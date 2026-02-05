@@ -1,0 +1,254 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////
+// ENUMS
+//////////////////////
+
+enum AccountType {
+  INDIVIDUAL
+  COMPANY
+  CLUB
+}
+
+enum WorkItemType {
+  PROJECT
+  EVENT
+  PLAN
+}
+
+enum WorkItemStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum ExpenseCategory {
+  SALARY
+  MARKETING
+  TOOLS
+  OPERATIONS
+  EVENT
+  OTHER
+}
+
+//////////////////////
+// AUTH / IDENTITY
+//////////////////////
+
+model User {
+  id            String   @id @default(cuid())
+  name          String?
+  email         String   @unique
+  password      String?
+  emailVerified DateTime?
+  image         String?
+  role          String   @default("user")
+
+  account       Account?
+  oauthAccount  OAuthAccount?
+  refreshTokens RefreshToken[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("users")
+}
+
+model OAuthAccount {
+  id                String  @id @default(cuid())
+  userId            String  @unique
+  provider          String
+  providerAccountId String
+  access_token      String?
+  refresh_token     String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("oauth_accounts")
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  userId     String
+  revokedAt  DateTime?
+  expiresAt  DateTime
+  userAgent  String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+//////////////////////
+// ACCOUNT (WORKSPACE)
+//////////////////////
+
+model Account {
+  id        String      @id @default(uuid())
+  userId    String      @unique
+  name      String
+  type      AccountType
+
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workItems WorkItem[]
+
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@map("accounts")
+}
+
+//////////////////////
+// CORE DOMAIN
+//////////////////////
+
+model WorkItem {
+  id        String         @id @default(uuid())
+  accountId String
+  name      String
+  type      WorkItemType
+  status    WorkItemStatus @default(ACTIVE)
+
+  account   Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  roles     Role[]
+  modules   Module[]
+
+  project   Project?
+  event     Event?
+  planInfo  PlanInfo?
+
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@map("work_items")
+}
+
+//////////////////////
+// SPECIALIZED TYPES
+//////////////////////
+
+model Project {
+  workItemId String @id
+  deadline   DateTime?
+  methodology String?
+
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@map("projects")
+}
+
+model Event {
+  workItemId    String @id
+  venue         String?
+  expectedCrowd Int?
+
+  workItem      WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@map("events")
+}
+
+model PlanInfo {
+  workItemId String @id
+  notes      String?
+
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@map("plan_info")
+}
+
+//////////////////////
+// ROLES (PER WORK ITEM)
+//////////////////////
+
+model Role {
+  id         String   @id @default(uuid())
+  workItemId String
+  name       String
+  budget     Decimal? @db.Decimal(12, 2)
+
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  expenses   Expense[]
+
+  @@unique([workItemId, name])
+  @@map("roles")
+}
+
+//////////////////////
+// MODULES
+//////////////////////
+
+model Module {
+  id         String   @id @default(uuid())
+  workItemId String
+  name       String
+
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  investments Investment[]
+  revenues    Revenue[]
+  expenses    Expense[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("modules")
+}
+
+//////////////////////
+// FINANCIALS
+//////////////////////
+
+model Investment {
+  id         String   @id @default(uuid())
+  moduleId   String
+  amount     Decimal  @db.Decimal(12, 2)
+  investedAt DateTime @default(now())
+
+  module     Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@map("investments")
+}
+
+model Revenue {
+  id          String   @id @default(uuid())
+  moduleId    String
+  amount      Decimal  @db.Decimal(12, 2)
+  receivedAt  DateTime @default(now())
+
+  module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@map("revenues")
+}
+
+model Expense {
+  id          String          @id @default(uuid())
+  category    ExpenseCategory
+  description String?
+  amount      Decimal         @db.Decimal(12, 2)
+  occurredAt  DateTime        @default(now())
+
+  moduleId    String
+  module      Module          @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  roleId      String?
+  role        Role?           @relation(fields: [roleId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime        @default(now())
+
+  @@map("expenses")
+}
