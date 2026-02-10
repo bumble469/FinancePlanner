@@ -8,6 +8,7 @@ import { AuthCard } from '@/components/auth/auth-card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { FcGoogle } from "react-icons/fc"
 
 import { Reveal } from '@/components/animate/reveal'
 import { Stagger, StaggerItem } from '@/components/animate/stagger'
@@ -94,7 +95,7 @@ export default function LoginPage() {
   }
 
   const handleGoogleLogin = () => {
-    console.log('Continue with Google clicked')
+    window.location.href = '/api/auth/google'
   }
 
   return (
@@ -166,10 +167,18 @@ export default function LoginPage() {
 
           <StaggerItem>
             <Button
-              variant="outline"
-              className="w-full hover:bg-primary/10 hover:text-primary hover:border-primary/40 cursor-pointer"
+              type="button"
+              variant="ghost"
               onClick={handleGoogleLogin}
+              className="
+                w-full flex items-center justify-center gap-2
+                border-border
+                bg-background
+                hover:text-foreground
+                hover:border-border cursor-pointer
+              "
             >
+              <FcGoogle className="h-5 w-5" />
               Continue with Google
             </Button>
           </StaggerItem>

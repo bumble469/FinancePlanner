@@ -2,11 +2,11 @@ import * as jose from 'jose';
 import { cookies } from 'next/headers';
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-secret-key-change-this'
+  process.env.JWT_SECRET
 );
 
 const JWT_REFRESH_SECRET = new TextEncoder().encode(
-  process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-change-this'
+  process.env.JWT_REFRESH_SECRET
 );
 
 export const ACCESS_TOKEN_TTL = 15 * 60 * 1000; 

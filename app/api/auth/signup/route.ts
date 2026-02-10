@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, AccountType } from '@prisma/client';
 import { hashPassword, validatePasswordStrength } from '@/lib/password';
 import {
   generateAccessToken,
   generateRefreshToken,
-  setRefreshTokenCookie,
   REFRESH_TOKEN_TTL,
 } from '@/lib/jwt';
 
@@ -12,30 +11,14 @@ const prisma = new PrismaClient();
 
 interface SignupRequestBody {
   email: string;
-  password: string;
-  confirmPassword: string;
+  password?: string;
+  confirmPassword?: string;
   name?: string;
   accountName?: string;
-  accountType?: 'INDIVIDUAL' | 'COMPANY' | 'CLUB';
+  accountType?: AccountType;
 }
 
-interface SignupResponse {
-  success: boolean;
-  data?: {
-    accessToken: string;
-    user: {
-      id: string;
-      email: string;
-      name: string | null;
-    };
-  };
-  error?: string;
-  errors?: Record<string, string>;
-}
-
-export async function POST(
-  request: NextRequest
-): Promise<NextResponse<SignupResponse>> {
+export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as SignupRequestBody;
     const errors: Record<string, string> = {};
@@ -44,10 +27,19 @@ export async function POST(
 
     if (!email) {
       errors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.email = 'Invalid email format';
+    }
+
+    if (!body.password) {
+      errors.password = 'Password is required';
     } else {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        errors.email = 'Invalid email format';
+      const validation = validatePasswordStrength(body.password);
+      if (!validation.valid) {
+        errors.password = validation.errors.join('; ');
+      }
+      if (body.password !== body.confirmPassword) {
+        errors.confirmPassword = 'Passwords do not match';
       }
     }
 
@@ -55,22 +47,9 @@ export async function POST(
       errors.name = 'Name must be at least 2 characters';
     }
 
-    const passwordValidation = validatePasswordStrength(body.password || '');
-    if (!passwordValidation.valid) {
-      errors.password = passwordValidation.errors.join('; ');
-    }
-
-    if (body.password !== body.confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match';
-    }
-
     if (Object.keys(errors).length > 0) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Validation failed',
-          errors,
-        },
+        { success: false, error: 'Validation failed', errors },
         { status: 400 }
       );
     }
@@ -90,7 +69,7 @@ export async function POST(
       );
     }
 
-    const hashedPassword = await hashPassword(body.password);
+    const hashedPassword = await hashPassword(body.password!);
 
     const user = await prisma.user.create({
       data: {
@@ -110,14 +89,14 @@ export async function POST(
       data: {
         userId: user.id,
         name: body.accountName || 'My Account',
-        type: body.accountType || 'INDIVIDUAL',
+        type: body.accountType || AccountType.INDIVIDUAL,
       },
     });
 
     const accessToken = await generateAccessToken({
       sub: user.id,
       email: user.email,
-      name: user.name || undefined,
+      name: user.name ?? undefined,
       role: 'user',
     });
 
@@ -135,34 +114,34 @@ export async function POST(
       refreshTokenRecord.id
     );
 
-    await setRefreshTokenCookie(refreshToken, REFRESH_TOKEN_TTL);
-
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: true,
         data: {
           accessToken,
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-          },
+          user,
         },
       },
       { status: 201 }
     );
+
+    response.cookies.set({
+      name: 'refresh_token',
+      value: refreshToken,
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: REFRESH_TOKEN_TTL / 1000,
+      path: '/',
+    });
+
+    return response;
   } catch (error) {
     console.error('[Signup] Error:', error);
-
     return NextResponse.json(
-      {
-        success: false,
-        error: 'Internal server error',
-      },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }
 

@@ -9,6 +9,7 @@ import { AccountTypeToggle } from '@/components/auth/account-type-toggle'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { FcGoogle } from "react-icons/fc"
 
 import { Reveal } from '@/components/animate/reveal'
 import { Stagger, StaggerItem } from '@/components/animate/stagger'
@@ -88,6 +89,10 @@ export default function SignupPage() {
     if (errors.accountType || errors.companyName) {
       setErrors({ ...errors, accountType: undefined, companyName: undefined })
     }
+  }
+
+  const handleGoogleSignup = () => {
+    window.location.href = '/api/auth/google'
   }
 
   return (
@@ -233,6 +238,38 @@ export default function SignupPage() {
               </p>
             </div>
           </StaggerItem>
+
+          <StaggerItem>
+            <div className="relative my-2">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  Or
+                </span>
+              </div>
+            </div>
+          </StaggerItem>
+
+          <StaggerItem>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleGoogleSignup}
+              className="
+                w-full flex items-center justify-center gap-2
+                border-border
+                bg-background
+                hover:text-foreground
+                hover:border-border cursor-pointer
+              "
+            >
+              <FcGoogle className="h-5 w-5" />
+              Continue with Google
+            </Button>
+          </StaggerItem>
+
         </Stagger>
 
       </AuthCard>

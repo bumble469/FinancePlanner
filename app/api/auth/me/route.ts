@@ -1,18 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { verifyAccessToken } from '@/lib/jwt';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const authHeader = request.headers.get('authorization');
+    const token = (await cookies()).get('access_token')?.value;
 
-    if (!authHeader?.startsWith('Bearer ')) {
+    if (!token) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const token = authHeader.replace('Bearer ', '');
     const payload = await verifyAccessToken(token);
 
     if (!payload) {
@@ -36,10 +36,9 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     console.error('[ME] Error:', error);
-
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
+      { success: false, error: 'Invalid or expired token' },
+      { status: 401 }
     );
   }
 }

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { verifyPassword } from '@/lib/password';
-import { generateAccessToken, generateRefreshToken, setRefreshTokenCookie, REFRESH_TOKEN_TTL } from '@/lib/jwt';
+import {
+  generateAccessToken,
+  generateRefreshToken,
+  REFRESH_TOKEN_TTL,
+} from '@/lib/jwt';
 
 const prisma = new PrismaClient();
 
@@ -10,41 +14,25 @@ interface LoginRequestBody {
   password: string;
 }
 
-interface LoginResponse {
-  success: boolean;
-  data?: {
-    accessToken: string;
-    user: {
-      id: string;
-      email: string;
-      name: string | null;
-    };
-  };
-  error?: string;
-  errors?: Record<string, string>;
-}
-
-export async function POST(
-  request: NextRequest
-): Promise<NextResponse<LoginResponse>> {
+export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as LoginRequestBody;
-    const errors: Record<string, string> = {};
 
-    if (!body.email || !body.password) {
-      errors.general = 'Email and password are required';
-      return NextResponse.json<LoginResponse>(
+    const email = body.email?.toLowerCase().trim();
+    const password = body.password;
+
+    if (!email || !password) {
+      return NextResponse.json(
         {
           success: false,
-          error: 'Validation failed',
-          errors,
+          error: 'Email and password are required',
         },
         { status: 400 }
       );
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: body.email.toLowerCase() },
+      where: { email },
       select: {
         id: true,
         email: true,
@@ -54,25 +42,23 @@ export async function POST(
       },
     });
 
-    if (!user) {
-      return NextResponse.json<LoginResponse>(
+    if (!user || !user.password) {
+      return NextResponse.json(
         {
           success: false,
           error: 'Invalid email or password',
-          errors: { general: 'Invalid email or password' },
         },
         { status: 401 }
       );
     }
 
-    const passwordMatch = await verifyPassword(body.password, user.password);
+    const isValid = await verifyPassword(password, user.password);
 
-    if (!passwordMatch) {
-      return NextResponse.json<LoginResponse>(
+    if (!isValid) {
+      return NextResponse.json(
         {
           success: false,
           error: 'Invalid email or password',
-          errors: { general: 'Invalid email or password' },
         },
         { status: 401 }
       );
@@ -91,7 +77,7 @@ export async function POST(
     const accessToken = await generateAccessToken({
       sub: user.id,
       email: user.email,
-      name: user.name || undefined,
+      name: user.name ?? undefined,
       role: user.role,
     });
 
@@ -104,11 +90,12 @@ export async function POST(
       },
     });
 
-    const refreshToken = await generateRefreshToken(user.id, refreshTokenRecord.id);
+    const refreshToken = await generateRefreshToken(
+      user.id,
+      refreshTokenRecord.id
+    );
 
-    await setRefreshTokenCookie(refreshToken, REFRESH_TOKEN_TTL);
-
-    return NextResponse.json<LoginResponse>(
+    const response = NextResponse.json(
       {
         success: true,
         data: {
@@ -122,18 +109,24 @@ export async function POST(
       },
       { status: 200 }
     );
+
+    response.cookies.set({
+      name: 'refresh_token',
+      value: refreshToken,
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: REFRESH_TOKEN_TTL / 1000,
+      path: '/',
+    });
+
+    return response;
   } catch (error) {
     console.error('[Login] Error:', error);
-
-    return NextResponse.json<LoginResponse>(
-      {
-        success: false,
-        error: 'Internal server error',
-      },
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }
 
