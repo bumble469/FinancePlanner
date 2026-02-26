@@ -103,7 +103,6 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      // 🔗 Link OAuth account
       await prisma.oAuthAccount.create({
         data: {
           userId: user.id,

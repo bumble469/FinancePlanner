@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
         password: hashedPassword,
         name: body.name?.trim() || null,
         role: 'user',
+        emailVerified: new Date(),
       },
       select: {
         id: true,
@@ -84,12 +85,12 @@ export async function POST(request: NextRequest) {
         name: true,
       },
     });
-
+    const accountType = (body.accountType?.toUpperCase() as AccountType) || AccountType.INDIVIDUAL;
     await prisma.account.create({
       data: {
         userId: user.id,
         name: body.accountName || 'My Account',
-        type: body.accountType || AccountType.INDIVIDUAL,
+        type: accountType 
       },
     });
 
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[Signup] Error:', error);
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      { success: false, error: 'Internal server error'+error },
       { status: 500 }
     );
   }

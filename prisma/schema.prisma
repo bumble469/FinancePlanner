@@ -27,6 +27,7 @@ enum WorkItemStatus {
   ACTIVE
   COMPLETED
   ARCHIVED
+  CANCELLED
 }
 
 enum ExpenseCategory {
@@ -38,25 +39,38 @@ enum ExpenseCategory {
   OTHER
 }
 
+enum MemberRole {
+  ADMIN    // creator, full access
+  MANAGER  // can manage their department, view others
+  MEMBER   // can only log expenses in assigned department
+}
+
+enum IncomeType {
+  INVESTMENT
+  REVENUE
+}
+
 //////////////////////
-// AUTH / IDENTITY
+// AUTH / IDENTITY (unchanged)
 //////////////////////
 
 model User {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   name          String?
-  email         String   @unique
+  email         String    @unique
   password      String?
   emailVerified DateTime?
   image         String?
-  role          String   @default("user")
+  role          String    @default("user")
 
-  account       Account?
-  oauthAccount  OAuthAccount?
-  refreshTokens RefreshToken[]
+  account             Account?
+  oauthAccount        OAuthAccount?
+  refreshTokens       RefreshToken[]
+  workItemMemberships WorkItemMember[]
+  departmentMembers   DepartmentMember[]
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("users")
 }
@@ -79,13 +93,13 @@ model OAuthAccount {
 }
 
 model RefreshToken {
-  id         String   @id @default(uuid())
-  userId     String
-  revokedAt  DateTime?
-  expiresAt  DateTime
-  userAgent  String?
-  ipAddress  String?
-  createdAt  DateTime @default(now())
+  id        String    @id @default(uuid())
+  userId    String
+  revokedAt DateTime?
+  expiresAt DateTime
+  userAgent String?
+  ipAddress String?
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -98,22 +112,22 @@ model RefreshToken {
 //////////////////////
 
 model Account {
-  id        String      @id @default(uuid())
-  userId    String      @unique
-  name      String
-  type      AccountType
+  id   String      @id @default(uuid())
+  userId String    @unique
+  name   String
+  type   AccountType
 
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   workItems WorkItem[]
 
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("accounts")
 }
 
 //////////////////////
-// CORE DOMAIN
+// WORK ITEM (PROJECT / EVENT / PLAN)
 //////////////////////
 
 model WorkItem {
@@ -122,42 +136,105 @@ model WorkItem {
   name      String
   type      WorkItemType
   status    WorkItemStatus @default(ACTIVE)
+  budget    Decimal?       @db.Decimal(12, 2) // overall budget set at creation
+  currency  String         @default("USD")
+  description String?
 
-  account   Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
-  roles     Role[]
-  modules   Module[]
+  // type-specific details
+  project  Project?
+  event    Event?
+  planInfo PlanInfo?
 
-  project   Project?
-  event     Event?
-  planInfo  PlanInfo?
+  // collaboration
+  members     WorkItemMember[]
 
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  // departments and phases
+  departments Department[]
+  phases      Phase[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("work_items")
 }
 
 //////////////////////
-// SPECIALIZED TYPES
+// COLLABORATION
+//////////////////////
+
+model WorkItemMember {
+  id         String     @id @default(uuid())
+  workItemId String
+  userId     String
+  role       MemberRole @default(MEMBER)
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  departmentMembers DepartmentMember[]
+
+  joinedAt DateTime @default(now())
+
+  @@unique([workItemId, userId]) // user can't be added twice to same work item
+  @@map("work_item_members")
+}
+
+//////////////////////
+// DEPARTMENTS (formerly Role)
+//////////////////////
+
+model Department {
+  id         String   @id @default(uuid())
+  workItemId String
+  name       String
+  budget     Decimal? @db.Decimal(12, 2) // allocated slice of WorkItem budget
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  members  DepartmentMember[]
+  expenses Expense[]
+
+  @@unique([workItemId, name]) // no duplicate department names per work item
+  @@map("departments")
+}
+
+// which member is assigned to which department
+model DepartmentMember {
+  id             String @id @default(uuid())
+  departmentId   String
+  userId         String
+  workItemMemberId String
+
+  department     Department     @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workItemMember WorkItemMember @relation(fields: [workItemMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, userId])
+  @@map("department_members")
+}
+
+//////////////////////
+// SPECIALIZED WORK ITEM TYPES
 //////////////////////
 
 model Project {
-  workItemId String @id
-  deadline   DateTime?
-  methodology String?
+  workItemId   String    @id
+  deadline     DateTime?
+  methodology  String?
 
-  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
 
   @@map("projects")
 }
 
 model Event {
-  workItemId    String @id
-  venue         String?
-  expectedCrowd Int?
+  workItemId     String @id
+  venue          String?
+  expectedCrowd  Int?
+  eventDate      DateTime?
 
-  workItem      WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
 
   @@map("events")
 }
@@ -166,89 +243,67 @@ model PlanInfo {
   workItemId String @id
   notes      String?
 
-  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
 
   @@map("plan_info")
 }
 
 //////////////////////
-// ROLES (PER WORK ITEM)
+// PHASES (formerly Module)
 //////////////////////
 
-model Role {
-  id         String   @id @default(uuid())
+model Phase {
+  id         String @id @default(uuid())
   workItemId String
   name       String
-  budget     Decimal? @db.Decimal(12, 2)
+  startDate  DateTime?
+  endDate    DateTime?
 
-  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  expenses   Expense[]
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
 
-  @@unique([workItemId, name])
-  @@map("roles")
-}
+  expenses Expense[]
+  income   Income[]
 
-//////////////////////
-// MODULES
-//////////////////////
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-model Module {
-  id         String   @id @default(uuid())
-  workItemId String
-  name       String
-
-  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-
-  investments Investment[]
-  revenues    Revenue[]
-  expenses    Expense[]
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("modules")
+  @@map("phases")
 }
 
 //////////////////////
 // FINANCIALS
 //////////////////////
 
-model Investment {
-  id         String   @id @default(uuid())
-  moduleId   String
-  amount     Decimal  @db.Decimal(12, 2)
-  investedAt DateTime @default(now())
+// merged Investment + Revenue into a single Income model
+model Income {
+  id          String     @id @default(uuid())
+  phaseId     String
+  type        IncomeType // INVESTMENT or REVENUE
+  amount      Decimal    @db.Decimal(12, 2)
+  description String?
+  receivedAt  DateTime   @default(now())
 
-  module     Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  phase Phase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
 
-  @@map("investments")
-}
-
-model Revenue {
-  id          String   @id @default(uuid())
-  moduleId    String
-  amount      Decimal  @db.Decimal(12, 2)
-  receivedAt  DateTime @default(now())
-
-  module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-
-  @@map("revenues")
+  @@map("income")
 }
 
 model Expense {
-  id          String          @id @default(uuid())
-  category    ExpenseCategory
-  description String?
-  amount      Decimal         @db.Decimal(12, 2)
-  occurredAt  DateTime        @default(now())
+  id           String          @id @default(uuid())
+  category     ExpenseCategory
+  description  String?
+  amount       Decimal         @db.Decimal(12, 2)
+  occurredAt   DateTime        @default(now())
 
-  moduleId    String
-  module      Module          @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  phaseId      String
+  phase        Phase           @relation(fields: [phaseId], references: [id], onDelete: Cascade)
 
-  roleId      String?
-  role        Role?           @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  departmentId String?
+  department   Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
-  createdAt   DateTime        @default(now())
+  loggedById   String?         // which user logged this expense
+  
+  createdAt    DateTime        @default(now())
 
   @@map("expenses")
 }

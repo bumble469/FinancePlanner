@@ -13,6 +13,7 @@ import { FcGoogle } from "react-icons/fc"
 
 import { Reveal } from '@/components/animate/reveal'
 import { Stagger, StaggerItem } from '@/components/animate/stagger'
+import { Eye, EyeOff } from 'lucide-react'
 
 interface SignupFormValues {
   accountType: 'individual' | 'company'
@@ -41,7 +42,9 @@ export default function SignupPage() {
     password: '',
     confirmPassword: '',
   })
-  const [errors, setErrors] = useState<FormErrors>({})
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {}
@@ -78,11 +81,43 @@ export default function SignupPage() {
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (!validateForm()) return
-    console.log('Signup attempt:', formData)
-  }
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          confirmPassword: formData.confirmPassword,
+          name: formData.name,
+          accountType: formData.accountType,
+          accountName: formData.accountType === 'company' ? formData.companyName : undefined,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        if (json.errors) {
+          setErrors(json.errors);
+        } else {
+          setErrors({ email: json.error || 'Signup failed' });
+        }
+        return;
+      }
+
+      document.cookie = `access_token=${json.data.accessToken}; path=/; max-age=${15 * 60}; samesite=lax`;
+
+      window.location.href = '/';
+    } catch (err) {
+      console.error('Signup failed:', err);
+      setErrors({ email: 'Something went wrong. Please try again.' });
+    }
+  };
 
   const handleAccountTypeChange = (value: 'individual' | 'company') => {
     setFormData({ ...formData, accountType: value, companyName: '' })
@@ -93,6 +128,68 @@ export default function SignupPage() {
 
   const handleGoogleSignup = () => {
     window.location.href = '/api/auth/google'
+  }
+
+  const [touched, setTouched] = useState<Partial<Record<keyof SignupFormValues, boolean>>>({})
+
+  const validateField = (name: keyof SignupFormValues, value: string) => {
+    const newErrors = { ...errors }
+
+    switch (name) {
+      case 'companyName':
+        if (formData.accountType === 'company' && !value.trim()) {
+          newErrors.companyName = 'Company name is required'
+        } else {
+          delete newErrors.companyName
+        }
+        break
+      case 'name':
+        if (!value.trim()) {
+          newErrors.name = 'Name is required'
+        } else if (value.trim().length < 2) {
+          newErrors.name = 'Name must be at least 2 characters'
+        } else {
+          delete newErrors.name
+        }
+        break
+      case 'email':
+        if (!value.trim()) {
+          newErrors.email = 'Email is required'
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          newErrors.email = 'Please enter a valid email'
+        } else {
+          delete newErrors.email
+        }
+        break
+      case 'password':
+        if (!value) {
+          newErrors.password = 'Password is required'
+        } else if (value.length < 8) {
+          newErrors.password = 'Password must be at least 8 characters'
+        } else {
+          delete newErrors.password
+        }
+        // re-validate confirmPassword if already touched
+        if (touched.confirmPassword) {
+          if (formData.confirmPassword && value !== formData.confirmPassword) {
+            newErrors.confirmPassword = 'Passwords do not match'
+          } else {
+            delete newErrors.confirmPassword
+          }
+        }
+        break
+      case 'confirmPassword':
+        if (!value) {
+          newErrors.confirmPassword = 'Please confirm your password'
+        } else if (formData.password !== value) {
+          newErrors.confirmPassword = 'Passwords do not match'
+        } else {
+          delete newErrors.confirmPassword
+        }
+        break
+    }
+
+    setErrors(newErrors)
   }
 
   return (
@@ -148,6 +245,10 @@ export default function SignupPage() {
                       setErrors({ ...errors, name: undefined })
                     }
                   }}
+                  onBlur={(e) => {
+                    setTouched({ ...touched, name: true })
+                    validateField('name', e.target.value)
+                  }}
                 />
                 {errors.name && (
                   <p className="text-sm text-destructive">{errors.name}</p>
@@ -169,6 +270,10 @@ export default function SignupPage() {
                       setErrors({ ...errors, email: undefined })
                     }
                   }}
+                  onBlur={(e) => {
+                    setTouched({ ...touched, email: true })
+                    validateField('email', e.target.value)
+                  }}
                 />
                 {errors.email && (
                   <p className="text-sm text-destructive">{errors.email}</p>
@@ -179,18 +284,30 @@ export default function SignupPage() {
             <StaggerItem>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={(e) => {
-                    setFormData({ ...formData, password: e.target.value })
-                    if (errors.password) {
-                      setErrors({ ...errors, password: undefined })
-                    }
-                  }}
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={formData.password}
+                    className="pr-10"
+                    onChange={(e) => {
+                      setFormData({ ...formData, password: e.target.value })
+                      if (errors.password) setErrors({ ...errors, password: undefined })
+                    }}
+                    onBlur={(e) => {
+                      setTouched({ ...touched, password: true })
+                      validateField('password', e.target.value)
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </button>
+                </div>
                 {errors.password && (
                   <p className="text-sm text-destructive">{errors.password}</p>
                 )}
@@ -200,22 +317,32 @@ export default function SignupPage() {
             <StaggerItem>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  value={formData.confirmPassword}
-                  onChange={(e) => {
-                    setFormData({ ...formData, confirmPassword: e.target.value })
-                    if (errors.confirmPassword) {
-                      setErrors({ ...errors, confirmPassword: undefined })
-                    }
-                  }}
-                />
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={formData.confirmPassword}
+                    className="pr-10"
+                    onChange={(e) => {
+                      setFormData({ ...formData, confirmPassword: e.target.value })
+                      if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: undefined })
+                    }}
+                    onBlur={(e) => {
+                      setTouched({ ...touched, confirmPassword: true })
+                      validateField('confirmPassword', e.target.value)
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showConfirmPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </button>
+                </div>
                 {errors.confirmPassword && (
-                  <p className="text-sm text-destructive">
-                    {errors.confirmPassword}
-                  </p>
+                  <p className="text-sm text-destructive">{errors.confirmPassword}</p>
                 )}
               </div>
             </StaggerItem>
@@ -225,7 +352,6 @@ export default function SignupPage() {
                 Create Account
               </Button>
             </StaggerItem>
-
           </form>
 
           <StaggerItem>

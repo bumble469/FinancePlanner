@@ -99,24 +99,40 @@ export async function verifyRefreshToken(
 
 export async function setRefreshTokenCookie(token: string, expiresIn: number) {
   const cookieStore = await cookies();
-  
-  cookieStore.set('refreshToken', token, {
+  cookieStore.set('refresh_token', token, { 
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: expiresIn / 1000,
+    path: '/',
+  });
+}
+
+export async function clearAccessTokenCookie() {
+  const cookieStore = await cookies();
+  cookieStore.set('access_token', '', {
+    httpOnly: true,
     sameSite: 'lax',
-    maxAge: expiresIn / 1000, 
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 0,
     path: '/',
   });
 }
 
 export async function clearRefreshTokenCookie() {
   const cookieStore = await cookies();
-  cookieStore.delete('refreshToken');
+  cookieStore.set('refresh_token', '', {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 0,
+    path: '/',
+  });
 }
 
 export async function getRefreshTokenFromCookie(): Promise<string | null> {
   const cookieStore = await cookies();
-  return cookieStore.get('refreshToken')?.value || null;
+  return cookieStore.get('refresh_token')?.value || null; 
 }
 
 export async function decodeToken(token: string) {

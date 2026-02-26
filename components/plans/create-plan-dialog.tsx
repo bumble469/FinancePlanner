@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react"
-
 import { useState } from "react";
 import {
   Dialog,
@@ -22,39 +21,48 @@ interface CreatePlanDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-/**
- * CreatePlanDialog - Form to create a new plan
- * 
- * Flow:
- * 1. User enters plan name, type (project/event), and budget
- * 2. Store creates new Plan with empty arrays for team/expenses
- * 3. User can then open dashboard to add details
- */
-
 export function CreatePlanDialog({ open, onOpenChange }: CreatePlanDialogProps) {
   const { addPlan } = useFinancialStore();
   const [name, setName] = useState("");
   const [type, setType] = useState<PlanType>("project");
   const [budget, setBudget] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
 
-    if (!name.trim() || !budget.trim()) {
-      return;
-    }
+    const budgetAmount = parseFloat(budget);
+    if (!name.trim() || !budget.trim() || budgetAmount <= 0) return;
 
     setIsLoading(true);
     try {
-      const budgetAmount = Number.parseFloat(budget);
-      if (budgetAmount > 0) {
-        addPlan(name, type, budgetAmount);
-        setName("");
-        setBudget("");
-        setType("project");
-        onOpenChange(false);
+      const res = await fetch("/api/workitems", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          type: type.toUpperCase(),   
+          budget: budgetAmount,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setError(json.error || "Failed to create plan");
+        return;
       }
+
+      addPlan(json.data);  
+
+      setName("");
+      setBudget("");
+      setType("project");
+      onOpenChange(false);
+    } catch (err) {
+      setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +79,11 @@ export function CreatePlanDialog({ open, onOpenChange }: CreatePlanDialogProps) 
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Plan Name */}
+
+          {error && (
+            <p className="text-sm text-destructive text-center">{error}</p>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="plan-name" className="text-sm font-medium">
               Plan Name
@@ -104,6 +116,15 @@ export function CreatePlanDialog({ open, onOpenChange }: CreatePlanDialogProps) 
                   <span className="font-medium">Event</span>
                   <span className="text-muted-foreground ml-2 text-sm">
                     For event planning with ticket revenue
+                  </span>
+                </Label>
+              </div>
+              <div className="flex items-center gap-3">
+                <RadioGroupItem value="plan" id="type-plan" />
+                <Label htmlFor="type-plan" className="font-normal cursor-pointer">
+                  <span className="font-medium">Plan</span>
+                  <span className="text-muted-foreground ml-2 text-sm">
+                    For general planning
                   </span>
                 </Label>
               </div>

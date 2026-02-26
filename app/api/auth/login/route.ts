@@ -111,6 +111,16 @@ export async function POST(request: NextRequest) {
     );
 
     response.cookies.set({
+      name: 'access_token',
+      value: accessToken,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 15 * 60,
+      path: '/',
+    });
+
+    response.cookies.set({
       name: 'refresh_token',
       value: refreshToken,
       httpOnly: true,

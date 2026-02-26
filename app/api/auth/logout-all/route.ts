@@ -4,7 +4,7 @@ import { getRefreshTokenFromCookie, verifyRefreshToken, clearRefreshTokenCookie,
 
 const prisma = new PrismaClient();
 
-interface LogoutResponse {
+interface LogoutAllResponse {
   success: boolean;
   message?: string;
   error?: string;
@@ -12,17 +12,14 @@ interface LogoutResponse {
 
 export async function POST(
   request: NextRequest
-): Promise<NextResponse<LogoutResponse>> {
+): Promise<NextResponse<LogoutAllResponse>> {
   try {
     const refreshTokenFromCookie = await getRefreshTokenFromCookie();
 
     if (!refreshTokenFromCookie) {
       await clearRefreshTokenCookie();
-      return NextResponse.json<LogoutResponse>(
-        {
-          success: true,
-          message: 'Logged out successfully',
-        },
+      return NextResponse.json<LogoutAllResponse>(
+        { success: true, message: 'Logged out from all devices successfully' },
         { status: 200 }
       );
     }
@@ -30,32 +27,25 @@ export async function POST(
     const decoded = await verifyRefreshToken(refreshTokenFromCookie);
 
     if (decoded) {
-      await prisma.refreshToken.update({
-        where: { id: decoded.tokenId },
+      await prisma.refreshToken.updateMany({
+        where: {
+          userId: decoded.sub,
+          revokedAt: null,
+        },
         data: { revokedAt: new Date() },
-      }).catch((err) => {
-        console.error('[Logout] Failed to revoke token:', err);
-        return { status: 500, message: "Logout failed: ", err}
       });
     }
     await clearAccessTokenCookie();
     await clearRefreshTokenCookie();
 
-    return NextResponse.json<LogoutResponse>(
-      {
-        success: true,
-        message: 'Logged out successfully',
-      },
+    return NextResponse.json<LogoutAllResponse>(
+      { success: true, message: 'Logged out from all devices successfully' },
       { status: 200 }
     );
   } catch (error) {
-    console.error('[Logout] Error:', error);
-
-    return NextResponse.json<LogoutResponse>(
-      {
-        success: false,
-        error: 'Internal server error',
-      },
+    console.error('[Logout All] Error:', error);
+    return NextResponse.json<LogoutAllResponse>(
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     );
   } finally {

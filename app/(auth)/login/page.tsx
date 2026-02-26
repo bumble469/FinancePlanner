@@ -12,6 +12,7 @@ import { FcGoogle } from "react-icons/fc"
 
 import { Reveal } from '@/components/animate/reveal'
 import { Stagger, StaggerItem } from '@/components/animate/stagger'
+import { Eye, EyeOff } from 'lucide-react'
 
 interface LoginFormValues {
   email: string
@@ -34,6 +35,7 @@ interface LoginApiResponse {
 
 export default function LoginPage() {
   const router = useRouter()
+  const [showPassword, setShowPassword] = useState(false);
 
   const [formData, setFormData] = useState<LoginFormValues>({
     email: '',
@@ -86,7 +88,7 @@ export default function LoginPage() {
         return
       }
 
-      router.push('/dashboard')
+      router.push('/')
     } catch (err) {
       setErrors({ general: 'Something went wrong. Please try again.' })
     } finally {
@@ -133,17 +135,31 @@ export default function LoginPage() {
             <StaggerItem>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={(e) => {
-                    setFormData({ ...formData, password: e.target.value })
-                    if (errors.password)
-                      setErrors({ ...errors, password: undefined })
-                  }}
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={(e) => {
+                      setFormData({ ...formData, password: e.target.value })
+                      if (errors.password)
+                        setErrors({ ...errors, password: undefined })
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? (
+                      <Eye className="h-4 w-4" />
+                    ) : (
+                      <EyeOff className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
                 {errors.password && (
                   <p className="text-sm text-destructive">{errors.password}</p>
                 )}

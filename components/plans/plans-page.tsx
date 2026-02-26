@@ -8,17 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { useFinancialStore } from "@/lib/store";
 import { PlanCard } from "./plan-card";
 import { CreatePlanDialog } from "./create-plan-dialog";
-import type { Plan } from "@/lib/types";
-
-/**
- * PlansPage - Display and manage all plans for the current account
- * 
- * Data Flow:
- * Account (useFinancialStore)
- *   └── Plans (array of Plan objects)
- *       ├── Plan metrics (budget, spent, profit/loss, status)
- *       └── Links to /plans/[planId]/dashboard
- */
 
 export function PlansPage() {
   const { plans, account } = useFinancialStore();

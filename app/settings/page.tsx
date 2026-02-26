@@ -1,5 +1,6 @@
 import { TopNav } from "@/components/layout/top-nav";
 import { Card } from "@/components/ui/card";
+import { LogoutSection } from "@/components/settings/logout-section";
 
 export const metadata = {
   title: "Settings - FinanceFlow",
@@ -19,7 +20,7 @@ export default function SettingsPage() {
               Manage your account and preferences
             </p>
           </div>
-
+          <LogoutSection />
           {/* Settings Sections */}
           <div className="grid gap-6">
             {/* Account Settings */}
@@ -64,7 +65,8 @@ export default function SettingsPage() {
                 About This Dashboard
               </h2>
               <p className="text-muted-foreground mb-3">
-                This financial management dashboard uses a hierarchical, multi-plan architecture:
+                This financial management dashboard uses a hierarchical,
+                multi-plan architecture:
               </p>
               <div className="space-y-2 text-sm text-muted-foreground font-mono">
                 <p>Account (Individual or Company)</p>
