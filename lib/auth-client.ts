@@ -193,7 +193,9 @@ class AuthClient {
           ...options,
           headers: {
             ...options.headers,
-            Authorization: `Bearer ${this.accessToken}`,
+            ...(this.accessToken
+              ? { Authorization: `Bearer ${this.accessToken}` }
+              : {}),
           },
           credentials: 'include',
         });

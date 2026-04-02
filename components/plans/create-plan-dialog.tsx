@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useFinancialStore } from "@/lib/store";
 import type { PlanType } from "@/lib/types";
+import axios from "axios";
 
 interface CreatePlanDialogProps {
   open: boolean;
@@ -29,7 +30,7 @@ export function CreatePlanDialog({ open, onOpenChange }: CreatePlanDialogProps) 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 
@@ -38,31 +39,26 @@ export function CreatePlanDialog({ open, onOpenChange }: CreatePlanDialogProps) 
 
     setIsLoading(true);
     try {
-      const res = await fetch("/api/workitems", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          type: type.toUpperCase(),   
-          budget: budgetAmount,
-        }),
+      const { data } = await axios.post("/api/plan", {
+        name: name.trim(),
+        type: type.toUpperCase(),
+        budget: budgetAmount,
+      }, {
+        withCredentials: true,
       });
 
-      const json = await res.json();
-
-      if (!res.ok) {
-        setError(json.error || "Failed to create plan");
-        return;
-      }
-
-      addPlan(json.data);  
+      addPlan(data.data);
 
       setName("");
       setBudget("");
       setType("project");
       onOpenChange(false);
     } catch (err) {
-      setError("Something went wrong. Please try again.");
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.error || "Failed to create plan");
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -119,22 +115,13 @@ export function CreatePlanDialog({ open, onOpenChange }: CreatePlanDialogProps) 
                   </span>
                 </Label>
               </div>
-              <div className="flex items-center gap-3">
-                <RadioGroupItem value="plan" id="type-plan" />
-                <Label htmlFor="type-plan" className="font-normal cursor-pointer">
-                  <span className="font-medium">Plan</span>
-                  <span className="text-muted-foreground ml-2 text-sm">
-                    For general planning
-                  </span>
-                </Label>
-              </div>
             </RadioGroup>
           </div>
 
           {/* Budget */}
           <div className="space-y-2">
             <Label htmlFor="plan-budget" className="text-sm font-medium">
-              Budget ($)
+              Budget (Rs)
             </Label>
             <Input
               id="plan-budget"

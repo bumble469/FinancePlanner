@@ -8,7 +8,7 @@ async function getPlanAndVerifyOwner(planId: string, userId: string) {
   if (!account) return null;
 
   const plan = await prisma.workItem.findFirst({
-    where: { id: planId, accountId: account.id }, // ensures user owns this plan
+    where: { id: planId, accountId: account.id },
     include: {
       project: true,
       event: true,
@@ -85,16 +85,16 @@ export async function PATCH(
 // DELETE /api/plan/[id]
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
-    const existing = await getPlanAndVerifyOwner(params.id, user.sub);
+    const existing = await getPlanAndVerifyOwner((await params).id, user.sub);
     if (!existing) return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
 
-    await prisma.workItem.delete({ where: { id: params.id } });
+    await prisma.workItem.delete({ where: { id: (await params).id } });
     // cascades to project/event/planInfo/departments/phases automatically
 
     return NextResponse.json({ success: true, message: 'Plan deleted successfully' }, { status: 200 });

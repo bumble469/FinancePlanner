@@ -105,7 +105,7 @@ export function OverviewPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {plans.map((plan) => {
-              const planSpent = plan.expenses.reduce(
+              const planSpent = plan?.expenses.reduce(
                 (sum, e) => sum + e.spentAmount,
                 0
               );

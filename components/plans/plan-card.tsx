@@ -1,24 +1,33 @@
 "use client";
 
+import { useState } from "react";
 import { ArrowRight, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useFinancialStore } from "@/lib/store";
 import type { Plan } from "@/lib/types";
+import axios from "axios";
 
 interface PlanCardProps {
   plan: Plan;
 }
 
-/**
- * PlanCard - Displays plan summary with key metrics
- * Clicking opens /plans/[planId]/dashboard
- */
-
 export function PlanCard({ plan }: PlanCardProps) {
   const { removePlan } = useFinancialStore();
+  const [deleting, setDeleting] = useState(false);
 
   const spent = plan.expenses.reduce((sum, e) => sum + e.spentAmount, 0);
   const profitLoss = plan.budget - spent;
@@ -41,9 +50,25 @@ export function PlanCard({ plan }: PlanCardProps) {
     return "Healthy";
   };
 
+  const handleDeletePlan = async () => {
+    try {
+      setDeleting(true);
+
+      await axios.delete(`/api/plan/${plan.id}`, {
+        withCredentials: true,
+      });
+
+      removePlan(plan.id);
+    } catch (error) {
+      console.error("Failed to delete plan", error);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <Card className="relative border border-border bg-card p-6 transition-all hover:shadow-lg">
-      {/* Header with type and status */}
+      {/* Header */}
       <div className="mb-4 flex items-start justify-between">
         <div className="space-y-2">
           <h3 className="text-lg font-semibold text-foreground line-clamp-2">
@@ -68,6 +93,7 @@ export function PlanCard({ plan }: PlanCardProps) {
             ${plan.budget.toLocaleString()}
           </span>
         </div>
+
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Spent</span>
           <span className="font-semibold text-foreground">
@@ -75,15 +101,14 @@ export function PlanCard({ plan }: PlanCardProps) {
           </span>
         </div>
 
-        {/* Progress bar */}
         <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
           <div
             className={`h-full transition-all ${
               isRisk
                 ? "bg-danger"
                 : isWarning
-                  ? "bg-warning"
-                  : "bg-success"
+                ? "bg-warning"
+                : "bg-success"
             }`}
             style={{ width: `${Math.min(spentPercent, 100)}%` }}
           />
@@ -95,9 +120,7 @@ export function PlanCard({ plan }: PlanCardProps) {
           </span>
           <span
             className={`font-semibold ${
-              profitLoss >= 0
-                ? "text-success"
-                : "text-danger"
+              profitLoss >= 0 ? "text-success" : "text-danger"
             }`}
           >
             ${Math.abs(profitLoss).toLocaleString()}
@@ -105,7 +128,7 @@ export function PlanCard({ plan }: PlanCardProps) {
         </div>
       </div>
 
-      {/* Event-specific info */}
+      {/* Event Info */}
       {isEvent && plan.eventData && (
         <div className="mb-6 space-y-2 rounded-lg bg-muted/50 p-3">
           <div className="flex justify-between text-sm">
@@ -123,26 +146,50 @@ export function PlanCard({ plan }: PlanCardProps) {
         </div>
       )}
 
-      {/* Footer - Actions */}
+      {/* Footer */}
       <div className="flex gap-2">
         <Link href={`/plans/${plan.id}`} className="flex-1">
-          <Button
-            variant="default"
-            className="w-full gap-2"
-            size="sm"
-          >
+          <Button className="w-full gap-2" size="sm">
             View Dashboard
             <ArrowRight className="h-4 w-4" />
           </Button>
         </Link>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => removePlan(plan.id)}
-          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+
+        {/* ✅ THEMED DELETE DIALOG */}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </AlertDialogTrigger>
+
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Delete Plan?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete your
+                plan and all associated data.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeletePlan}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Card>
   );

@@ -13,13 +13,8 @@ export interface Account {
   name: string;
   type: AccountType;
   createdAt: Date;
-  // For company accounts: placeholder for future members
   members?: string[];
 }
-
-// ============================================================
-// PLAN LEVEL (Projects or Events)
-// ============================================================
 
 export interface Plan {
   id: string;
@@ -35,6 +30,8 @@ export interface Plan {
   expenses: Expense[];
   eventData?: EventData;
   simulation: SimulationModifiers;
+  currency: string;
+  description: string;
   // For event plans: mode is always "event", for project plans: mode is "company"
   mode: "company" | "event";
 }
