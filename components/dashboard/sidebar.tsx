@@ -25,7 +25,7 @@ const navItems = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "team", label: "Team & Roles", icon: Users },
   { id: "expenses", label: "Expenses", icon: Receipt },
-  { id: "event", label: "Event Planning", icon: CalendarDays },
+  { id: "event", label: "Planning", icon: CalendarDays },
   { id: "simulation", label: "What-If Mode", icon: FlaskConical },
 ];
 

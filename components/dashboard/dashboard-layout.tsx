@@ -6,7 +6,7 @@ import { Sidebar } from "./sidebar";
 import { OverviewSection } from "./sections/overview-section";
 import { TeamSection } from "./sections/team-section";
 import { ExpenseSection } from "./sections/expense-section";
-import { EventSection } from "./sections/event-section";
+import { EventSection } from "./sections/planning-section";
 import { SimulationSection } from "./sections/simulation-section";
 import { Menu, X, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -93,6 +93,7 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
           planName={currentPlan.name}
+          entityName={currentPlan.name}
         />
       </div>
 
@@ -151,6 +152,7 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
         <Sidebar
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
+          entityName={currentPlan.name}
         />
       </div>
 

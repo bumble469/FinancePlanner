@@ -33,14 +33,29 @@ export interface Plan {
   currency: string;
   description: string;
   // For event plans: mode is always "event", for project plans: mode is "company"
-  mode: "company" | "event";
+  mode: "project" | "event";
 }
 
 // ============================================================
 // PLAN CONTENT TYPES
 // ============================================================
 
-export type Mode = "company" | "event";
+export type Mode = "project" | "event";
+
+// ================= DEPARTMENTS =================
+
+export type Department = {
+  id: string;
+  name: string;
+  budget: number;
+};
+
+// ================= MODULES (PHASES) =================
+export type Module = {
+  id: string;
+  name: string;
+  departmentId: string;
+};
 
 export interface TeamMember {
   id: string;

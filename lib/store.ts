@@ -9,8 +9,11 @@ import type {
   Mode,
   EventData,
   SimulationModifiers,
-  PlanType,
+  Department,
+  Module,
 } from "./types";
+
+// ================= ACCOUNT STORE =================
 
 interface AccountStore {
   account: Account | null;
@@ -32,6 +35,8 @@ interface AccountStore {
   setError: (error: string | null) => void;
 }
 
+// ================= DASHBOARD STORE =================
+
 interface PlanDashboardStore {
   mode: Mode;
   setMode: (mode: Mode) => void;
@@ -48,17 +53,33 @@ interface PlanDashboardStore {
   updateExpense: (id: string, expense: Partial<Expense>) => void;
   removeExpense: (id: string) => void;
 
-  eventData: EventData | null;
+  eventData: EventData;
   updateEventData: (data: Partial<EventData>) => void;
 
   simulation: SimulationModifiers;
   updateSimulation: (data: Partial<SimulationModifiers>) => void;
   resetSimulation: () => void;
 
+  // ✅ NEW: Departments
+  departments: Department[];
+  setDepartments: (d: Department[]) => void;
+  addDepartment: (d: Department) => void;
+  updateDepartment: (id: string, d: Partial<Department>) => void;
+  removeDepartment: (id: string) => void;
+
+  // ✅ NEW: Modules (Phases)
+  modules: Module[];
+  setModules: (m: Module[]) => void;
+  addModule: (m: Module) => void;
+  updateModule: (id: string, m: Partial<Module>) => void;
+  removeModule: (id: string) => void;
+
   syncToPlan: (planId: string, plan: Plan) => void;
 }
 
 type FinancialStore = AccountStore & PlanDashboardStore;
+
+// ================= DEFAULTS =================
 
 const defaultSimulation: SimulationModifiers = {
   costMultiplier: 1,
@@ -66,6 +87,15 @@ const defaultSimulation: SimulationModifiers = {
   revenueAdjustment: 0,
   isSimulating: false,
 };
+
+const defaultEventData: EventData = {
+  estimatedAttendance: 500,
+  ticketPrice: 50,
+  expectedRevenue: 25000,
+  eventExpenses: 10000,
+};
+
+// ================= STORE =================
 
 export const useFinancialStore = create<FinancialStore>((set, get) => ({
   // ACCOUNT
@@ -75,13 +105,17 @@ export const useFinancialStore = create<FinancialStore>((set, get) => ({
   // PLANS
   plans: [],
   setPlans: (plans) => set({ plans }),
-  addPlan: (plan) => set((state) => ({ plans: [...state.plans, plan] })),
+
+  addPlan: (plan) =>
+    set((state) => ({ plans: [...state.plans, plan] })),
+
   removePlan: (planId) =>
     set((state) => ({
       plans: state.plans.filter((p) => p.id !== planId),
       currentPlanId:
         state.currentPlanId === planId ? null : state.currentPlanId,
     })),
+
   updatePlanStatus: (planId, status) =>
     set((state) => ({
       plans: state.plans.map((p) =>
@@ -92,68 +126,82 @@ export const useFinancialStore = create<FinancialStore>((set, get) => ({
   // LOADING / ERROR
   isLoading: false,
   setIsLoading: (isLoading) => set({ isLoading }),
+
   error: null,
   setError: (error) => set({ error }),
 
   // CURRENT PLAN
   currentPlanId: null,
   setCurrentPlanId: (planId) => set({ currentPlanId: planId }),
+
   getCurrentPlan: () => {
     const state = get();
     return state.plans.find((p) => p.id === state.currentPlanId) || null;
   },
 
-  // PLAN DASHBOARD
-  mode: "company",
+  // ================= DASHBOARD =================
+
+  mode: "event",
 
   setMode: (mode) =>
-    set((state) => {
-      if (!state.currentPlanId) return state;
-      return {
-        mode,
-        plans: state.plans.map((p) =>
-          p.id === state.currentPlanId ? { ...p, mode } : p
-        ),
-      };
-    }),
+    set((state) => ({
+      mode,
+      plans: state.plans.map((p) =>
+        p.id === state.currentPlanId ? { ...p, mode } : p
+      ),
+    })),
 
-  // TEAM MEMBERS
+  // ================= TEAM =================
+
   teamMembers: [],
   setTeamMembers: (teamMembers) => set({ teamMembers }),
+
   addTeamMember: (member) =>
-    set((state) => ({ teamMembers: [...state.teamMembers, member] })),
+    set((state) => ({
+      teamMembers: [...state.teamMembers, member],
+    })),
+
   updateTeamMember: (id, member) =>
     set((state) => ({
       teamMembers: state.teamMembers.map((m) =>
         m.id === id ? { ...m, ...member } : m
       ),
     })),
+
   removeTeamMember: (id) =>
     set((state) => ({
       teamMembers: state.teamMembers.filter((m) => m.id !== id),
     })),
 
-  // EXPENSES
+  // ================= EXPENSES =================
+
   expenses: [],
   setExpenses: (expenses) => set({ expenses }),
+
   addExpense: (expense) =>
-    set((state) => ({ expenses: [...state.expenses, expense] })),
+    set((state) => ({
+      expenses: [...state.expenses, expense],
+    })),
+
   updateExpense: (id, expense) =>
     set((state) => ({
       expenses: state.expenses.map((e) =>
         e.id === id ? { ...e, ...expense } : e
       ),
     })),
+
   removeExpense: (id) =>
     set((state) => ({
       expenses: state.expenses.filter((e) => e.id !== id),
     })),
 
-  // EVENT DATA
-  eventData: null,
+  // ================= EVENT =================
+
+  eventData: defaultEventData,
+
   updateEventData: (data) =>
     set((state) => {
-      const eventData = { ...state.eventData, ...data } as EventData;
+      const eventData = { ...state.eventData, ...data };
       return {
         eventData,
         plans: state.plans.map((p) =>
@@ -162,8 +210,10 @@ export const useFinancialStore = create<FinancialStore>((set, get) => ({
       };
     }),
 
-  // SIMULATION
+  // ================= SIMULATION =================
+
   simulation: defaultSimulation,
+
   updateSimulation: (data) =>
     set((state) => {
       const simulation = { ...state.simulation, ...data };
@@ -174,35 +224,84 @@ export const useFinancialStore = create<FinancialStore>((set, get) => ({
         ),
       };
     }),
+
   resetSimulation: () =>
-    set((state) => ({
+    set({
       simulation: defaultSimulation,
-      plans: state.plans.map((p) =>
-        p.id === state.currentPlanId
-          ? { ...p, simulation: defaultSimulation }
-          : p
+    }),
+
+  // ================= DEPARTMENTS =================
+
+  departments: [],
+  setDepartments: (departments) => set({ departments }),
+
+  addDepartment: (dept) =>
+    set((state) => ({
+      departments: [...state.departments, dept],
+    })),
+
+  updateDepartment: (id, data) =>
+    set((state) => ({
+      departments: state.departments.map((d) =>
+        d.id === id ? { ...d, ...data } : d
       ),
     })),
 
-  // SYNC
+  removeDepartment: (id) =>
+    set((state) => ({
+      departments: state.departments.filter((d) => d.id !== id),
+      modules: state.modules.filter((m) => m.departmentId !== id),
+    })),
+
+  // ================= MODULES =================
+
+  modules: [],
+  setModules: (modules) => set({ modules }),
+
+  addModule: (mod) =>
+    set((state) => ({
+      modules: [...state.modules, mod],
+    })),
+
+  updateModule: (id, data) =>
+    set((state) => ({
+      modules: state.modules.map((m) =>
+        m.id === id ? { ...m, ...data } : m
+      ),
+    })),
+
+  removeModule: (id) =>
+    set((state) => ({
+      modules: state.modules.filter((m) => m.id !== id),
+    })),
+
+  // ================= SYNC =================
+
   syncToPlan: (planId, plan) =>
     set({
       currentPlanId: planId,
       mode: plan.mode,
       teamMembers: plan.teamMembers,
       expenses: plan.expenses,
-      eventData: plan.eventData || null,
+      eventData: plan.eventData || defaultEventData,
       simulation: plan.simulation,
+
+      // reset (later replace with backend data)
+      departments: [],
+      modules: [],
     }),
 }));
+
+// ================= METRICS =================
 
 export function calculateMetrics(
   expenses: Expense[],
   simulation: SimulationModifiers,
   mode: Mode,
-  eventData: EventData | null
+  eventData: EventData
 ) {
   const totalBudget = expenses.reduce((s, e) => s + e.allocatedBudget, 0);
+
   let totalSpent =
     expenses.reduce((s, e) => s + e.spentAmount, 0) *
     simulation.costMultiplier;
@@ -211,7 +310,7 @@ export function calculateMetrics(
 
   let estimatedProfitLoss = totalBudget - totalSpent;
 
-  if (mode === "event" && eventData) {
+  if (mode === "event") {
     estimatedProfitLoss =
       eventData.expectedRevenue +
       simulation.revenueAdjustment -
