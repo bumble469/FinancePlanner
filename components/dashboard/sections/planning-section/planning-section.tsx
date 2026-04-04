@@ -18,6 +18,9 @@ import {
   Calculator,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import axios from "axios";
+import { AddDeptDialog } from "./components/add-dept-dialog";
+import { useEffect } from "react";
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -28,7 +31,7 @@ function formatCurrency(value: number): string {
 }
 
 export function EventSection() {
-  const { mode, eventData, updateEventData, expenses, simulation, departments, addDepartment, updateDepartment, removeDepartment,
+  const { currentPlanId, mode, eventData, updateEventData, expenses, simulation, departments, addDepartment, updateDepartment, removeDepartment,
     modules, addModule, updateModule, removeModule
   } = useFinancialStore();
   const isEvent = mode === "event";
@@ -43,6 +46,86 @@ export function EventSection() {
     eventData.eventExpenses / eventData.ticketPrice
   );
   const profitPerAttendee = eventData.ticketPrice - eventData.eventExpenses / eventData.estimatedAttendance;
+
+  useEffect(() => {
+    fetchDepartments();
+  }, [])
+
+  const fetchDepartments = async () => {
+    if (!currentPlanId) return;
+    try {
+      const res = await axios.get(
+        `/api/plan/${currentPlanId}/departments`,
+        { withCredentials: true }
+      );
+
+      // assuming API returns array
+      const data = res.data;
+
+      // you probably need a setter in store
+      useFinancialStore.getState().setDepartments(data);
+
+    } catch (err) {
+      console.error("Fetch departments failed:", err);
+    }
+  };
+
+  const createDepartment = async (
+    id: string,
+    name: string,
+    budget: number
+  ) => {
+    if (!currentPlanId) return;
+
+    const newDept = { id, name, budget };
+
+    addDepartment(newDept);
+
+    try {
+      await axios.post(
+        `/api/plan/${currentPlanId}/departments`,
+        newDept,
+        { withCredentials: true }
+      );
+    } catch (err) {
+      console.error("Create department failed:", err);
+      removeDepartment(id);
+    }
+  };
+
+  const updateDepartmentHandler = async (
+    id: string,
+    data: Partial<{ name: string; budget: number }>
+  ) => {
+    if (!currentPlanId) return;
+
+    updateDepartment(id, data);
+
+    try {
+      await axios.patch(
+        `/api/plan/${currentPlanId}/departments/${id}`,
+        data,
+        { withCredentials: true }
+      );
+    } catch (err) {
+      console.error("Update failed:", err);
+    }
+  };
+
+  const deleteDepartmentHandler = async (id: string) => {
+    if (!currentPlanId) return;
+
+    removeDepartment(id);
+
+    try {
+      await axios.delete(
+        `/api/plan/${currentPlanId}/departments/${id}`,
+        { withCredentials: true }
+      );
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -65,42 +148,46 @@ export function EventSection() {
             <div className="flex justify-between mb-4">
               <h2 className="font-semibold">Departments</h2>
 
-              <Button
-                size="sm"
-                onClick={() =>
-                  addDepartment({
-                    id: crypto.randomUUID(),
-                    name: "New Department",
-                    budget: 0,
-                  })
-                }
-              >
-                + Add
-              </Button>
+              <AddDeptDialog onCreate={createDepartment} onDeptCreated={fetchDepartments} maxBudget={eventData.eventExpenses} />
             </div>
 
             {departments.map((d) => (
-              <div key={d.id} className="border p-4 rounded-lg space-y-3">
+              <div key={d.id} className="border p-4 rounded-lg space-y-4">
 
-                {/* NAME */}
-                <Input
-                  value={d.name}
-                  onChange={(e) =>
-                    updateDepartment(d.id, { name: e.target.value })
-                  }
-                />
+                {/* TOP ROW */}
+                <div className="flex items-center gap-3">
+                  <Input
+                    value={d.name}
+                    onChange={(e) =>
+                      updateDepartmentHandler(d.id, { name: e.target.value })
+                    }
+                    className="flex-1"
+                    placeholder="Department name"
+                  />
 
-                {/* BUDGET */}
-                <Input
-                  type="number"
-                  value={d.budget}
-                  onChange={(e) =>
-                    updateDepartment(d.id, {
-                      budget: Number(e.target.value),
-                    })
-                  }
-                />
+                  <Input
+                    type="number"
+                    value={d.budget ?? ""}
+                    onChange={(e) =>
+                      updateDepartmentHandler(d.id, {
+                        budget: Number(e.target.value),
+                      })
+                    }
+                    className="w-32"
+                    placeholder="Budget"
+                  />
 
+                  {/* DELETE BUTTON */}
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => deleteDepartmentHandler(d.id)}
+                  >
+                    ✕
+                  </Button>
+                </div>
+
+                {/* MODULES */}
                 {isProject && (
                   <div className="pl-4 border-l space-y-2">
 
@@ -110,7 +197,7 @@ export function EventSection() {
                         addModule({
                           id: crypto.randomUUID(),
                           name: "New Module",
-                          departmentId: d.id, 
+                          departmentId: d.id,
                         })
                       }
                     >
@@ -120,7 +207,7 @@ export function EventSection() {
                     {modules
                       .filter((m) => m.departmentId === d.id)
                       .map((m) => (
-                        <div key={m.id} className="flex gap-2">
+                        <div key={m.id} className="flex gap-2 items-center">
                           <Input
                             value={m.name}
                             onChange={(e) =>
@@ -129,6 +216,7 @@ export function EventSection() {
                           />
                           <Button
                             size="icon"
+                            variant="ghost"
                             onClick={() => removeModule(m.id)}
                           >
                             ✕
@@ -137,18 +225,9 @@ export function EventSection() {
                       ))}
                   </div>
                 )}
-
-                {/* DELETE */}
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => removeDepartment(d.id)}
-                >
-                  Delete
-                </Button>
               </div>
             ))}
-          </div>          
+          </div>
 
           {/* Attendance & Tickets */}
           {isEvent && (

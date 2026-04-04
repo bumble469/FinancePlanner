@@ -4,9 +4,6 @@ import {
   getRefreshTokenFromCookie,
   verifyRefreshToken,
   generateAccessToken,
-  generateRefreshToken,
-  setRefreshTokenCookie,
-  REFRESH_TOKEN_TTL,
 } from '@/lib/jwt';
 
 const prisma = new PrismaClient();

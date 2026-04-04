@@ -74,16 +74,13 @@ export async function GET(request: NextRequest) {
     let user;
 
     if (oauthAccount) {
-      // ✅ Existing Google user → LOGIN
       user = oauthAccount.user;
     } else {
-      // 4️⃣ Check if user exists by email
       user = await prisma.user.findUnique({
         where: { email },
       });
 
       if (!user) {
-        // 🆕 First time Google user → SIGNUP
         user = await prisma.user.create({
           data: {
             email,
@@ -118,7 +115,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 5️⃣ Issue tokens
     const accessToken = await generateAccessToken({
       sub: user.id,
       email: user.email,

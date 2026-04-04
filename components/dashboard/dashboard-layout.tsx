@@ -6,7 +6,7 @@ import { Sidebar } from "./sidebar";
 import { OverviewSection } from "./sections/overview-section";
 import { TeamSection } from "./sections/team-section";
 import { ExpenseSection } from "./sections/expense-section";
-import { EventSection } from "./sections/planning-section";
+import { EventSection } from "./sections/planning-section/planning-section";
 import { SimulationSection } from "./sections/simulation-section";
 import { Menu, X, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,22 +18,6 @@ interface DashboardLayoutProps {
   planId: string;
 }
 
-/**
- * DashboardLayout - Plan-scoped dashboard
- * 
- * This component is rendered for /plans/[planId] routes
- * It loads the specific plan and displays dashboard sections
- * 
- * Data Flow:
- * Plan (from store)
- *   ├── Sidebar navigation (Dashboard, Expenses, Team, Simulation)
- *   ├── Overview section (plan metrics)
- *   ├── Team section (plan members)
- *   ├── Expense section (plan expenses)
- *   ├── Event section (if plan.type === "event")
- *   └── Simulation section
- */
-
 export function DashboardLayout({ planId }: DashboardLayoutProps) {
   const router = useRouter();
   const { plans, syncToPlan, getCurrentPlan } = useFinancialStore();
@@ -41,14 +25,12 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<Plan | null>(null);
 
-  // Load and sync plan on mount
   useEffect(() => {
     const plan = plans.find((p) => p.id === planId);
     if (plan) {
       syncToPlan(planId, plan);
       setCurrentPlan(plan);
     } else {
-      // Plan not found, redirect to plans list
       router.push("/plans");
     }
   }, [planId, plans, syncToPlan, router]);

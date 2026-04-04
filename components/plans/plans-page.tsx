@@ -32,7 +32,7 @@ function mapWorkItemToPlan(workItem: any): Plan {
       revenueAdjustment: 0,
       isSimulating: false,
     },
-    mode: workItem.type === "EVENT" ? "event" : "company",
+    mode: workItem.type === "EVENT" ? "event" : "project",
   };
 }
 
@@ -42,25 +42,25 @@ export function PlansPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
   useEffect(() => {
-    const fetchPlans = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const { data } = await axios.get("/api/plan", { withCredentials: true });
-        setPlans(data.data.map(mapWorkItemToPlan));
-      } catch (err) {
-        if (axios.isAxiosError(err)) {
-          setError(err.response?.data?.error || "Failed to fetch plans");
-        } else {
-          setError("Something went wrong");
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchPlans();
-  }, []);
+  }, [])
+
+  const fetchPlans = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { data } = await axios.get("/api/plan", { withCredentials: true });
+      setPlans(data.data.map(mapWorkItemToPlan));
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.error || "Failed to fetch plans");
+      } else {
+        setError("Something went wrong");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const activePlans = plans.filter((p) => p.status === "active");
   const completedPlans = plans.filter((p) => p.status === "completed");
@@ -151,6 +151,7 @@ export function PlansPage() {
       <CreatePlanDialog
         open={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
+        onPlanCreate={fetchPlans}
       />
     </div>
   );

@@ -20,9 +20,10 @@ import axios from "axios";
 interface CreatePlanDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onPlanCreate: () => void;
 }
 
-export function CreatePlanDialog({ open, onOpenChange }: CreatePlanDialogProps) {
+export function CreatePlanDialog({ open, onOpenChange, onPlanCreate }: CreatePlanDialogProps) {
   const { addPlan } = useFinancialStore();
   const [name, setName] = useState("");
   const [type, setType] = useState<PlanType>("project");
@@ -48,7 +49,7 @@ export function CreatePlanDialog({ open, onOpenChange }: CreatePlanDialogProps) 
       });
 
       addPlan(data.data);
-
+      onPlanCreate();
       setName("");
       setBudget("");
       setType("project");
