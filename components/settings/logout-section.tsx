@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { LogOut, MonitorX } from "lucide-react";
+import { authClient } from "@/lib/auth-client";
 
 type DialogType = "logout" | "logout-all" | null;
 
@@ -23,15 +24,19 @@ export function LogoutSection() {
 
   const handleLogout = async (all: boolean) => {
     setLoading(true);
+
     try {
       const endpoint = all ? "/api/auth/logout-all" : "/api/auth/logout";
-      const res = await fetch(endpoint, { method: "POST" });
 
-      if (res.ok) {
-        window.location.href = '/'; 
-      }
-    } catch (error) {
-      console.error("Logout failed:", error);
+      await authClient.request(endpoint, {
+        method: "POST",
+      });
+
+      window.location.href = "/";
+
+    } catch (error: any) {
+      console.error("Logout failed:", error.response?.data || error);
+
     } finally {
       setLoading(false);
       setOpenDialog(null);
@@ -47,33 +52,33 @@ export function LogoutSection() {
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3">
-            <Button
-                variant="outline"
-                className="
+          <Button
+            variant="outline"
+            className="
                     flex items-center gap-2 cursor-pointer
                     hover:bg-gray-200
                     dark:hover:bg-gray-700
                     hover:text-foreground
                 "
-                onClick={() => setOpenDialog('logout')}
-                >
-                <LogOut className="h-4 w-4" />
-                Log out
-            </Button>
+            onClick={() => setOpenDialog('logout')}
+          >
+            <LogOut className="h-4 w-4" />
+            Log out
+          </Button>
 
-            <Button
-                variant="destructive"
-                className="
+          <Button
+            variant="destructive"
+            className="
                     flex items-center gap-2 cursor-pointer
                     hover:bg-destructive/90
                     dark:hover:bg-destructive/80
                     hover:text-destructive-foreground
                 "
-                onClick={() => setOpenDialog('logout-all')}
-                >
-                <MonitorX className="h-4 w-4" />
-                Log out of all devices
-            </Button>
+            onClick={() => setOpenDialog('logout-all')}
+          >
+            <MonitorX className="h-4 w-4" />
+            Log out of all devices
+          </Button>
         </div>
       </Card>
 

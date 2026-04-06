@@ -1,4 +1,5 @@
 'use client';
+import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 
 interface AuthUser {
   id: string;
@@ -19,6 +20,7 @@ interface AuthResponse {
 class AuthClient {
   private accessToken: string | null = null;
   private user: AuthUser | null = null;
+  private refreshPromise: Promise<boolean> | null = null;
 
   async signup(params: {
     email: string;
@@ -26,19 +28,14 @@ class AuthClient {
     confirmPassword: string;
     name?: string;
     accountName?: string;
-    accountType?: 'INDIVIDUAL' | 'COMPANY';
+    accountType?: "INDIVIDUAL" | "COMPANY";
   }): Promise<AuthResponse> {
     try {
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Include cookies
-        body: JSON.stringify(params),
+      const res = await axios.post("/api/auth/signup", params, {
+        withCredentials: true,
       });
 
-      const data: AuthResponse = await response.json();
+      const data: AuthResponse = res.data;
 
       if (data.success && data.data) {
         this.accessToken = data.data.accessToken;
@@ -46,11 +43,11 @@ class AuthClient {
       }
 
       return data;
-    } catch (error) {
-      console.error('[Auth] Signup error:', error);
+    } catch (error: any) {
+      console.error("[Auth] Signup error:", error);
       return {
         success: false,
-        error: 'Network error',
+        error: error?.response?.data?.error || "Network error",
       };
     }
   }
@@ -60,16 +57,11 @@ class AuthClient {
     password: string;
   }): Promise<AuthResponse> {
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Include cookies
-        body: JSON.stringify(params),
+      const res = await axios.post("/api/auth/login", params, {
+        withCredentials: true,
       });
 
-      const data: AuthResponse = await response.json();
+      const data: AuthResponse = res.data;
 
       if (data.success && data.data) {
         this.accessToken = data.data.accessToken;
@@ -77,11 +69,11 @@ class AuthClient {
       }
 
       return data;
-    } catch (error) {
-      console.error('[Auth] Login error:', error);
+    } catch (error: any) {
+      console.error("[Auth] Login error:", error);
       return {
         success: false,
-        error: 'Network error',
+        error: error?.response?.data?.error || "Network error",
       };
     }
   }
@@ -92,15 +84,13 @@ class AuthClient {
     error?: string;
   }> {
     try {
-      const response = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
+      const res = await axios.post(
+        "/api/auth/refresh",
+        {},
+        { withCredentials: true }
+      );
 
-      const data: AuthResponse = await response.json();
+      const data: AuthResponse = res.data;
 
       if (data.success && data.data) {
         this.accessToken = data.data.accessToken;
@@ -114,11 +104,11 @@ class AuthClient {
         success: false,
         error: data.error,
       };
-    } catch (error) {
-      console.error('[Auth] Refresh error:', error);
+    } catch (error: any) {
+      console.error("[Auth] Refresh error:", error);
       return {
         success: false,
-        error: 'Network error',
+        error: "Network error",
       };
     }
   }
@@ -128,15 +118,13 @@ class AuthClient {
     error?: string;
   }> {
     try {
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Include cookies
-      });
+      const res = await axios.post(
+        "/api/auth/logout",
+        {},
+        { withCredentials: true }
+      );
 
-      const data = await response.json();
+      const data = res.data;
 
       if (data.success) {
         this.accessToken = null;
@@ -144,11 +132,11 @@ class AuthClient {
       }
 
       return data;
-    } catch (error) {
-      console.error('[Auth] Logout error:', error);
+    } catch (error: any) {
+      console.error("[Auth] Logout error:", error);
       return {
         success: false,
-        error: 'Network error',
+        error: "Network error",
       };
     }
   }
@@ -173,36 +161,56 @@ class AuthClient {
     return !!this.accessToken && !!this.user;
   }
 
-  async fetch(
+  // 🔥 MAIN REQUEST METHOD (REPLACES FETCH)
+  async request(
     url: string,
-    options: RequestInit = {}
-  ): Promise<Response> {
-    let response = await fetch(url, {
-      ...options,
-      headers: {
-        ...options.headers,
-        Authorization: `Bearer ${this.accessToken}`,
-      },
-      credentials: 'include',
-    });
+    options: AxiosRequestConfig = {}
+  ): Promise<AxiosResponse> {
+    const makeRequest = () =>
+      axios({
+        url,
+        withCredentials: true,
+        ...options,
+        headers: {
+          ...options.headers,
+          ...(this.accessToken
+            ? { Authorization: `Bearer ${this.accessToken}` }
+            : {}),
+        },
+      });
 
-    if (response.status === 401) {
-      const refreshResult = await this.refresh();
-      if (refreshResult.success) {
-        response = await fetch(url, {
-          ...options,
-          headers: {
-            ...options.headers,
-            ...(this.accessToken
-              ? { Authorization: `Bearer ${this.accessToken}` }
-              : {}),
-          },
-          credentials: 'include',
-        });
+    try {
+      return await makeRequest();
+    } catch (error: any) {
+      // 🔥 HANDLE 401
+      if (error.response?.status === 401) {
+        // 🔒 lock refresh
+        if (!this.refreshPromise) {
+          this.refreshPromise = this.refresh().then((res) => {
+            this.refreshPromise = null;
+            return res.success;
+          });
+        }
+
+        const success = await this.refreshPromise;
+
+        if (success) {
+          return makeRequest(); // retry
+        } else {
+          // ❌ logout user
+          this.accessToken = null;
+          this.user = null;
+
+          if (typeof window !== "undefined") {
+            window.location.href = "/login";
+          }
+
+          throw error;
+        }
       }
-    }
 
-    return response;
+      throw error;
+    }
   }
 }
 

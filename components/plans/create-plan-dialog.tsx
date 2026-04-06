@@ -15,8 +15,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useFinancialStore } from "@/lib/store";
 import type { PlanType } from "@/lib/types";
-import axios from "axios";
-
+import { authClient } from "@/lib/auth-client";
 interface CreatePlanDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -40,12 +39,14 @@ export function CreatePlanDialog({ open, onOpenChange, onPlanCreate }: CreatePla
 
     setIsLoading(true);
     try {
-      const { data } = await axios.post("/api/plan", {
-        name: name.trim(),
-        type: type.toUpperCase(),
-        budget: budgetAmount,
-      }, {
-        withCredentials: true,
+      const { data } = await authClient.request("/api/plan",  
+      {
+        method: "POST",
+        data: {
+          name: name.trim(),
+          type: type.toUpperCase(),
+          budget: budgetAmount,
+        }
       });
 
       addPlan(data.data);
@@ -55,11 +56,7 @@ export function CreatePlanDialog({ open, onOpenChange, onPlanCreate }: CreatePla
       setType("project");
       onOpenChange(false);
     } catch (err) {
-      if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.error || "Failed to create plan");
-      } else {
-        setError("Something went wrong. Please try again.");
-      }
+      setError("Failed to create plan: " + (err as Error).message);
     } finally {
       setIsLoading(false);
     }

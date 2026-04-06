@@ -89,10 +89,10 @@ const defaultSimulation: SimulationModifiers = {
 };
 
 const defaultEventData: EventData = {
-  estimatedAttendance: 500,
-  ticketPrice: 50,
-  expectedRevenue: 25000,
-  eventExpenses: 10000,
+  estimatedAttendance: 0,
+  ticketPrice: 0 ,
+  expectedRevenue: 0,
+  eventExpenses: 0,
 };
 
 // ================= STORE =================

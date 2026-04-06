@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useFinancialStore } from "@/lib/store";
 import type { Plan } from "@/lib/types";
-import axios from "axios";
+import { authClient } from "@/lib/auth-client";
 
 interface PlanCardProps {
   plan: Plan;
@@ -54,8 +54,8 @@ export function PlanCard({ plan }: PlanCardProps) {
     try {
       setDeleting(true);
 
-      await axios.delete(`/api/plan/${plan.id}`, {
-        withCredentials: true,
+      await authClient.request(`/api/plan/${plan.id}`, {
+        method: "DELETE"
       });
 
       removePlan(plan.id);

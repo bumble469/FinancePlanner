@@ -22,25 +22,12 @@ export default function Home() {
   useEffect(() => {
     async function checkAuth() {
       try {
-        let res = await authClient.fetch('/api/auth/me');
+        const res = await authClient.request('/api/auth/me');
 
-        if (res.status === 401) {
-          const refreshRes = await authClient.fetch('/api/auth/refresh', {
-            method: 'POST',
-          });
+        const user = res.data?.data;
 
-          if (refreshRes.ok) {
-            res = await authClient.fetch('/api/auth/me');
-          } else {
-            snackbar.show('Session expired. Please login again.');
-            setIsAuthenticated(false);
-            return;
-          }
-        }
-
-        if (res.ok) {
-          const json = await res.json();
-          authClient.setUser(json.data);
+        if (user) {
+          authClient.setUser(user);
           setIsAuthenticated(true);
         } else {
           setIsAuthenticated(false);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,39 +12,72 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
+type Dept = {
+  id: string;
+  name: string;
+  budget: number;
+};
+
 type Props = {
   onCreate: (id: string, name: string, budget: number) => Promise<void> | void;
+  onUpdate?: (id: string, name: string, budget: number) => Promise<void> | void;
   onDeptCreated: () => void;
   maxBudget: number;
+  editingDept?: Dept | null;
+  open?: boolean;
+  setOpen?: (v: boolean) => void;
 };
 
 export function AddDeptDialog({
   onCreate,
+  onUpdate,
   onDeptCreated,
   maxBudget,
+  editingDept,
+  open: controlledOpen,
+  setOpen: setControlledOpen,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = setControlledOpen ?? setInternalOpen;
+
   const [name, setName] = useState("");
   const [budget, setBudget] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
+  const isEdit = !!editingDept;
   const numericBudget = Number(budget);
+
+  useEffect(() => {
+    if (editingDept) {
+      setName(editingDept.name);
+      setBudget(String(editingDept.budget));
+      setOpen(true);
+    } else {
+      setName("");
+      setBudget("");
+    }
+  }, [editingDept]);
 
   const isInvalid =
     !name ||
     !budget ||
     numericBudget <= 0 ||
-    numericBudget > maxBudget;
+    (maxBudget >= 0 && numericBudget > maxBudget);
 
-  const handleCreate = async () => {
+  const handleSubmit = async () => {
     if (isInvalid) return;
 
     setLoading(true);
 
     try {
-      const id = crypto.randomUUID();
+      if (isEdit && editingDept && onUpdate) {
+        await onUpdate(editingDept.id, name, numericBudget);
+      } else {
+        const id = crypto.randomUUID();
+        await onCreate(id, name, numericBudget);
+      }
 
-      await onCreate(id, name, numericBudget);
       onDeptCreated();
 
       // reset
@@ -52,7 +85,7 @@ export function AddDeptDialog({
       setBudget("");
       setOpen(false);
     } catch (err) {
-      console.error("Create failed:", err);
+      console.error("Submit failed:", err);
     } finally {
       setLoading(false);
     }
@@ -60,13 +93,26 @@ export function AddDeptDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">+ Add</Button>
-      </DialogTrigger>
+      {!isEdit && (
+        <DialogTrigger asChild>
+          <Button
+            size="sm"
+            onClick={() => {
+              if (setControlledOpen) {
+                setControlledOpen(true);
+              }
+            }}
+          >
+            + Add
+          </Button>
+        </DialogTrigger>
+      )}
 
       <DialogContent className="space-y-6">
         <DialogHeader>
-          <DialogTitle>Create Department</DialogTitle>
+          <DialogTitle>
+            {isEdit ? "Edit Department" : "Create Department"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5">
@@ -94,13 +140,13 @@ export function AddDeptDialog({
               onChange={(e) => setBudget(e.target.value)}
               placeholder="Enter amount"
               onKeyDown={(e) => {
-                if (e.key === "Enter") handleCreate();
+                if (e.key === "Enter") handleSubmit();
               }}
             />
 
-            {budget && numericBudget > maxBudget && (
+            {budget && maxBudget >= 0 && numericBudget > maxBudget && (
               <p className="text-sm text-red-500">
-                Budget cannot exceed plan limit (${maxBudget})
+                Budget cannot exceed remaining ({maxBudget})
               </p>
             )}
           </div>
@@ -108,10 +154,16 @@ export function AddDeptDialog({
 
         <Button
           className="w-full mt-2"
-          onClick={handleCreate}
+          onClick={handleSubmit}
           disabled={isInvalid || loading}
         >
-          {loading ? "Creating..." : "Create"}
+          {loading
+            ? isEdit
+              ? "Saving..."
+              : "Creating..."
+            : isEdit
+            ? "Save Changes"
+            : "Create"}
         </Button>
       </DialogContent>
     </Dialog>

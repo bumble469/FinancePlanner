@@ -10,6 +10,7 @@ import { PlanCard } from "./plan-card";
 import { CreatePlanDialog } from "./create-plan-dialog";
 import type { Plan } from "@/lib/types";
 import axios from "axios";
+import { authClient } from "@/lib/auth-client";
 
 function mapWorkItemToPlan(workItem: any): Plan {
   return {
@@ -49,7 +50,9 @@ export function PlansPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const { data } = await axios.get("/api/plan", { withCredentials: true });
+      const { data } = await authClient.request("/api/plan", {
+        method: "GET"
+      });
       setPlans(data.data.map(mapWorkItemToPlan));
     } catch (err) {
       if (axios.isAxiosError(err)) {

@@ -91,7 +91,6 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // ✅ Add creator as OWNER in members table
       await tx.workItemMember.create({
         data: {
           workItemId: workItem.id,

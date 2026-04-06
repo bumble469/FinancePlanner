@@ -4,6 +4,9 @@ import {
   getRefreshTokenFromCookie,
   verifyRefreshToken,
   generateAccessToken,
+  generateRefreshToken,
+  REFRESH_TOKEN_TTL,
+  setRefreshTokenCookie
 } from '@/lib/jwt';
 
 const prisma = new PrismaClient();
@@ -44,10 +47,6 @@ export async function POST(
       );
     }
 
-    // ============================================================
-    // CHECK REFRESH TOKEN IN DATABASE
-    // ============================================================
-
     const refreshTokenRecord = await prisma.refreshToken.findUnique({
       where: { id: decoded.tokenId },
       include: {
@@ -84,10 +83,7 @@ export async function POST(
       );
     }
 
-    // ============================================================
     // GENERATE NEW ACCESS TOKEN
-    // ============================================================
-
     const { user } = refreshTokenRecord;
 
     const newAccessToken = await generateAccessToken({
@@ -97,13 +93,6 @@ export async function POST(
       role: user.role,
     });
 
-    // ============================================================
-    // OPTIONAL: REFRESH TOKEN ROTATION
-    // ============================================================
-    // Implement refresh token rotation for additional security
-    // Uncomment to enable rotation (generates new refresh token on each refresh)
-
-    /*
     // Revoke old refresh token
     await prisma.refreshToken.update({
       where: { id: decoded.tokenId },
@@ -120,17 +109,18 @@ export async function POST(
       },
     });
 
-    const newRefreshToken = await generateRefreshToken(user.id, newRefreshTokenRecord.id);
+    const newRefreshToken = await generateRefreshToken(
+      user.id,
+      newRefreshTokenRecord.id
+    );
 
-    // Set new refresh token cookie
+    // ⚠️ KEEPING your helper (as requested)
     await setRefreshTokenCookie(newRefreshToken, REFRESH_TOKEN_TTL);
-    */
 
-    // ============================================================
-    // RESPONSE
-    // ============================================================
-
-    return NextResponse.json<RefreshResponse>(
+    // ============================
+    // ✅ CREATE RESPONSE FIRST
+    // ============================
+    const response = NextResponse.json<RefreshResponse>(
       {
         success: true,
         data: {
@@ -139,6 +129,32 @@ export async function POST(
       },
       { status: 200 }
     );
+
+    // ============================
+    // ✅ ACCESS TOKEN COOKIE
+    // ============================
+    response.cookies.set({
+      name: 'access_token',
+      value: newAccessToken,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 1,
+      path: '/',
+    });
+
+    response.cookies.set({
+      name: 'refresh_token',
+      value: newRefreshToken,
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: REFRESH_TOKEN_TTL / 1000,
+      path: '/',
+    });
+
+    return response;
+
   } catch (error) {
     console.error('[Refresh] Error:', error);
 
@@ -154,9 +170,6 @@ export async function POST(
   }
 }
 
-/**
- * Helper: Extract client IP from request
- */
 function getClientIp(request: NextRequest): string | null {
   return (
     request.headers.get('x-forwarded-for')?.split(',')[0] ||

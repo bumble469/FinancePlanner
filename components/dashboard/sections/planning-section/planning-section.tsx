@@ -1,6 +1,8 @@
 "use client";
-
+import { useState } from "react";
 import { useFinancialStore, calculateMetrics } from "@/lib/store";
+import { authClient } from "@/lib/auth-client";
+import { Department } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -36,10 +38,11 @@ export function EventSection() {
   } = useFinancialStore();
   const isEvent = mode === "event";
   const isProject = mode === "project";
-  const metrics = calculateMetrics(expenses, simulation, mode, eventData);
-  const eventProfit =
-    eventData.expectedRevenue - eventData.eventExpenses * simulation.costMultiplier;
+  // const metrics = calculateMetrics(expenses, simulation, mode, eventData);
+  const eventProfit = eventData.expectedRevenue - eventData.eventExpenses * simulation.costMultiplier;
   const isProfit = eventProfit >= 0;
+  const [editingDept, setEditingDept] = useState<Department | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   // Calculate break-even
   const breakEvenAttendees = Math.ceil(
@@ -49,21 +52,19 @@ export function EventSection() {
 
   useEffect(() => {
     fetchDepartments();
-  }, [])
+  }, [currentPlanId])
 
   const fetchDepartments = async () => {
     if (!currentPlanId) return;
+
     try {
-      const res = await axios.get(
-        `/api/plan/${currentPlanId}/departments`,
-        { withCredentials: true }
+      const res = await authClient.request(
+        `/api/plan/${currentPlanId}/departments`
       );
-
-      // assuming API returns array
       const data = res.data;
-
-      // you probably need a setter in store
-      useFinancialStore.getState().setDepartments(data);
+      useFinancialStore.getState().setDepartments(
+        data.map((d: any) => ({ ...d, budget: Number(d.budget) }))
+      );
 
     } catch (err) {
       console.error("Fetch departments failed:", err);
@@ -77,15 +78,18 @@ export function EventSection() {
   ) => {
     if (!currentPlanId) return;
 
-    const newDept = { id, name, budget };
+    const tempDept = { id, name, budget };
+    const newDept = { name, budget };
 
-    addDepartment(newDept);
+    addDepartment(tempDept);
 
     try {
-      await axios.post(
+      await authClient.request(
         `/api/plan/${currentPlanId}/departments`,
-        newDept,
-        { withCredentials: true }
+        {
+          method: "POST",
+          data: newDept,
+        }
       );
     } catch (err) {
       console.error("Create department failed:", err);
@@ -102,10 +106,12 @@ export function EventSection() {
     updateDepartment(id, data);
 
     try {
-      await axios.patch(
+      await authClient.request(
         `/api/plan/${currentPlanId}/departments/${id}`,
-        data,
-        { withCredentials: true }
+        {
+          method: "PATCH",
+          data
+        }
       );
     } catch (err) {
       console.error("Update failed:", err);
@@ -114,18 +120,22 @@ export function EventSection() {
 
   const deleteDepartmentHandler = async (id: string) => {
     if (!currentPlanId) return;
-
     removeDepartment(id);
-
     try {
-      await axios.delete(
+      await authClient.request(
         `/api/plan/${currentPlanId}/departments/${id}`,
-        { withCredentials: true }
+        {
+          method: "DELETE"
+        }
       );
     } catch (err) {
       console.error("Delete failed:", err);
     }
   };
+
+  const remainingBudget = (eventData.eventExpenses || 0) - departments
+    .filter((d) => d.id !== editingDept?.id)
+    .reduce((sum, d) => sum + Number(d.budget || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -148,49 +158,63 @@ export function EventSection() {
             <div className="flex justify-between mb-4">
               <h2 className="font-semibold">Departments</h2>
 
-              <AddDeptDialog onCreate={createDepartment} onDeptCreated={fetchDepartments} maxBudget={eventData.eventExpenses} />
+              <AddDeptDialog
+                onCreate={createDepartment}
+                onUpdate={(id, name, budget) =>
+                  updateDepartmentHandler(id, { name, budget })
+                }
+                onDeptCreated={fetchDepartments}
+                maxBudget={remainingBudget}
+                editingDept={editingDept}
+                open={dialogOpen}
+                setOpen={(v) => {
+                  setDialogOpen(v);
+                  if (!v) setEditingDept(null);
+                }}
+              />
             </div>
 
             {departments.map((d) => (
-              <div key={d.id} className="border p-4 rounded-lg space-y-4">
-
+              <div
+                key={d.id}
+                className="group rounded-xl border bg-card p-4 hover:shadow-sm transition"
+              >
                 {/* TOP ROW */}
-                <div className="flex items-center gap-3">
-                  <Input
-                    value={d.name}
-                    onChange={(e) =>
-                      updateDepartmentHandler(d.id, { name: e.target.value })
-                    }
-                    className="flex-1"
-                    placeholder="Department name"
-                  />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">{d.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatCurrency(d.budget || 0)}
+                    </p>
+                  </div>
 
-                  <Input
-                    type="number"
-                    value={d.budget ?? ""}
-                    onChange={(e) =>
-                      updateDepartmentHandler(d.id, {
-                        budget: Number(e.target.value),
-                      })
-                    }
-                    className="w-32"
-                    placeholder="Budget"
-                  />
+                  <div className="flex items-center gap-2 opacity-70 group-hover:opacity-100 transition">
+                    {/* EDIT BUTTON */}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => {
+                        setEditingDept(d);
+                        setDialogOpen(true);
+                      }}
+                    >
+                      ✏️
+                    </Button>
 
-                  {/* DELETE BUTTON */}
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    onClick={() => deleteDepartmentHandler(d.id)}
-                  >
-                    ✕
-                  </Button>
+                    {/* DELETE BUTTON */}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => deleteDepartmentHandler(d.id)}
+                    >
+                      🗑️
+                    </Button>
+                  </div>
                 </div>
 
-                {/* MODULES */}
+                {/* MODULES (unchanged) */}
                 {isProject && (
-                  <div className="pl-4 border-l space-y-2">
-
+                  <div className="mt-4 pl-4 border-l space-y-2">
                     <Button
                       size="sm"
                       onClick={() =>
