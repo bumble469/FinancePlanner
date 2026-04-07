@@ -41,6 +41,7 @@ export function PlansPage() {
   const { plans, account, setPlans, setIsLoading, setError, isLoading, error } =
     useFinancialStore();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
 
   useEffect(() => {
     fetchPlans();
@@ -67,6 +68,11 @@ export function PlansPage() {
 
   const activePlans = plans.filter((p) => p.status === "active");
   const completedPlans = plans.filter((p) => p.status === "completed");
+
+  const handleEditPlan = (plan: Plan) => {
+    setEditingPlan(plan);
+    setIsCreateDialogOpen(true);
+  };  
 
   if (isLoading) {
     return (
@@ -125,7 +131,7 @@ export function PlansPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {activePlans.map((plan) => (
-              <PlanCard key={plan.id} plan={plan} />
+              <PlanCard key={plan.id} plan={plan} onEdit={handleEditPlan} />
             ))}
           </div>
         )}
@@ -145,7 +151,7 @@ export function PlansPage() {
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {completedPlans.map((plan) => (
-              <PlanCard key={plan.id} plan={plan} />
+              <PlanCard key={plan.id} plan={plan} onEdit={handleEditPlan} />
             ))}
           </div>
         </section>
@@ -153,8 +159,13 @@ export function PlansPage() {
 
       <CreatePlanDialog
         open={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
+        onOpenChange={(open) => {
+          setIsCreateDialogOpen(open);
+          if (!open) setEditingPlan(null);
+        }}
         onPlanCreate={fetchPlans}
+        initialData={editingPlan ?? undefined}
+        isEditMode={!!editingPlan}
       />
     </div>
   );

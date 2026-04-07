@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Trash2 } from "lucide-react";
+import { ArrowRight, Trash2, Pencil } from "lucide-react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,9 +23,10 @@ import { authClient } from "@/lib/auth-client";
 
 interface PlanCardProps {
   plan: Plan;
+  onEdit: (plan: Plan) => void;
 }
 
-export function PlanCard({ plan }: PlanCardProps) {
+export function PlanCard({ plan, onEdit }: PlanCardProps) {
   const { removePlan } = useFinancialStore();
   const [deleting, setDeleting] = useState(false);
 
@@ -70,6 +71,14 @@ export function PlanCard({ plan }: PlanCardProps) {
     <Card className="relative border border-border bg-card p-6 transition-all hover:shadow-lg">
       {/* Header */}
       <div className="mb-4 flex items-start justify-between">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="absolute top-3 right-3"
+          onClick={() => onEdit(plan)}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
         <div className="space-y-2">
           <h3 className="text-lg font-semibold text-foreground line-clamp-2">
             {plan.name}

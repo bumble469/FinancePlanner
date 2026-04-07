@@ -18,11 +18,14 @@ import {
   CheckCircle2,
   ArrowRight,
   Calculator,
+  Pencil,
+  Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import axios from "axios";
 import { AddDeptDialog } from "./components/add-dept-dialog";
 import { useEffect } from "react";
+import { ConfirmDeleteDialog } from "./components/confirm-delete-dialog";
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -39,16 +42,17 @@ export function EventSection() {
   const isEvent = mode === "event";
   const isProject = mode === "project";
   // const metrics = calculateMetrics(expenses, simulation, mode, eventData);
-  const eventProfit = eventData.expectedRevenue - eventData.eventExpenses * simulation.costMultiplier;
+  const eventProfit = eventData.expectedRevenue - eventData.eventBudget * simulation.costMultiplier;
   const isProfit = eventProfit >= 0;
   const [editingDept, setEditingDept] = useState<Department | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDeptId, setDeleteDeptId] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // Calculate break-even
   const breakEvenAttendees = Math.ceil(
-    eventData.eventExpenses / eventData.ticketPrice
+    eventData.eventBudget / eventData.ticketPrice
   );
-  const profitPerAttendee = eventData.ticketPrice - eventData.eventExpenses / eventData.estimatedAttendance;
+  const profitPerAttendee = eventData.ticketPrice - eventData.eventBudget / eventData.estimatedAttendance;
 
   useEffect(() => {
     fetchDepartments();
@@ -120,20 +124,20 @@ export function EventSection() {
 
   const deleteDepartmentHandler = async (id: string) => {
     if (!currentPlanId) return;
+
     removeDepartment(id);
+
     try {
       await authClient.request(
         `/api/plan/${currentPlanId}/departments/${id}`,
-        {
-          method: "DELETE"
-        }
+        { method: "DELETE" }
       );
     } catch (err) {
       console.error("Delete failed:", err);
     }
   };
 
-  const remainingBudget = (eventData.eventExpenses || 0) - departments
+  const remainingBudget = (eventData.eventBudget || 0) - departments
     .filter((d) => d.id !== editingDept?.id)
     .reduce((sum, d) => sum + Number(d.budget || 0), 0);
 
@@ -172,6 +176,16 @@ export function EventSection() {
                   if (!v) setEditingDept(null);
                 }}
               />
+              <ConfirmDeleteDialog
+                open={confirmOpen}
+                setOpen={setConfirmOpen}
+                onConfirm={() => {
+                  if (deleteDeptId) {
+                    deleteDepartmentHandler(deleteDeptId);
+                    setDeleteDeptId(null);
+                  }
+                }}
+              />
             </div>
 
             {departments.map((d) => (
@@ -198,16 +212,19 @@ export function EventSection() {
                         setDialogOpen(true);
                       }}
                     >
-                      ✏️
+                      <Pencil className="h-4 w-4" />
                     </Button>
 
                     {/* DELETE BUTTON */}
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={() => deleteDepartmentHandler(d.id)}
+                      onClick={() => {
+                        setDeleteDeptId(d.id);
+                        setConfirmOpen(true);
+                      }}
                     >
-                      🗑️
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -341,17 +358,17 @@ export function EventSection() {
                     <span className="text-muted-foreground">$</span>
                     <Input
                       type="number"
-                      value={eventData.eventExpenses}
+                      value={eventData.eventBudget}
                       onChange={(e) =>
-                        updateEventData({ eventExpenses: Number(e.target.value) })
+                        updateEventData({ eventBudget: Number(e.target.value) })
                       }
                       className="h-9 w-32 text-right font-mono"
                     />
                   </div>
                 </div>
                 <Slider
-                  value={[eventData.eventExpenses]}
-                  onValueChange={([v]) => updateEventData({ eventExpenses: v })}
+                  value={[eventData.eventBudget]}
+                  onValueChange={([v]) => updateEventData({ eventBudget: v })}
                   min={1000}
                   max={100000}
                   step={500}
@@ -367,25 +384,25 @@ export function EventSection() {
                 <div className="rounded-lg border border-border bg-secondary/30 p-3">
                   <p className="text-xs text-muted-foreground">Venue (est.)</p>
                   <p className="font-mono text-sm text-foreground">
-                    {formatCurrency(eventData.eventExpenses * 0.35)}
+                    {formatCurrency(eventData.eventBudget * 0.35)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-border bg-secondary/30 p-3">
                   <p className="text-xs text-muted-foreground">Catering (est.)</p>
                   <p className="font-mono text-sm text-foreground">
-                    {formatCurrency(eventData.eventExpenses * 0.25)}
+                    {formatCurrency(eventData.eventBudget * 0.25)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-border bg-secondary/30 p-3">
                   <p className="text-xs text-muted-foreground">Marketing (est.)</p>
                   <p className="font-mono text-sm text-foreground">
-                    {formatCurrency(eventData.eventExpenses * 0.2)}
+                    {formatCurrency(eventData.eventBudget * 0.2)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-border bg-secondary/30 p-3">
                   <p className="text-xs text-muted-foreground">Other (est.)</p>
                   <p className="font-mono text-sm text-foreground">
-                    {formatCurrency(eventData.eventExpenses * 0.2)}
+                    {formatCurrency(eventData.eventBudget * 0.2)}
                   </p>
                 </div>
               </div>
@@ -423,7 +440,7 @@ export function EventSection() {
               <div>
                 <p className="text-sm text-muted-foreground">Event Expenses</p>
                 <p className="text-2xl font-bold text-warning">
-                  {formatCurrency(eventData.eventExpenses)}
+                  {formatCurrency(eventData.eventBudget)}
                 </p>
               </div>
             </div>
@@ -433,7 +450,7 @@ export function EventSection() {
           <div className="flex items-center justify-center gap-2 py-2 text-muted-foreground">
             <span className="text-success">{formatCurrency(eventData.expectedRevenue)}</span>
             <ArrowRight className="h-4 w-4" />
-            <span className="text-warning">-{formatCurrency(eventData.eventExpenses)}</span>
+            <span className="text-warning">-{formatCurrency(eventData.eventBudget)}</span>
           </div>
 
           {/* Profit/Loss Card */}

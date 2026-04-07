@@ -21,10 +21,13 @@ export default function PlanDashboardPage() {
         const res = await authClient.request(`/api/plan/${planId}`, {
           method: "GET"
         });
-        const budget = Number(res.data.data.budget);
-        if (!isNaN(budget)) {
-          updateEventData({ eventExpenses: budget });
-        }
+        const data = res.data.data;
+
+        useFinancialStore.getState().setPlanMeta({
+          eventBudget: data.budget,
+          departments: data.departments || [],
+          modules: data.modules || [],
+        });
       } catch (err) {
         console.error("Failed to fetch plan:", err);
       } finally {

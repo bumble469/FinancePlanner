@@ -13,7 +13,6 @@ import type {
   Module,
 } from "./types";
 
-// ================= ACCOUNT STORE =================
 
 interface AccountStore {
   account: Account | null;
@@ -74,6 +73,12 @@ interface PlanDashboardStore {
   updateModule: (id: string, m: Partial<Module>) => void;
   removeModule: (id: string) => void;
 
+  setPlanMeta: (data: {
+    eventBudget: number;
+    departments: Department[];
+    modules?: Module[];
+  }) => void;
+
   syncToPlan: (planId: string, plan: Plan) => void;
 }
 
@@ -92,7 +97,7 @@ const defaultEventData: EventData = {
   estimatedAttendance: 0,
   ticketPrice: 0 ,
   expectedRevenue: 0,
-  eventExpenses: 0,
+  eventBudget: 0,
 };
 
 // ================= STORE =================
@@ -275,6 +280,18 @@ export const useFinancialStore = create<FinancialStore>((set, get) => ({
       modules: state.modules.filter((m) => m.id !== id),
     })),
 
+    // ================= LOAD PLAN META =================
+
+  setPlanMeta: (data) =>
+    set((state) => ({
+      eventData: {
+        ...state.eventData,
+        eventBudget: Number(data.eventBudget) || 0,
+      },
+      departments: data.departments || [],
+      modules: data.modules || [],
+    })),
+
   // ================= SYNC =================
 
   syncToPlan: (planId, plan) =>
@@ -314,7 +331,7 @@ export function calculateMetrics(
     estimatedProfitLoss =
       eventData.expectedRevenue +
       simulation.revenueAdjustment -
-      eventData.eventExpenses * simulation.costMultiplier;
+      eventData.eventBudget * simulation.costMultiplier;
   }
 
   return {

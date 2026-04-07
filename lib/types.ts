@@ -90,7 +90,7 @@ export interface EventData {
   estimatedAttendance: number;
   ticketPrice: number;
   expectedRevenue: number;
-  eventExpenses: number;
+  eventBudget: number;
 }
 
 export interface SimulationModifiers {

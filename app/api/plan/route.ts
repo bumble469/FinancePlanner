@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, type, budget } = body;
+    const { name, type, budget, description, status, currency } = body;
 
     // ✅ validation
     if (!name?.trim()) {
@@ -81,13 +81,15 @@ export async function POST(request: NextRequest) {
     }
 
     const plan = await prisma.$transaction(async (tx) => {
-      // ✅ Create work item
       const workItem = await tx.workItem.create({
         data: {
           accountId: account.id,
           name: name.trim(),
           type,
           budget,
+          description,
+          status,
+          currency
         },
       });
 
@@ -99,7 +101,6 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // ✅ Create type-specific table entry
       if (type === WorkItemType.PROJECT) {
         await tx.project.create({
           data: { workItemId: workItem.id },
@@ -114,7 +115,6 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // ✅ Return full data
       return tx.workItem.findUnique({
         where: { id: workItem.id },
         include: {

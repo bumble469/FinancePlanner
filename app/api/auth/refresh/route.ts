@@ -139,7 +139,7 @@ export async function POST(
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 1,
+      maxAge: 60 * 15,
       path: '/',
     });
 

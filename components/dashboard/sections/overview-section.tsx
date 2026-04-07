@@ -1,6 +1,6 @@
 "use client";
 
-import { useFinancialStore, calculateMetrics } from "@/lib/store";
+import { useFinancialStore } from "@/lib/store";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { SplinePlaceholder } from "@/components/dashboard/spline-placeholder";
 import {
@@ -11,10 +11,6 @@ import {
   Info,
 } from "lucide-react";
 import type { FinancialStatus } from "@/lib/types";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { useState } from "react";
-import { Pencil, Check } from "lucide-react";
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -26,6 +22,7 @@ function formatCurrency(value: number): string {
 }
 
 function getStatus(value: number, threshold: number): FinancialStatus {
+  if (threshold === 0) return "risk";
   const ratio = value / threshold;
   if (ratio >= 0.7) return "healthy";
   if (ratio >= 0.3) return "warning";
@@ -33,67 +30,47 @@ function getStatus(value: number, threshold: number): FinancialStatus {
 }
 
 export function OverviewSection() {
-  const { entityName, setEntityName, expenses, simulation, mode, eventData } =
-    useFinancialStore();
+  const { expenses, simulation, eventData, departments } = useFinancialStore();
+  console.log("departments in store: ", departments)
+  const totalBudget = eventData.eventBudget;
 
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [tempName, setTempName] = useState(entityName);
+  const totalAllocated = departments.reduce(
+    (sum, d) => sum + Number(d.budget || 0),
+    0
+  );
 
-  const metrics = calculateMetrics(expenses, simulation, mode, eventData);
+  const remainingBalance = totalBudget - totalAllocated;
 
-  const balanceStatus = getStatus(metrics.remainingBalance, metrics.totalBudget);
+  const totalSpent = expenses.reduce(
+    (sum, e) => sum + (e.spentAmount || 0),
+    0
+  );
+
+  const estimatedProfitLoss =
+    eventData.expectedRevenue - eventData.eventBudget;
+
+  const balanceStatus = getStatus(remainingBalance, totalBudget);
+
   const profitStatus =
-    metrics.estimatedProfitLoss >= 0
+    estimatedProfitLoss >= 0
       ? "healthy"
-      : metrics.estimatedProfitLoss > -10000
+      : estimatedProfitLoss > -10000
         ? "warning"
         : "risk";
-
-  const handleSaveName = () => {
-    setEntityName(tempName);
-    setIsEditingName(false);
-  };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-3">
-            {isEditingName ? (
-              <div className="flex items-center gap-2">
-                <Input
-                  value={tempName}
-                  onChange={(e) => setTempName(e.target.value)}
-                  className="h-10 w-64 text-xl font-bold"
-                  autoFocus
-                  onKeyDown={(e) => e.key === "Enter" && handleSaveName()}
-                />
-                <Button size="icon" variant="ghost" onClick={handleSaveName}>
-                  <Check className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <>
-                <h1 className="text-2xl font-bold text-foreground">
-                  {entityName}
-                </h1>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setIsEditingName(true)}
-                >
-                  <Pencil className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </>
-            )}
-          </div>
+          <h1 className="text-2xl font-bold text-foreground">
+            Event Overview
+          </h1>
           <p className="mt-1 text-muted-foreground">
-            {mode === "company"
-              ? "Financial overview for your organization"
-              : "Event budget and revenue tracking"}
+            Event budget and revenue tracking
           </p>
         </div>
+
         {simulation.isSimulating && (
           <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2 text-primary">
             <Info className="h-4 w-4" />
@@ -102,106 +79,100 @@ export function OverviewSection() {
         )}
       </div>
 
-      {/* Metrics Grid */}
+      {/* Metrics */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Total Budget"
-          value={formatCurrency(metrics.totalBudget)}
+          value={formatCurrency(totalBudget)}
           status="healthy"
           icon={<Wallet className="h-5 w-5" />}
           isSimulated={simulation.isSimulating}
         />
+
         <MetricCard
-          title="Total Spent"
-          value={formatCurrency(metrics.totalSpent)}
-          subtitle={`${((metrics.totalSpent / metrics.totalBudget) * 100).toFixed(1)}% of budget`}
+          title="Total Allocated"
+          value={formatCurrency(totalAllocated)}
+          subtitle={`${(totalBudget > 0
+            ? (totalAllocated / totalBudget) * 100
+            : 0).toFixed(
+              1
+            )}% allocated`}
           status={
-            metrics.totalSpent / metrics.totalBudget > 0.9 ? "warning" : "healthy"
+            totalAllocated / totalBudget > 0.9 ? "warning" : "healthy"
           }
-          trend="up"
-          trendValue="12.5%"
           icon={<ArrowDownCircle className="h-5 w-5" />}
           isSimulated={simulation.isSimulating}
         />
+
         <MetricCard
           title="Remaining Balance"
-          value={formatCurrency(metrics.remainingBalance)}
+          value={formatCurrency(remainingBalance)}
           status={balanceStatus}
           trend={balanceStatus === "healthy" ? "up" : "down"}
-          trendValue={balanceStatus === "healthy" ? "8.2%" : "-5.3%"}
           icon={<PiggyBank className="h-5 w-5" />}
           isSimulated={simulation.isSimulating}
         />
+
         <MetricCard
-          title={mode === "company" ? "Est. Profit/Loss" : "Event Profit/Loss"}
-          value={formatCurrency(metrics.estimatedProfitLoss)}
+          title="Profit / Loss"
+          value={formatCurrency(estimatedProfitLoss)}
           status={profitStatus}
-          trend={metrics.estimatedProfitLoss >= 0 ? "up" : "down"}
-          trendValue={metrics.estimatedProfitLoss >= 0 ? "+15.7%" : "-8.4%"}
+          trend={estimatedProfitLoss >= 0 ? "up" : "down"}
           icon={<TrendingUp className="h-5 w-5" />}
           isSimulated={simulation.isSimulating}
         />
       </div>
 
-      {/* Main Content Grid */}
+      {/* Layout */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* 3D Visualization Placeholder - Takes 2 columns */}
         <div className="lg:col-span-2">
           <SplinePlaceholder
             title="3D Financial Scene"
-            description="Your budget flows and expense categories visualized in real-time"
+            description="Budget allocation and department flow in real-time"
           />
         </div>
 
-        {/* Side Panel - Explanation */}
         <div className="flex flex-col gap-4">
           <div className="rounded-xl border border-border bg-card p-5">
             <h3 className="flex items-center gap-2 font-semibold text-foreground">
               <Info className="h-4 w-4 text-primary" />
-              About This View
+              Summary
             </h3>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              The 3D visualization represents your financial data as a physical
-              system. Money flows from your budget through different expense
-              categories, with visual indicators showing spending velocity and
-              remaining capacity.
+            <p className="mt-3 text-sm text-muted-foreground">
+              Budget is distributed across departments. Remaining balance shows
+              how much is left to allocate. Profit/loss is based on expected
+              revenue vs expenses.
             </p>
-            <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-              <li className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-success" />
-                Green objects: Healthy budgets
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-warning" />
-                Yellow objects: Approaching limit
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-danger" />
-                Red objects: Over budget
-              </li>
-            </ul>
           </div>
 
-          {/* Quick Stats */}
           <div className="rounded-xl border border-border bg-card p-5">
             <h3 className="font-semibold text-foreground">Quick Stats</h3>
+
             <div className="mt-4 space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Expense Categories</span>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">
+                  Departments
+                </span>
                 <span className="font-medium text-foreground">
-                  {expenses.length}
+                  {departments.length}
                 </span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Over Budget</span>
+
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">
+                  Over Budget
+                </span>
                 <span className="font-medium text-danger">
-                  {expenses.filter((e) => e.spentAmount > e.allocatedBudget).length}
+                  {remainingBalance < 0 ? 1 : 0}
                 </span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Budget Utilization</span>
+
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">
+                  Utilization
+                </span>
                 <span className="font-medium text-foreground">
-                  {((metrics.totalSpent / metrics.totalBudget) * 100).toFixed(0)}%
+                  {((totalAllocated / totalBudget) * 100 || 0).toFixed(0)}%
                 </span>
               </div>
             </div>
