@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Users, DollarSign, Box } from "lucide-react";
 import type { TeamMember } from "@/lib/types";
+import { getCurrencySymbol } from "@/lib/currency";
 
 const teams = ["Leadership", "Engineering", "Design", "Marketing", "Operations"];
 const roles = [
@@ -44,16 +45,13 @@ const roles = [
   "Operations Manager",
 ];
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-  }).format(value);
+function formatCurrency(value: number, currency: string): string {
+  const symbol = getCurrencySymbol(currency);
+  return `${symbol} ${value.toLocaleString("en-IN")}`;
 }
 
 export function TeamSection() {
-  const { teamMembers, addTeamMember, updateTeamMember, removeTeamMember } =
+  const { teamMembers, addTeamMember, updateTeamMember, removeTeamMember, currency } =
     useFinancialStore();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -104,6 +102,7 @@ export function TeamSection() {
       setEditingMember(null);
     } else {
       addTeamMember({
+        id: crypto.randomUUID(), 
         name: formData.name,
         role: formData.role,
         team: formData.team,
@@ -251,7 +250,7 @@ export function TeamSection() {
             <div>
               <p className="text-sm text-muted-foreground">Total Monthly Cost</p>
               <p className="text-2xl font-bold text-success">
-                {formatCurrency(totalMonthlyCost)}
+                {formatCurrency(totalMonthlyCost, currency)}
               </p>
             </div>
           </div>
@@ -301,7 +300,7 @@ export function TeamSection() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {formatCurrency(member.monthlyCost)}
+                      {formatCurrency(member.monthlyCost, currency)}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
@@ -346,7 +345,7 @@ export function TeamSection() {
                       </span>
                     </div>
                     <span className="font-mono text-sm text-success">
-                      {formatCurrency(item.cost)}
+                      {formatCurrency(item.cost, currency)}
                     </span>
                   </div>
                 ))}
@@ -366,7 +365,7 @@ export function TeamSection() {
                     </span>
                   </div>
                   <span className="font-mono text-sm text-success">
-                    {formatCurrency(item.cost)}
+                    {formatCurrency(item.cost, currency)}
                   </span>
                 </div>
               ))}

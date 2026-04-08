@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { useFinancialStore, calculateMetrics } from "@/lib/store";
+import { useState, useEffect } from "react";
+import { useFinancialStore } from "@/lib/store";
 import { authClient } from "@/lib/auth-client";
 import { Department } from "@/lib/types";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import {
-  CalendarDays,
   Users,
   Ticket,
   DollarSign,
@@ -19,35 +18,44 @@ import {
   ArrowRight,
   Calculator,
   Pencil,
-  Trash2
+  Trash2,
+  Plus,
+  ArrowLeft,
+  Layers,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import axios from "axios";
 import { AddDeptDialog } from "./components/add-dept-dialog";
-import { useEffect } from "react";
 import { ConfirmDeleteDialog } from "./components/confirm-delete-dialog";
+import { getCurrencySymbol } from "@/lib/currency";
+import { DepartmentListView } from "./components/dept-list-view";
+import { DepartmentDetailView } from "./components/dept-detail-view";
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-  }).format(value);
+function formatCurrency(value: number, currency: string): string {
+  const symbol = getCurrencySymbol(currency);
+  return `${symbol} ${value.toLocaleString("en-IN")}`;
 }
 
 export function EventSection() {
   const { currentPlanId, mode, eventData, updateEventData, expenses, simulation, departments, addDepartment, updateDepartment, removeDepartment,
-    modules, addModule, updateModule, removeModule
+    modules, addModule, updateModule, removeModule, currency
   } = useFinancialStore();
   const isEvent = mode === "event";
   const isProject = mode === "project";
   // const metrics = calculateMetrics(expenses, simulation, mode, eventData);
   const eventProfit = eventData.expectedRevenue - eventData.eventBudget * simulation.costMultiplier;
   const isProfit = eventProfit >= 0;
+
+  //dept vars
   const [editingDept, setEditingDept] = useState<Department | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [deptDialogOpen, setDeptDialogOpen] = useState(false);
   const [deleteDeptId, setDeleteDeptId] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmDeptOpen, setConfirmDeptOpen] = useState(false);
+
+  const [activeDept, setActiveDept] = useState<Department | null>(null);
+
+  const [deleteModuleId, setDeleteModuleId] = useState<string | null>(null);
+  const [confirmModuleOpen, setConfirmModuleOpen] = useState(false);
 
   const breakEvenAttendees = Math.ceil(
     eventData.eventBudget / eventData.ticketPrice
@@ -141,6 +149,86 @@ export function EventSection() {
     .filter((d) => d.id !== editingDept?.id)
     .reduce((sum, d) => sum + Number(d.budget || 0), 0);
 
+
+  useEffect(() => {
+    if (activeDept) {
+      fetchPhases(activeDept.id);
+    }
+  }, [activeDept]);
+
+  // api calls for phases(modules)
+  const fetchPhases = async (deptId: string) => {
+    if (!currentPlanId) return;
+    try {
+      const res = await authClient.request(
+        `/api/plan/${currentPlanId}/departments/${deptId}/phases`
+      );
+      useFinancialStore.getState().setModules(
+        res.data.map((p: any) => ({ ...p }))
+      );
+    } catch (err) {
+      console.error("Fetch phases failed:", err);
+    }
+  };
+
+  const createPhase = async (deptId: string, name: string) => {
+    if (!currentPlanId) return;
+
+    const tempId = crypto.randomUUID();
+    const optimistic = { id: tempId, name, departmentId: deptId };
+
+    addModule(optimistic);
+
+    try {
+      const res = await authClient.request(
+        `/api/plan/${currentPlanId}/departments/${deptId}/phases`,
+        {
+          method: "POST",
+          data: { name },
+        }
+      );
+      useFinancialStore.getState().updateModule(tempId, res.data.id);
+    } catch (err) {
+      console.error("Create phase failed:", err);
+      removeModule(tempId);
+    }
+  };
+
+  const updatePhaseHandler = async (
+    deptId: string,
+    phaseId: string,
+    data: Partial<{ name: string; startDate: string; endDate: string }>
+  ) => {
+    if (!currentPlanId) return;
+
+    updateModule(phaseId, data);
+
+    try {
+      await authClient.request(
+        `/api/plan/${currentPlanId}/departments/${deptId}/phases/${phaseId}`,
+        {
+          method: "PATCH",
+          data,
+        }
+      );
+    } catch (err) {
+      console.error("Update phase failed:", err);
+    }
+  };
+
+  const deletePhaseHandler = async (phaseId: string) => {
+    if (!currentPlanId || !activeDept) return;
+    removeModule(phaseId);
+    try {
+      await authClient.request(
+        `/api/plan/${currentPlanId}/departments/${activeDept.id}/phases/${phaseId}`,
+        { method: "DELETE" }
+      );
+    } catch (err) {
+      console.error("Delete phase failed:", err);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -159,115 +247,91 @@ export function EventSection() {
         <div className="space-y-6 lg:col-span-2">
           {/* Departments */}
           <div className="rounded-xl border p-6">
-            <div className="flex justify-between mb-4">
-              <h2 className="font-semibold">Departments</h2>
 
-              <AddDeptDialog
-                onCreate={createDepartment}
-                onUpdate={(id, name, budget) =>
-                  updateDepartmentHandler(id, { name, budget })
-                }
-                onDeptCreated={fetchDepartments}
-                maxBudget={remainingBudget}
-                editingDept={editingDept}
-                open={dialogOpen}
-                setOpen={(v) => {
-                  setDialogOpen(v);
-                  if (!v) setEditingDept(null);
-                }}
-              />
+            {/* Panel header — hide add button when drilled in */}
+            <div
+              className={`flex items-center justify-between ${
+                activeDept ? "" : "mb-4"
+              }`}
+            >
+              {!activeDept && <h2 className="font-semibold">Departments</h2>}
+
+              {!activeDept && (
+                <>
+                  <AddDeptDialog
+                    onCreate={createDepartment}
+                    onUpdate={(id, name, budget) =>
+                      updateDepartmentHandler(id, { name, budget })
+                    }
+                    onDeptCreated={fetchDepartments}
+                    maxBudget={remainingBudget}
+                    editingDept={editingDept}
+                    open={deptDialogOpen}
+                    setOpen={(v) => {
+                      setDeptDialogOpen(v);
+                      if (!v) setEditingDept(null);
+                    }}
+                  />
+                  <ConfirmDeleteDialog
+                    open={confirmDeptOpen}
+                    type={"department"}
+                    setOpen={setConfirmDeptOpen}
+                    onConfirm={() => {
+                      if (deleteDeptId) {
+                        deleteDepartmentHandler(deleteDeptId);
+                        setDeleteDeptId(null);
+                      }
+                    }}
+                  />
+                </>
+              )}
+
+              {/* Module confirm delete — always mounted */}
               <ConfirmDeleteDialog
-                open={confirmOpen}
-                setOpen={setConfirmOpen}
+                open={confirmModuleOpen}
+                type={"module"}
+                setOpen={setConfirmModuleOpen}
                 onConfirm={() => {
-                  if (deleteDeptId) {
-                    deleteDepartmentHandler(deleteDeptId);
-                    setDeleteDeptId(null);
+                  if (deleteModuleId) {
+                    deletePhaseHandler(deleteModuleId);
+                    setDeleteModuleId(null);
                   }
                 }}
               />
             </div>
 
-            {departments.map((d) => (
-              <div
-                key={d.id}
-                className="group rounded-xl border bg-card p-4 hover:shadow-sm transition"
-              >
-                {/* TOP ROW */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-foreground">{d.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatCurrency(d.budget || 0)}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2 opacity-70 group-hover:opacity-100 transition">
-                    {/* EDIT BUTTON */}
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => {
-                        setEditingDept(d);
-                        setDialogOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-
-                    {/* DELETE BUTTON */}
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => {
-                        setDeleteDeptId(d.id);
-                        setConfirmOpen(true);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* MODULES (unchanged) */}
-                {isProject && (
-                  <div className="mt-4 pl-4 border-l space-y-2">
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        addModule({
-                          id: crypto.randomUUID(),
-                          name: "New Module",
-                          departmentId: d.id,
-                        })
-                      }
-                    >
-                      + Module
-                    </Button>
-
-                    {modules
-                      .filter((m) => m.departmentId === d.id)
-                      .map((m) => (
-                        <div key={m.id} className="flex gap-2 items-center">
-                          <Input
-                            value={m.name}
-                            onChange={(e) =>
-                              updateModule(m.id, { name: e.target.value })
-                            }
-                          />
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => removeModule(m.id)}
-                          >
-                            ✕
-                          </Button>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            ))}
+            {/* Conditional view */}
+            {activeDept ? (
+              <DepartmentDetailView
+                dept={activeDept}
+                modules={modules}
+                currency={currency}
+                onBack={() => setActiveDept(null)}
+                onAddModule={(name) => createPhase(activeDept.id, name)}
+                onEditModule={(module, name) =>
+                  updatePhaseHandler(activeDept.id, module.id, { name })
+                }
+                onDeleteModule={(id) => {
+                  setDeleteModuleId(id);
+                  setConfirmModuleOpen(true);
+                }}
+              />
+            ) : (
+              <DepartmentListView
+                departments={departments}
+                currency={currency}
+                isProject={isProject}
+                onEdit={(d) => {
+                  setEditingDept(d);
+                  setDeptDialogOpen(true);
+                }}
+                onDelete={(id) => {
+                  setDeleteDeptId(id);
+                  setConfirmDeptOpen(true);
+                }}
+                onDrillDown={(d) => setActiveDept(d)}
+              />
+            )}
           </div>
 
           {/* Attendance & Tickets */}
@@ -384,25 +448,25 @@ export function EventSection() {
                 <div className="rounded-lg border border-border bg-secondary/30 p-3">
                   <p className="text-xs text-muted-foreground">Venue (est.)</p>
                   <p className="font-mono text-sm text-foreground">
-                    {formatCurrency(eventData.eventBudget * 0.35)}
+                    {formatCurrency(eventData.eventBudget * 0.35, currency)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-border bg-secondary/30 p-3">
                   <p className="text-xs text-muted-foreground">Catering (est.)</p>
                   <p className="font-mono text-sm text-foreground">
-                    {formatCurrency(eventData.eventBudget * 0.25)}
+                    {formatCurrency(eventData.eventBudget * 0.25, currency)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-border bg-secondary/30 p-3">
                   <p className="text-xs text-muted-foreground">Marketing (est.)</p>
                   <p className="font-mono text-sm text-foreground">
-                    {formatCurrency(eventData.eventBudget * 0.2)}
+                    {formatCurrency(eventData.eventBudget * 0.2, currency)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-border bg-secondary/30 p-3">
                   <p className="text-xs text-muted-foreground">Other (est.)</p>
                   <p className="font-mono text-sm text-foreground">
-                    {formatCurrency(eventData.eventBudget * 0.2)}
+                    {formatCurrency(eventData.eventBudget * 0.2, currency)}
                   </p>
                 </div>
               </div>
@@ -421,13 +485,13 @@ export function EventSection() {
               <div>
                 <p className="text-sm text-muted-foreground">Expected Revenue</p>
                 <p className="text-2xl font-bold text-success">
-                  {formatCurrency(eventData.expectedRevenue)}
+                  {formatCurrency(eventData.expectedRevenue, currency)}
                 </p>
               </div>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
               {eventData.estimatedAttendance.toLocaleString()} attendees ×{" "}
-              {formatCurrency(eventData.ticketPrice)}
+              {formatCurrency(eventData.ticketPrice, currency)}
             </p>
           </div>
 
@@ -440,7 +504,7 @@ export function EventSection() {
               <div>
                 <p className="text-sm text-muted-foreground">Event Expenses</p>
                 <p className="text-2xl font-bold text-warning">
-                  {formatCurrency(eventData.eventBudget)}
+                  {formatCurrency(eventData.eventBudget, currency)}
                 </p>
               </div>
             </div>
@@ -448,9 +512,9 @@ export function EventSection() {
 
           {/* Calculation Visual */}
           <div className="flex items-center justify-center gap-2 py-2 text-muted-foreground">
-            <span className="text-success">{formatCurrency(eventData.expectedRevenue)}</span>
+            <span className="text-success">{formatCurrency(eventData.expectedRevenue, currency)}</span>
             <ArrowRight className="h-4 w-4" />
-            <span className="text-warning">-{formatCurrency(eventData.eventBudget)}</span>
+            <span className="text-warning">-{formatCurrency(eventData.eventBudget, currency)}</span>
           </div>
 
           {/* Profit/Loss Card */}
@@ -485,7 +549,7 @@ export function EventSection() {
                     isProfit ? "text-success" : "text-danger"
                   )}
                 >
-                  {formatCurrency(Math.abs(eventProfit))}
+                  {formatCurrency(Math.abs(eventProfit), currency)}
                 </p>
               </div>
             </div>
@@ -527,7 +591,7 @@ export function EventSection() {
                     profitPerAttendee >= 0 ? "text-success" : "text-danger"
                   )}
                 >
-                  {formatCurrency(profitPerAttendee)}
+                  {formatCurrency(profitPerAttendee, currency)}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">

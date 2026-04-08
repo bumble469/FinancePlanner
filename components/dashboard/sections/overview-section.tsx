@@ -11,14 +11,11 @@ import {
   Info,
 } from "lucide-react";
 import type { FinancialStatus } from "@/lib/types";
+import { getCurrencySymbol } from "@/lib/currency";
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
+function formatCurrency(value: number, currency: string): string {
+  const symbol = getCurrencySymbol(currency);
+  return `${symbol} ${value.toLocaleString("en-IN")}`;
 }
 
 function getStatus(value: number, threshold: number): FinancialStatus {
@@ -30,8 +27,7 @@ function getStatus(value: number, threshold: number): FinancialStatus {
 }
 
 export function OverviewSection() {
-  const { expenses, simulation, eventData, departments } = useFinancialStore();
-  console.log("departments in store: ", departments)
+  const { expenses, simulation, eventData, departments, currency } = useFinancialStore();
   const totalBudget = eventData.eventBudget;
 
   const totalAllocated = departments.reduce(
@@ -83,7 +79,7 @@ export function OverviewSection() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Total Budget"
-          value={formatCurrency(totalBudget)}
+          value={formatCurrency(totalBudget, currency)}
           status="healthy"
           icon={<Wallet className="h-5 w-5" />}
           isSimulated={simulation.isSimulating}
@@ -91,7 +87,7 @@ export function OverviewSection() {
 
         <MetricCard
           title="Total Allocated"
-          value={formatCurrency(totalAllocated)}
+          value={formatCurrency(totalAllocated, currency)}
           subtitle={`${(totalBudget > 0
             ? (totalAllocated / totalBudget) * 100
             : 0).toFixed(
@@ -106,7 +102,7 @@ export function OverviewSection() {
 
         <MetricCard
           title="Remaining Balance"
-          value={formatCurrency(remainingBalance)}
+          value={formatCurrency(remainingBalance, currency)}
           status={balanceStatus}
           trend={balanceStatus === "healthy" ? "up" : "down"}
           icon={<PiggyBank className="h-5 w-5" />}
@@ -115,7 +111,7 @@ export function OverviewSection() {
 
         <MetricCard
           title="Profit / Loss"
-          value={formatCurrency(estimatedProfitLoss)}
+          value={formatCurrency(estimatedProfitLoss, currency)}
           status={profitStatus}
           trend={estimatedProfitLoss >= 0 ? "up" : "down"}
           icon={<TrendingUp className="h-5 w-5" />}

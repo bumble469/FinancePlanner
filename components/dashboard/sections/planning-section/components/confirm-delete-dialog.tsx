@@ -13,6 +13,7 @@ import {
 
 type ConfirmDeleteDialogProps = {
   open: boolean;
+  type: string;
   setOpen: (open: boolean) => void;
   onConfirm: () => void;
   title?: string;
@@ -21,10 +22,11 @@ type ConfirmDeleteDialogProps = {
 
 export function ConfirmDeleteDialog({
   open,
+  type,
   setOpen,
   onConfirm,
-  title = "Delete Department",
-  description = "Are you sure you want to delete this department? This action cannot be undone.",
+  title = `Delete ${type}`,
+  description = `Are you sure you want to delete this ${type}? This action cannot be undone.`,
 }: ConfirmDeleteDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
@@ -39,7 +41,7 @@ export function ConfirmDeleteDialog({
 
         {/* FOOTER */}
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => setOpen(false)}>
+          <AlertDialogCancel onClick={() => setOpen(false)} className="cursor-pointer hover:text-gray-500">
             Cancel
           </AlertDialogCancel>
 
@@ -48,7 +50,7 @@ export function ConfirmDeleteDialog({
               onConfirm();
               setOpen(false);
             }}
-            className="bg-red-600 hover:bg-red-700 text-white"
+            className="bg-red-600 hover:bg-red-800 text-white cursor-pointer"
           >
             Delete
           </AlertDialogAction>

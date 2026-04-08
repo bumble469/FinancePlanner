@@ -7,24 +7,6 @@ interface SplinePlaceholderProps {
   description?: string;
 }
 
-/**
- * Placeholder component for Spline 3D visualization
- *
- * INTEGRATION POINT:
- * Replace this component with actual Spline embed:
- *
- * ```tsx
- * import Spline from '@splinetool/react-spline';
- *
- * <Spline scene="YOUR_SPLINE_SCENE_URL" />
- * ```
- *
- * The Spline scene should visualize:
- * - Money flows between expense categories
- * - Team members as 3D avatars
- * - Budget allocation as physical objects
- * - Real-time updates based on financial data
- */
 export function SplinePlaceholder({
   title = "3D Financial Scene",
   description = "Interactive visualization of your financial data",

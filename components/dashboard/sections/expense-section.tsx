@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import type { Expense, ExpenseCategory, FinancialStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { getCurrencySymbol } from "@/lib/currency";
 
 const categoryConfig: Record<
   ExpenseCategory,
@@ -55,12 +56,9 @@ const categories: ExpenseCategory[] = [
   "events",
 ];
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-  }).format(value);
+function formatCurrency(value: number, currency: string): string {
+  const symbol = getCurrencySymbol(currency);
+  return `${symbol} ${value.toLocaleString("en-IN")}`;
 }
 
 function getExpenseStatus(spent: number, budget: number): FinancialStatus {
@@ -71,8 +69,7 @@ function getExpenseStatus(spent: number, budget: number): FinancialStatus {
 }
 
 export function ExpenseSection() {
-  const { expenses, addExpense, updateExpense, removeExpense } =
-    useFinancialStore();
+  const { expenses, addExpense, updateExpense, removeExpense, currency } = useFinancialStore();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -108,6 +105,7 @@ export function ExpenseSection() {
       setEditingExpense(null);
     } else {
       addExpense({
+        id: crypto.randomUUID(),
         name: formData.name,
         category: formData.category as ExpenseCategory,
         allocatedBudget: Number(formData.allocatedBudget),
@@ -233,13 +231,13 @@ export function ExpenseSection() {
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="text-sm text-muted-foreground">Total Budget</p>
           <p className="mt-1 text-2xl font-bold text-foreground">
-            {formatCurrency(totalBudget)}
+            {formatCurrency(totalBudget, currency)}
           </p>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="text-sm text-muted-foreground">Total Spent</p>
           <p className="mt-1 text-2xl font-bold text-warning">
-            {formatCurrency(totalSpent)}
+            {formatCurrency(totalSpent, currency)}
           </p>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
@@ -250,7 +248,7 @@ export function ExpenseSection() {
               totalBudget - totalSpent >= 0 ? "text-success" : "text-danger"
             )}
           >
-            {formatCurrency(totalBudget - totalSpent)}
+            {formatCurrency(totalBudget - totalSpent, currency)}
           </p>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
@@ -346,7 +344,7 @@ export function ExpenseSection() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Allocated</span>
                   <span className="font-mono font-medium text-foreground">
-                    {formatCurrency(expense.allocatedBudget)}
+                    {formatCurrency(expense.allocatedBudget, currency)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
@@ -357,7 +355,7 @@ export function ExpenseSection() {
                       isOverBudget ? "text-danger" : "text-foreground"
                     )}
                   >
-                    {formatCurrency(expense.spentAmount)}
+                    {formatCurrency(expense.spentAmount, currency)}
                   </span>
                 </div>
 

@@ -2,19 +2,11 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
+import Image from "next/image"; // ✅ add this
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-
-/**
- * TopNav - Global navigation for account-level pages
- * 
- * Routes:
- * / (home) -> Overview
- * /plans -> Plans list
- * /settings -> Settings (placeholder)
- */
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", segment: "/" },
@@ -26,7 +18,6 @@ export function TopNav() {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Hide top nav on plan dashboard pages
   if (pathname.startsWith("/plans/") && !pathname.endsWith("/plans")) {
     return null;
   }
@@ -35,11 +26,16 @@ export function TopNav() {
     <nav className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="flex items-center justify-between py-3">
-          {/* Logo */}
+          
+          {/* ✅ Updated Logo */}
           <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <BarChart3 className="h-5 w-5 text-primary-foreground" />
-            </div>
+            <Image
+              src="/web_logo.png"   // from public folder
+              alt="FinanceFlow Logo"
+              width={32}
+              height={32}
+              className="rounded-lg"
+            />
             <span className="font-semibold text-foreground hidden sm:inline">
               FinanceFlow
             </span>

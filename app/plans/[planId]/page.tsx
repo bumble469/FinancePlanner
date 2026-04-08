@@ -27,6 +27,7 @@ export default function PlanDashboardPage() {
           eventBudget: data.budget,
           departments: data.departments || [],
           modules: data.modules || [],
+          currency: data.currency,
         });
       } catch (err) {
         console.error("Failed to fetch plan:", err);

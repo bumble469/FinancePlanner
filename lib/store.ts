@@ -40,6 +40,9 @@ interface PlanDashboardStore {
   mode: Mode;
   setMode: (mode: Mode) => void;
 
+  currency: string;
+  setCurrency: (currency: string) => void;
+
   teamMembers: TeamMember[];
   setTeamMembers: (members: TeamMember[]) => void;
   addTeamMember: (member: TeamMember) => void;
@@ -77,6 +80,7 @@ interface PlanDashboardStore {
     eventBudget: number;
     departments: Department[];
     modules?: Module[];
+    currency?: string;
   }) => void;
 
   syncToPlan: (planId: string, plan: Plan) => void;
@@ -110,6 +114,9 @@ export const useFinancialStore = create<FinancialStore>((set, get) => ({
   // PLANS
   plans: [],
   setPlans: (plans) => set({ plans }),
+
+  currency: "INR",
+  setCurrency: (currency) => set({ currency }),
 
   addPlan: (plan) =>
     set((state) => ({ plans: [...state.plans, plan] })),
@@ -290,6 +297,7 @@ export const useFinancialStore = create<FinancialStore>((set, get) => ({
       },
       departments: data.departments || [],
       modules: data.modules || [],
+      currency: data.currency || 'INR',
     })),
 
   // ================= SYNC =================
