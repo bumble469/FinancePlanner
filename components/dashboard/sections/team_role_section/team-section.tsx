@@ -3,22 +3,6 @@
 import { useState } from "react";
 import { useFinancialStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -28,22 +12,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Users, DollarSign, Box } from "lucide-react";
-import type { TeamMember } from "@/lib/types";
+import type { TeamMember, Role } from "@/lib/types";
+import { ROLES } from "@/lib/types";
 import { getCurrencySymbol } from "@/lib/currency";
-
+import { AddMemberDialog } from "./components/member-dialog";
 const teams = ["Leadership", "Engineering", "Design", "Marketing", "Operations"];
-const roles = [
-  "CEO",
-  "CTO",
-  "CFO",
-  "Senior Developer",
-  "Junior Developer",
-  "Product Designer",
-  "UI/UX Designer",
-  "Marketing Lead",
-  "Marketing Manager",
-  "Operations Manager",
-];
 
 function formatCurrency(value: number, currency: string): string {
   const symbol = getCurrencySymbol(currency);
@@ -56,7 +29,12 @@ export function TeamSection() {
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    role: Role | "";
+    team: string;
+    monthlyCost: string;
+  }>({
     name: "",
     role: "",
     team: "",
@@ -73,7 +51,7 @@ export function TeamSection() {
   });
 
   // Group by role for summary
-  const roleSummary = roles.reduce(
+  const roleSummary = ROLES.reduce(
     (acc, role) => {
       const members = teamMembers.filter((m) => m.role === role);
       if (members.length > 0) {
@@ -141,90 +119,18 @@ export function TeamSection() {
             Manage your team members and their associated costs
           </p>
         </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Member
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {editingMember ? "Edit Team Member" : "Add Team Member"}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  placeholder="Enter name"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
-                <Select
-                  value={formData.role}
-                  onValueChange={(v) => setFormData({ ...formData, role: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.map((role) => (
-                      <SelectItem key={role} value={role}>
-                        {role}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="team">Team / Department</Label>
-                <Select
-                  value={formData.team}
-                  onValueChange={(v) => setFormData({ ...formData, team: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select team" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teams.map((team) => (
-                      <SelectItem key={team} value={team}>
-                        {team}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="cost">Monthly Cost ($)</Label>
-                <Input
-                  id="cost"
-                  type="number"
-                  placeholder="Enter monthly cost"
-                  value={formData.monthlyCost}
-                  onChange={(e) =>
-                    setFormData({ ...formData, monthlyCost: e.target.value })
-                  }
-                />
-              </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <Button variant="outline" onClick={handleClose}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSubmit}>
-                  {editingMember ? "Update" : "Add"} Member
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <Button className="cursor-pointer" onClick={() => setIsAddOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Member
+          </Button>
+
+          <AddMemberDialog 
+            open={isAddOpen}
+            onOpenChange={setIsAddOpen}
+            onSubmit={handleSubmit}
+          />
+        </div>
       </div>
 
       {/* Summary Cards */}

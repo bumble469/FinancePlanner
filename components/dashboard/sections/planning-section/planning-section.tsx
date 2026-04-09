@@ -17,12 +17,6 @@ import {
   CheckCircle2,
   ArrowRight,
   Calculator,
-  Pencil,
-  Trash2,
-  Plus,
-  ArrowLeft,
-  Layers,
-  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddDeptDialog } from "./components/add-dept-dialog";

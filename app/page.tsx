@@ -6,7 +6,6 @@ import { TopNav } from "@/components/layout/top-nav";
 import { OverviewPage } from "@/components/overview/overview-page";
 import { authClient } from '@/lib/auth-client';
 import { useSnackbar } from '@/lib/useSnackbar';
-
 import { LandingHeader } from "@/components/landing/header";
 import { HeroSection } from "@/components/landing/hero";
 import { FeaturesSection } from "@/components/landing/features";
@@ -43,7 +42,6 @@ export default function Home() {
   return (
     <>
       <Snackbar />
-
       {isAuthenticated ? (
         <div className="min-h-screen bg-background">
           <TopNav />

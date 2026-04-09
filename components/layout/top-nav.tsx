@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Overview", segment: "/" },
   { href: "/plans", label: "Plans", segment: "/plans" },
   { href: "/settings", label: "Settings", segment: "/settings" },
+  { href: "/connections", label: "Connections", segment: "/connections" },
 ];
 
 export function TopNav() {

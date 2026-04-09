@@ -40,9 +40,11 @@ enum ExpenseCategory {
 }
 
 enum MemberRole {
-  ADMIN // creator, full access
-  MANAGER // can manage their department, view others
-  MEMBER // can only log expenses in assigned department
+  ADMIN 
+  CO_ADMIN
+  MANAGER
+  CO_MANAGER
+  MEMBER 
 }
 
 enum IncomeType {
@@ -345,7 +347,7 @@ model Task {
   title       String
   description String?
 
-  status TaskStatus @default(TODO) // ✅ FIXED
+  status TaskStatus @default(TODO)
 
   workItemId   String
   departmentId String?

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { OverviewSection } from "./sections/overview-section";
-import { TeamSection } from "./sections/team-section";
+import { TeamSection } from "./sections/team_role_section/team-section";
 import { ExpenseSection } from "./sections/expense-section";
 import { EventSection } from "./sections/planning-section/planning-section";
 import { SimulationSection } from "./sections/simulation-section";

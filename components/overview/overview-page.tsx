@@ -8,18 +8,6 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-/**
- * OverviewPage - Global account-level overview
- * 
- * Data Flow:
- * Account (useFinancialStore)
- *   └── All Plans (aggregated)
- *       ├── Total Budget (sum of all plans)
- *       ├── Total Spent (sum of all plans)
- *       ├── Total Profit/Loss (aggregated)
- *       └── Plan summary cards
- */
-
 export function OverviewPage() {
   const { account, plans } = useFinancialStore();
 

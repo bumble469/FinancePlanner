@@ -7,6 +7,15 @@
 export type AccountType = "individual" | "company";
 export type PlanType = "project" | "event";
 export type PlanStatus = "active" | "completed";
+export const ROLES = [
+  "ADMIN",
+  "CO_ADMIN",
+  "MANAGER",
+  "CO_MANAGER",
+  "MEMBER",
+] as const;
+
+export type Role = (typeof ROLES)[number];
 
 export interface Account {
   id: string;
@@ -60,7 +69,7 @@ export type Module = {
 export interface TeamMember {
   id: string;
   name: string;
-  role: string;
+  role: Role;
   team: string;
   monthlyCost: number;
   // Integration point: Each team member can map to a 3D avatar/node
@@ -106,3 +115,25 @@ export interface FinancialMetrics {
   remainingBalance: number;
   estimatedProfitLoss: number;
 }
+
+// ================= TASKS =================
+
+export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
+
+export type Task = {
+  id: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  workItemId?: string;
+  departmentId?: string;
+  phaseId?: string;
+  assignedToId?: string;
+  assignedTo?: {
+    id: string;
+    name: string;
+    image?: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+};

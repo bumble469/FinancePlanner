@@ -96,6 +96,7 @@ export function AddDeptDialog({
       {!isEdit && (
         <DialogTrigger asChild>
           <Button
+            className="cursor-pointer"
             size="sm"
             onClick={() => {
               if (setControlledOpen) {
