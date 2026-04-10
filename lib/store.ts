@@ -81,6 +81,7 @@ interface PlanDashboardStore {
     departments: Department[];
     modules?: Module[];
     currency?: string;
+    teamMembers: TeamMember[];
   }) => void;
 
   syncToPlan: (planId: string, plan: Plan) => void;
@@ -298,6 +299,7 @@ export const useFinancialStore = create<FinancialStore>((set, get) => ({
       departments: data.departments || [],
       modules: data.modules || [],
       currency: data.currency || 'INR',
+      teamMembers: data.teamMembers || [],
     })),
 
   // ================= SYNC =================
@@ -310,8 +312,6 @@ export const useFinancialStore = create<FinancialStore>((set, get) => ({
       expenses: plan.expenses,
       eventData: plan.eventData || defaultEventData,
       simulation: plan.simulation,
-
-      // reset (later replace with backend data)
       departments: [],
       modules: [],
     }),

@@ -50,7 +50,7 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
       case "overview":
         return <OverviewSection />;
       case "team":
-        return <TeamSection />;
+        return <TeamSection planId={planId} />;
       case "expenses":
         return <ExpenseSection />;
       case "event":

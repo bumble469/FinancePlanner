@@ -10,11 +10,22 @@ async function getPlanAndVerifyOwner(planId: string, userId: string) {
   const plan = await prisma.workItem.findFirst({
     where: { id: planId, accountId: account.id },
     include: {
-      project: true,
-      event: true,
-      planInfo: true,
       departments: true,
       phases: true,
+      members: {
+        include: {
+          user: {
+            select: { name: true, email: true, image: true },
+          },
+          departmentMembers: {
+            include: {
+              department: {
+                select: { id: true, name: true },
+              },
+            },
+          },
+        },
+      },
     },
   });
 

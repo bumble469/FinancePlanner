@@ -180,6 +180,7 @@ model WorkItemMember {
   workItemId String
   userId     String
   role       MemberRole @default(MEMBER)
+  monthlyCost Decimal? @db.Decimal(12, 2)
 
   workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)

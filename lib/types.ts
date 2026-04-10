@@ -66,14 +66,20 @@ export type Module = {
   departmentId: string;
 };
 
+type DepartmentMember = {
+  department: {
+    id: string;
+    name: string;
+  };
+};
+
 export interface TeamMember {
   id: string;
   name: string;
   role: Role;
-  team: string;
+  user: any;
+  departmentMembers?: DepartmentMember[];
   monthlyCost: number;
-  // Integration point: Each team member can map to a 3D avatar/node
-  avatar3DNodeId?: string;
 }
 
 export interface Expense {

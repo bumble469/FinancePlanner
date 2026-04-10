@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
+import { useFinancialStore } from "@/lib/store";
 import {
   Dialog,
   DialogContent,
@@ -19,30 +20,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import type { Role } from "@/lib/types";
+import type { Role, Department } from "@/lib/types";
 
-const ALL_ROLES: Role[] = [
-  "ADMIN",
+type AllowedRole = Exclude<Role, "ADMIN">;
+
+const ALL_ROLES: AllowedRole[] = [
   "CO_ADMIN",
   "MANAGER",
   "CO_MANAGER",
   "MEMBER",
 ];
 
-const TEAMS = [
-  "Leadership",
-  "Engineering",
-  "Design",
-  "Marketing",
-  "Operations",
-];
-
 interface TeamMember {
   id: string;
   name: string;
-  role: Role;
-  team: string;
-  monthlyCost: number;
+  role: AllowedRole;
+  departmentIds: string[];
+  monthlyCost?: number; // ✅ optional
 }
 
 interface Props {
@@ -52,12 +46,14 @@ interface Props {
 }
 
 export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
+  const { departments } = useFinancialStore();
+
   const [formData, setFormData] = useState({
     id: "",
     email: "",
     name: "",
-    role: "" as Role | "",
-    team: "",
+    role: "" as AllowedRole | "",
+    departmentIds: [] as string[],
     monthlyCost: "",
   });
 
@@ -65,7 +61,7 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
   const [loadingUser, setLoadingUser] = useState(false);
   const [userSelected, setUserSelected] = useState(false);
 
-  // 🔥 SEARCH USERS AS YOU TYPE
+  // 🔥 SEARCH USERS
   useEffect(() => {
     if (!formData.email) {
       setUsers([]);
@@ -79,9 +75,7 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
 
         const res = await authClient.request("/api/users/by-email", {
           method: "GET",
-          params: {
-            email: formData.email,
-          },
+          params: { email: formData.email },
         });
 
         setUsers(res.data || []);
@@ -95,7 +89,6 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
     return () => clearTimeout(timeout);
   }, [formData.email]);
 
-  // 🔥 SELECT USER FROM LIST
   const handleSelectUser = (user: any) => {
     setFormData((prev) => ({
       ...prev,
@@ -108,13 +101,26 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
     setUserSelected(true);
   };
 
+  const toggleDepartment = (id: string) => {
+    setFormData((prev) => {
+      const exists = prev.departmentIds.includes(id);
+
+      return {
+        ...prev,
+        departmentIds: exists
+          ? prev.departmentIds.filter((d) => d !== id)
+          : [...prev.departmentIds, id],
+      };
+    });
+  };
+
   const resetForm = () => {
     setFormData({
       id: "",
       email: "",
       name: "",
       role: "",
-      team: "",
+      departmentIds: [],
       monthlyCost: "",
     });
     setUsers([]);
@@ -122,14 +128,17 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
   };
 
   const handleSubmit = () => {
-    if (!formData.id || !formData.role || !formData.team) return;
+    if (!formData.id || !formData.role) return;
 
     onSubmit({
       id: formData.id,
       name: formData.name,
-      role: formData.role as Role,
-      team: formData.team,
-      monthlyCost: Number(formData.monthlyCost || 0),
+      role: formData.role as AllowedRole,
+      departmentIds: formData.departmentIds,
+      monthlyCost:
+        formData.role === "CO_ADMIN" || !formData.monthlyCost
+          ? undefined
+          : Number(formData.monthlyCost),
     });
 
     resetForm();
@@ -141,6 +150,23 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
     onOpenChange(false);
   };
 
+  const formatRole = (role: string) =>
+    role
+      .toLowerCase()
+      .split("_")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join("-");
+
+  const showDepartments =
+    userSelected &&
+    formData.role &&
+    formData.role !== "CO_ADMIN";
+
+  const showCost =
+    userSelected &&
+    formData.role &&
+    formData.role !== "CO_ADMIN";
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent>
@@ -149,7 +175,8 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
         </DialogHeader>
 
         <div className="space-y-4 pt-4">
-          {/* EMAIL SEARCH INPUT */}
+
+          {/* EMAIL SEARCH */}
           <div className="space-y-2 relative">
             <Label>Email</Label>
             <Input
@@ -163,21 +190,18 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
               }
             />
 
-            {/* LOADING */}
             {loadingUser && (
               <p className="text-xs text-muted-foreground">
                 Searching...
               </p>
             )}
 
-            {/* DROPDOWN RESULTS */}
-            {/* DROPDOWN RESULTS */}
             {users.length > 0 && !userSelected && (
-              <div className="absolute z-10 mt-1 w-full rounded-md border border-border bg-popover shadow-md">
+              <div className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md">
                 {users.map((user) => (
                   <div
                     key={user.id}
-                    className="cursor-pointer px-3 py-2 hover:bg-accent hover:text-accent-foreground text-sm text-popover-foreground"
+                    className="cursor-pointer px-3 py-2 hover:bg-accent text-sm"
                     onClick={() => handleSelectUser(user)}
                   >
                     {user.email}{" "}
@@ -205,7 +229,9 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
                   onValueChange={(v) =>
                     setFormData((prev) => ({
                       ...prev,
-                      role: v as Role,
+                      role: v as AllowedRole,
+                      departmentIds: [],
+                      monthlyCost: "",
                     }))
                   }
                 >
@@ -215,62 +241,71 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
                   <SelectContent>
                     {ALL_ROLES.map((role) => (
                       <SelectItem key={role} value={role}>
-                        {role}
+                        {formatRole(role)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* TEAM */}
-              <div className="space-y-2">
-                <Label>Department</Label>
-                <Select
-                  value={formData.team}
-                  onValueChange={(v) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      team: v,
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TEAMS.map((team) => (
-                      <SelectItem key={team} value={team}>
-                        {team}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* DEPARTMENTS */}
+              {showDepartments && (
+                <div className="space-y-2">
+                  <Label>Departments</Label>
 
-              {/* COST */}
-              <div className="space-y-2">
-                <Label>Monthly Cost</Label>
-                <Input
-                  type="number"
-                  placeholder="Enter monthly cost"
-                  value={formData.monthlyCost}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      monthlyCost: e.target.value,
-                    }))
-                  }
-                />
-              </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {departments.map((d: Department) => {
+                      const selected = formData.departmentIds.includes(d.id);
+
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => toggleDepartment(d.id)}
+                          className={`p-2 rounded border text-sm transition ${
+                            selected
+                              ? "bg-primary text-white"
+                              : "bg-background hover:bg-muted"
+                          }`}
+                        >
+                          {d.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* MONTHLY COST */}
+              {showCost && (
+                <div className="space-y-2">
+                  <Label>Monthly Cost (optional)</Label>
+                  <Input
+                    type="number"
+                    placeholder="Enter monthly cost"
+                    value={formData.monthlyCost}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        monthlyCost: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              )}
             </>
           )}
 
           {/* ACTIONS */}
           <div className="flex justify-end gap-3 pt-4">
-            <Button variant="outline" onClick={handleClose}>
+            <Button variant="outline" onClick={handleClose} className="cursor-pointer hover:text-gray-600">
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={!userSelected}>
+            <Button
+              onClick={handleSubmit}
+              disabled={!userSelected || !formData.role}
+              className="cursor-pointer"
+            >
               Add Member
             </Button>
           </div>

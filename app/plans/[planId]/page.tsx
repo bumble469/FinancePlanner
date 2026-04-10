@@ -28,6 +28,7 @@ export default function PlanDashboardPage() {
           departments: data.departments || [],
           modules: data.modules || [],
           currency: data.currency,
+          teamMembers: data.members || [],
         });
       } catch (err) {
         console.error("Failed to fetch plan:", err);
