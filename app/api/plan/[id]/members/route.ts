@@ -53,7 +53,7 @@ export async function POST(
     const { id: planId } = await params;
     const body = await req.json();
 
-    const { userId, role, departmentIds = [] } = body;
+    const { userId, role, departmentIds = [], monthlyCost } = body;
 
     if (!userId) {
       return NextResponse.json(
@@ -68,6 +68,7 @@ export async function POST(
         workItemId: planId,
         userId,
         role: role || "MEMBER",
+        monthlyCost
       },
     });
 

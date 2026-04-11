@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Plus } from "lucide-react";
 import { TaskListView } from "./task-list-view";
 import { TaskDialog } from "./task-dialog";
-import { ConfirmDeleteDialog } from "./confirm-delete-dialog";
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { authClient } from "@/lib/auth-client";
 import { useFinancialStore } from "@/lib/store";
 

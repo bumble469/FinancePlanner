@@ -78,6 +78,7 @@ export interface TeamMember {
   name: string;
   role: Role;
   user: any;
+  userId: string;
   departmentMembers?: DepartmentMember[];
   monthlyCost: number;
 }

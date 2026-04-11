@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import { useFinancialStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -15,9 +14,9 @@ import { Plus, Pencil, Trash2, Users, DollarSign, Box } from "lucide-react";
 import type { TeamMember, Role } from "@/lib/types";
 import { ROLES } from "@/lib/types";
 import { getCurrencySymbol } from "@/lib/currency";
-import { AddMemberDialog } from "./components/member-dialog";
+import { AddEditMemberDialog } from "./components/member-dialog";
 import { authClient } from "@/lib/auth-client";
-
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 function formatCurrency(value: number | undefined, currency: string): string {
   const symbol = getCurrencySymbol(currency);
   return `${symbol} ${(value ?? 0).toLocaleString("en-IN")}`;
@@ -42,12 +41,11 @@ const defaultFormData: FormData = {
 };
 
 export function TeamSection({ planId }: { planId: string }) {  // Fix 3: planId as prop
-  const { teamMembers, removeTeamMember, currency, departments } = useFinancialStore();
-
-  console.log("team members: ", teamMembers);
+  const { teamMembers, removeTeamMember, currency, departments, currentUser, setTeamMembers } = useFinancialStore();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [formData, setFormData] = useState<FormData>(defaultFormData);
+  const [deletingMember, setDeletingMember] = useState<TeamMember | null>(null);
 
   const totalMonthlyCost = teamMembers.reduce((sum, m) => sum + m.monthlyCost, 0);
 
@@ -68,7 +66,6 @@ export function TeamSection({ planId }: { planId: string }) {  // Fix 3: planId 
     };
   });
 
-  // Group by role for summary
   const roleSummary = ROLES.reduce(
     (acc, role) => {
       const members = teamMembers.filter((m) => m.role === role);
@@ -84,9 +81,15 @@ export function TeamSection({ planId }: { planId: string }) {  // Fix 3: planId 
     [] as { role: string; count: number; cost: number }[]
   );
 
-  // Fix 5: resetForm defined as a function
-  const resetForm = () => {
-    setFormData(defaultFormData);
+  const fetchTeamData = async () => {
+    try {
+      const res = await authClient.request(`/api/plan/${planId}/members`, {
+        method: "GET",
+      });
+      setTeamMembers(res.data);
+    } catch (err: any) {
+      console.error(err);
+    }
   };
 
   const handleSubmit = async (data: {
@@ -108,9 +111,37 @@ export function TeamSection({ planId }: { planId: string }) {  // Fix 3: planId 
       });
 
       setIsAddOpen(false);
+      fetchTeamData();
     } catch (err: any) {
       console.error(err);
       alert(err?.response?.data?.error || "Failed to add member");
+    }
+  };
+
+  const handleEditSubmit = async (data: {
+    id: string;
+    name: string;
+    role: string;
+    departmentIds: string[];
+    monthlyCost?: number;
+  }) => {
+    if (!editingMember) return;
+    try {
+      await authClient.request(`/api/plan/${planId}/members/${editingMember.id}`, {
+        method: "PATCH",
+        data: {
+          role: data.role,
+          departmentIds: data.departmentIds,
+          monthlyCost: data.monthlyCost,
+        },
+      });
+
+      setIsAddOpen(false);
+      setEditingMember(null);
+      fetchTeamData();
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Failed to update member");
     }
   };
 
@@ -130,11 +161,21 @@ export function TeamSection({ planId }: { planId: string }) {  // Fix 3: planId 
     setIsAddOpen(true);
   };
 
-  const handleClose = () => {
-    setIsAddOpen(false);
-    setEditingMember(null);
-    // Fix 7: id is included in defaultFormData, so reset is valid
-    resetForm();
+  const confirmMemberDelete = async () => {
+    if (!deletingMember) return;
+
+    try {
+      await authClient.request(`/api/plan/${planId}/members/${deletingMember.id}`, {
+        method: "DELETE",
+      });
+
+      removeTeamMember(deletingMember.id);
+      setDeletingMember(null);
+      fetchTeamData();
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Failed to delete member");
+    }
   };
 
   return (
@@ -153,10 +194,29 @@ export function TeamSection({ planId }: { planId: string }) {  // Fix 3: planId 
             Add Member
           </Button>
 
-          <AddMemberDialog
+          <AddEditMemberDialog
             open={isAddOpen}
+            planId={planId}
             onOpenChange={setIsAddOpen}
-            onSubmit={handleSubmit}
+            onSubmit={editingMember ? handleEditSubmit : handleSubmit}
+            initialData={
+              editingMember
+                ? {
+                  id: editingMember.id,
+                  email: editingMember.user?.email ?? "",
+                  name: editingMember.user?.name ?? "",
+                  role: editingMember.role as any,
+                  departmentIds: editingMember.departmentMembers?.map((dm: any) => dm.departmentId) ?? [],
+                  monthlyCost: editingMember.monthlyCost,
+                }
+                : null
+            }
+          />
+          <ConfirmDeleteDialog
+            open={!!deletingMember}
+            type="member"
+            setOpen={(open) => { if (!open) setDeletingMember(null); }}
+            onConfirm={confirmMemberDelete}
           />
         </div>
       </div>
@@ -264,6 +324,8 @@ export function TeamSection({ planId }: { planId: string }) {  // Fix 3: planId 
                           size="icon"
                           variant="ghost"
                           onClick={() => handleEdit(member)}
+                          disabled={member.userId === currentUser?.id}
+                          className="cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -271,8 +333,9 @@ export function TeamSection({ planId }: { planId: string }) {  // Fix 3: planId 
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => removeTeamMember(member.id)}
-                          className="text-danger hover:text-danger"
+                          onClick={() => setDeletingMember(member)}
+                          disabled={member.userId === currentUser?.id}
+                          className="text-danger hover:text-danger cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

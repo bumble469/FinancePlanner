@@ -41,11 +41,20 @@ interface TeamMember {
 
 interface Props {
   open: boolean;
+  planId: string;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: TeamMember) => void;
+  initialData?: {          
+    id: string;
+    name: string;
+    email: string;
+    role: AllowedRole;
+    departmentIds: string[];
+    monthlyCost?: number;
+  } | null;
 }
 
-export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
+export function AddEditMemberDialog({ open, planId, onOpenChange, onSubmit, initialData }: Props) {
   const { departments } = useFinancialStore();
 
   const [formData, setFormData] = useState({
@@ -56,6 +65,21 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
     departmentIds: [] as string[],
     monthlyCost: "",
   });
+
+  useEffect(() => {
+    if (open && initialData) {
+      setFormData({
+        id: initialData.id,
+        email: initialData.email,
+        name: initialData.name,
+        role: initialData.role,
+        departmentIds: initialData.departmentIds,
+        monthlyCost: initialData.monthlyCost?.toString() ?? "",
+      });
+      setUserSelected(true);   
+      setUsers([]);
+    }
+  }, [open, initialData]);
 
   const [users, setUsers] = useState<any[]>([]);
   const [loadingUser, setLoadingUser] = useState(false);
@@ -75,7 +99,7 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
 
         const res = await authClient.request("/api/users/by-email", {
           method: "GET",
-          params: { email: formData.email },
+          params: { email: formData.email, planId },
         });
 
         setUsers(res.data || []);
@@ -171,7 +195,7 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add Member</DialogTitle>
+          <DialogTitle>{initialData ? "Edit Member" : "Add Member"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 pt-4">
@@ -306,7 +330,7 @@ export function AddMemberDialog({ open, onOpenChange, onSubmit }: Props) {
               disabled={!userSelected || !formData.role}
               className="cursor-pointer"
             >
-              Add Member
+              {initialData ? "Save Changes" : "Add Member"}
             </Button>
           </div>
         </div>

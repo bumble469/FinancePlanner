@@ -6,7 +6,6 @@ import { Department } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Button } from "@/components/ui/button";
 import {
   Users,
   Ticket,
@@ -20,7 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddDeptDialog } from "./components/add-dept-dialog";
-import { ConfirmDeleteDialog } from "./components/confirm-delete-dialog";
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { getCurrencySymbol } from "@/lib/currency";
 import { DepartmentListView } from "./components/dept-list-view";
 import { DepartmentDetailView } from "./components/dept-detail-view";

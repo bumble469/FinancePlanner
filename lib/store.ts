@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type {
   Account,
   Plan,
@@ -17,6 +18,9 @@ import type {
 interface AccountStore {
   account: Account | null;
   setAccount: (account: Account) => void;
+
+  currentUser: { id: string; email: string; name?: string } | null;
+  setCurrentUser: (user: { id: string; email: string; name?: string } | null) => void;
 
   plans: Plan[];
   setPlans: (plans: Plan[]) => void;
@@ -62,14 +66,12 @@ interface PlanDashboardStore {
   updateSimulation: (data: Partial<SimulationModifiers>) => void;
   resetSimulation: () => void;
 
-  // ✅ NEW: Departments
   departments: Department[];
   setDepartments: (d: Department[]) => void;
   addDepartment: (d: Department) => void;
   updateDepartment: (id: string, d: Partial<Department>) => void;
   removeDepartment: (id: string) => void;
 
-  // ✅ NEW: Modules (Phases)
   modules: Module[];
   setModules: (m: Module[]) => void;
   addModule: (m: Module) => void;
@@ -100,222 +102,233 @@ const defaultSimulation: SimulationModifiers = {
 
 const defaultEventData: EventData = {
   estimatedAttendance: 0,
-  ticketPrice: 0 ,
+  ticketPrice: 0,
   expectedRevenue: 0,
   eventBudget: 0,
 };
 
 // ================= STORE =================
 
-export const useFinancialStore = create<FinancialStore>((set, get) => ({
-  // ACCOUNT
-  account: null,
-  setAccount: (account) => set({ account }),
+export const useFinancialStore = create<FinancialStore>()(
+  persist(
+    (set, get) => ({
+      // ACCOUNT
+      account: null,
+      setAccount: (account) => set({ account }),
 
-  // PLANS
-  plans: [],
-  setPlans: (plans) => set({ plans }),
+      currentUser: null,
+      setCurrentUser: (user) => set({ currentUser: user }),
 
-  currency: "INR",
-  setCurrency: (currency) => set({ currency }),
+      // PLANS
+      plans: [],
+      setPlans: (plans) => set({ plans }),
 
-  addPlan: (plan) =>
-    set((state) => ({ plans: [...state.plans, plan] })),
+      currency: "INR",
+      setCurrency: (currency) => set({ currency }),
 
-  removePlan: (planId) =>
-    set((state) => ({
-      plans: state.plans.filter((p) => p.id !== planId),
-      currentPlanId:
-        state.currentPlanId === planId ? null : state.currentPlanId,
-    })),
+      addPlan: (plan) =>
+        set((state) => ({ plans: [...state.plans, plan] })),
 
-  updatePlanStatus: (planId, status) =>
-    set((state) => ({
-      plans: state.plans.map((p) =>
-        p.id === planId ? { ...p, status } : p
-      ),
-    })),
+      removePlan: (planId) =>
+        set((state) => ({
+          plans: state.plans.filter((p) => p.id !== planId),
+          currentPlanId:
+            state.currentPlanId === planId ? null : state.currentPlanId,
+        })),
 
-  // LOADING / ERROR
-  isLoading: false,
-  setIsLoading: (isLoading) => set({ isLoading }),
+      updatePlanStatus: (planId, status) =>
+        set((state) => ({
+          plans: state.plans.map((p) =>
+            p.id === planId ? { ...p, status } : p
+          ),
+        })),
 
-  error: null,
-  setError: (error) => set({ error }),
+      // LOADING / ERROR
+      isLoading: false,
+      setIsLoading: (isLoading) => set({ isLoading }),
 
-  // CURRENT PLAN
-  currentPlanId: null,
-  setCurrentPlanId: (planId) => set({ currentPlanId: planId }),
+      error: null,
+      setError: (error) => set({ error }),
 
-  getCurrentPlan: () => {
-    const state = get();
-    return state.plans.find((p) => p.id === state.currentPlanId) || null;
-  },
+      // CURRENT PLAN
+      currentPlanId: null,
+      setCurrentPlanId: (planId) => set({ currentPlanId: planId }),
 
-  // ================= DASHBOARD =================
-
-  mode: "event",
-
-  setMode: (mode) =>
-    set((state) => ({
-      mode,
-      plans: state.plans.map((p) =>
-        p.id === state.currentPlanId ? { ...p, mode } : p
-      ),
-    })),
-
-  // ================= TEAM =================
-
-  teamMembers: [],
-  setTeamMembers: (teamMembers) => set({ teamMembers }),
-
-  addTeamMember: (member) =>
-    set((state) => ({
-      teamMembers: [...state.teamMembers, member],
-    })),
-
-  updateTeamMember: (id, member) =>
-    set((state) => ({
-      teamMembers: state.teamMembers.map((m) =>
-        m.id === id ? { ...m, ...member } : m
-      ),
-    })),
-
-  removeTeamMember: (id) =>
-    set((state) => ({
-      teamMembers: state.teamMembers.filter((m) => m.id !== id),
-    })),
-
-  // ================= EXPENSES =================
-
-  expenses: [],
-  setExpenses: (expenses) => set({ expenses }),
-
-  addExpense: (expense) =>
-    set((state) => ({
-      expenses: [...state.expenses, expense],
-    })),
-
-  updateExpense: (id, expense) =>
-    set((state) => ({
-      expenses: state.expenses.map((e) =>
-        e.id === id ? { ...e, ...expense } : e
-      ),
-    })),
-
-  removeExpense: (id) =>
-    set((state) => ({
-      expenses: state.expenses.filter((e) => e.id !== id),
-    })),
-
-  // ================= EVENT =================
-
-  eventData: defaultEventData,
-
-  updateEventData: (data) =>
-    set((state) => {
-      const eventData = { ...state.eventData, ...data };
-      return {
-        eventData,
-        plans: state.plans.map((p) =>
-          p.id === state.currentPlanId ? { ...p, eventData } : p
-        ),
-      };
-    }),
-
-  // ================= SIMULATION =================
-
-  simulation: defaultSimulation,
-
-  updateSimulation: (data) =>
-    set((state) => {
-      const simulation = { ...state.simulation, ...data };
-      return {
-        simulation,
-        plans: state.plans.map((p) =>
-          p.id === state.currentPlanId ? { ...p, simulation } : p
-        ),
-      };
-    }),
-
-  resetSimulation: () =>
-    set({
-      simulation: defaultSimulation,
-    }),
-
-  // ================= DEPARTMENTS =================
-
-  departments: [],
-  setDepartments: (departments) => set({ departments }),
-
-  addDepartment: (dept) =>
-    set((state) => ({
-      departments: [...state.departments, dept],
-    })),
-
-  updateDepartment: (id, data) =>
-    set((state) => ({
-      departments: state.departments.map((d) =>
-        d.id === id ? { ...d, ...data } : d
-      ),
-    })),
-
-  removeDepartment: (id) =>
-    set((state) => ({
-      departments: state.departments.filter((d) => d.id !== id),
-      modules: state.modules.filter((m) => m.departmentId !== id),
-    })),
-
-  // ================= MODULES =================
-
-  modules: [],
-  setModules: (modules) => set({ modules }),
-
-  addModule: (mod) =>
-    set((state) => ({
-      modules: [...state.modules, mod],
-    })),
-
-  updateModule: (id, data) =>
-    set((state) => ({
-      modules: state.modules.map((m) =>
-        m.id === id ? { ...m, ...data } : m
-      ),
-    })),
-
-  removeModule: (id) =>
-    set((state) => ({
-      modules: state.modules.filter((m) => m.id !== id),
-    })),
-
-    // ================= LOAD PLAN META =================
-
-  setPlanMeta: (data) =>
-    set((state) => ({
-      eventData: {
-        ...state.eventData,
-        eventBudget: Number(data.eventBudget) || 0,
+      getCurrentPlan: () => {
+        const state = get();
+        return state.plans.find((p) => p.id === state.currentPlanId) || null;
       },
-      departments: data.departments || [],
-      modules: data.modules || [],
-      currency: data.currency || 'INR',
-      teamMembers: data.teamMembers || [],
-    })),
 
-  // ================= SYNC =================
+      // ================= DASHBOARD =================
 
-  syncToPlan: (planId, plan) =>
-    set({
-      currentPlanId: planId,
-      mode: plan.mode,
-      teamMembers: plan.teamMembers,
-      expenses: plan.expenses,
-      eventData: plan.eventData || defaultEventData,
-      simulation: plan.simulation,
+      mode: "event",
+
+      setMode: (mode) =>
+        set((state) => ({
+          mode,
+          plans: state.plans.map((p) =>
+            p.id === state.currentPlanId ? { ...p, mode } : p
+          ),
+        })),
+
+      // ================= TEAM =================
+
+      teamMembers: [],
+      setTeamMembers: (teamMembers) => set({ teamMembers }),
+
+      addTeamMember: (member) =>
+        set((state) => ({
+          teamMembers: [...state.teamMembers, member],
+        })),
+
+      updateTeamMember: (id, member) =>
+        set((state) => ({
+          teamMembers: state.teamMembers.map((m) =>
+            m.id === id ? { ...m, ...member } : m
+          ),
+        })),
+
+      removeTeamMember: (id) =>
+        set((state) => ({
+          teamMembers: state.teamMembers.filter((m) => m.id !== id),
+        })),
+
+      // ================= EXPENSES =================
+
+      expenses: [],
+      setExpenses: (expenses) => set({ expenses }),
+
+      addExpense: (expense) =>
+        set((state) => ({
+          expenses: [...state.expenses, expense],
+        })),
+
+      updateExpense: (id, expense) =>
+        set((state) => ({
+          expenses: state.expenses.map((e) =>
+            e.id === id ? { ...e, ...expense } : e
+          ),
+        })),
+
+      removeExpense: (id) =>
+        set((state) => ({
+          expenses: state.expenses.filter((e) => e.id !== id),
+        })),
+
+      // ================= EVENT =================
+
+      eventData: defaultEventData,
+
+      updateEventData: (data) =>
+        set((state) => {
+          const eventData = { ...state.eventData, ...data };
+          return {
+            eventData,
+            plans: state.plans.map((p) =>
+              p.id === state.currentPlanId ? { ...p, eventData } : p
+            ),
+          };
+        }),
+
+      // ================= SIMULATION =================
+
+      simulation: defaultSimulation,
+
+      updateSimulation: (data) =>
+        set((state) => {
+          const simulation = { ...state.simulation, ...data };
+          return {
+            simulation,
+            plans: state.plans.map((p) =>
+              p.id === state.currentPlanId ? { ...p, simulation } : p
+            ),
+          };
+        }),
+
+      resetSimulation: () =>
+        set({
+          simulation: defaultSimulation,
+        }),
+
+      // ================= DEPARTMENTS =================
+
       departments: [],
+      setDepartments: (departments) => set({ departments }),
+
+      addDepartment: (dept) =>
+        set((state) => ({
+          departments: [...state.departments, dept],
+        })),
+
+      updateDepartment: (id, data) =>
+        set((state) => ({
+          departments: state.departments.map((d) =>
+            d.id === id ? { ...d, ...data } : d
+          ),
+        })),
+
+      removeDepartment: (id) =>
+        set((state) => ({
+          departments: state.departments.filter((d) => d.id !== id),
+          modules: state.modules.filter((m) => m.departmentId !== id),
+        })),
+
+      // ================= MODULES =================
+
       modules: [],
+      setModules: (modules) => set({ modules }),
+
+      addModule: (mod) =>
+        set((state) => ({
+          modules: [...state.modules, mod],
+        })),
+
+      updateModule: (id, data) =>
+        set((state) => ({
+          modules: state.modules.map((m) =>
+            m.id === id ? { ...m, ...data } : m
+          ),
+        })),
+
+      removeModule: (id) =>
+        set((state) => ({
+          modules: state.modules.filter((m) => m.id !== id),
+        })),
+
+      // ================= LOAD PLAN META =================
+
+      setPlanMeta: (data) =>
+        set((state) => ({
+          eventData: {
+            ...state.eventData,
+            eventBudget: Number(data.eventBudget) || 0,
+          },
+          departments: data.departments || [],
+          modules: data.modules || [],
+          currency: data.currency || "INR",
+          teamMembers: data.teamMembers || [],
+        })),
+
+      // ================= SYNC =================
+
+      syncToPlan: (planId, plan) =>
+        set({
+          currentPlanId: planId,
+          mode: plan.mode,
+          teamMembers: plan.teamMembers,
+          expenses: plan.expenses,
+          eventData: plan.eventData || defaultEventData,
+          simulation: plan.simulation,
+          departments: [],
+          modules: [],
+        }),
     }),
-}));
+    {
+      name: "financial-store",
+      partialize: (state) => ({ currentUser: state.currentUser }), // ← only persist currentUser
+    }
+  )
+);
 
 // ================= METRICS =================
 

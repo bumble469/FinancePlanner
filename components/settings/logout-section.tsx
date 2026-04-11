@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { LogOut, MonitorX } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { useFinancialStore } from "@/lib/store";
 
 type DialogType = "logout" | "logout-all" | null;
 
@@ -21,6 +22,7 @@ export function LogoutSection() {
   const router = useRouter();
   const [openDialog, setOpenDialog] = useState<DialogType>(null);
   const [loading, setLoading] = useState(false);
+  const setCurrentUser = useFinancialStore((s) => s.setCurrentUser);
 
   const handleLogout = async (all: boolean) => {
     setLoading(true);
@@ -31,7 +33,7 @@ export function LogoutSection() {
       await authClient.request(endpoint, {
         method: "POST",
       });
-
+      setCurrentUser(null)
       window.location.href = "/";
 
     } catch (error: any) {

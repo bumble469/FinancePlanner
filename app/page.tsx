@@ -13,10 +13,12 @@ import { HowItWorksSection } from "@/components/landing/how-it-works";
 import { CTASection } from "@/components/landing/cta-section";
 import { LandingFooter } from "@/components/landing/footer";
 import { Snackbar } from '@/components/ui/snackbar-main';
+import { useFinancialStore } from '@/lib/store';
+
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const snackbar = useSnackbar();
+  const setCurrentUser = useFinancialStore((s) => s.setCurrentUser);
 
   useEffect(() => {
     async function checkAuth() {
@@ -24,9 +26,9 @@ export default function Home() {
         const res = await authClient.request('/api/auth/me');
 
         const user = res.data?.data;
-
         if (user) {
           authClient.setUser(user);
+          setCurrentUser(user);
           setIsAuthenticated(true);
         } else {
           setIsAuthenticated(false);

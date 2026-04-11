@@ -9,42 +9,34 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const email = searchParams.get("email");
+    const planId = searchParams.get("planId"); // ← add this
 
     if (!email) {
-      return NextResponse.json(
-        { error: "Email is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
-    const user = await prisma.user.findMany({
+    // Get existing member userIds for this plan
+    const existingUserIds = planId
+      ? (await prisma.workItemMember.findMany({
+          where: { workItemId: planId },
+          select: { userId: true },
+        })).map((m) => m.userId)
+      : [];
+
+    const users = await prisma.user.findMany({
       where: {
-        email: {
-            contains: email,
-            mode: 'insensitive'
-        }
+        email: { contains: email, mode: "insensitive" },
+        ...(existingUserIds.length > 0 && {
+          id: { notIn: existingUserIds }, // ← exclude existing members
+        }),
       },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      },
-      take: 10
+      select: { id: true, name: true, email: true },
+      take: 10,
     });
 
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json(user);
+    return NextResponse.json(users);
   } catch (error) {
     console.error(error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
