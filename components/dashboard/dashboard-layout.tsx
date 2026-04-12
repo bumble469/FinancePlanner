@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { OverviewSection } from "./sections/overview-section";
 import { TeamSection } from "./sections/team_role_section/team-section";
-import { ExpenseSection } from "./sections/expense-section";
+import { ExpenseSection } from "./sections/rev_exp_section/rev-exp_section";
 import { EventSection } from "./sections/planning-section/planning-section";
 import { SimulationSection } from "./sections/simulation-section";
 import { Menu, X, ArrowLeft } from "lucide-react";
@@ -52,7 +52,7 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
       case "team":
         return <TeamSection planId={planId} />;
       case "expenses":
-        return <ExpenseSection />;
+        return <ExpenseSection planId={planId} />;
       case "event":
         return <EventSection />;
       case "simulation":

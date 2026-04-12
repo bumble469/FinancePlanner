@@ -19,9 +19,9 @@ interface SidebarProps {
 
 const navItems = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "team", label: "Team & Roles", icon: Users },
-  { id: "expenses", label: "Expenses", icon: Receipt },
   { id: "event", label: "Planning", icon: CalendarDays },
+  { id: "team", label: "Team & Roles", icon: Users },
+  { id: "expenses", label: "Revenue and Expenses", icon: Receipt },
   { id: "simulation", label: "What-If Mode", icon: FlaskConical },
 ];
 

@@ -40,7 +40,7 @@ const defaultFormData: FormData = {
   monthlyCost: "",
 };
 
-export function TeamSection({ planId }: { planId: string }) {  // Fix 3: planId as prop
+export function TeamSection({ planId }: { planId: string }) {
   const { teamMembers, removeTeamMember, currency, departments, currentUser, setTeamMembers } = useFinancialStore();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
@@ -286,7 +286,15 @@ export function TeamSection({ planId }: { planId: string }) {  // Fix 3: planId 
                   <TableRow key={member.id}>
                     {/* Name */}
                     <TableCell className="font-medium whitespace-nowrap">
-                      {member?.user?.name || "-"}
+                      <div className="flex items-center gap-2">
+                        <span>{member?.user?.name || "-"}</span>
+
+                        {member.userId === currentUser?.id && (
+                          <span className="rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium">
+                            You
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
 
                     {/* Role */}

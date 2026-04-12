@@ -60,11 +60,13 @@ export type Department = {
 };
 
 // ================= MODULES (PHASES) =================
-export type Module = {
+export interface Module {
   id: string;
   name: string;
-  departmentId: string;
-};
+  startDate?: string;
+  endDate?: string;
+  departmentId?: string;
+}
 
 type DepartmentMember = {
   department: {
@@ -85,22 +87,40 @@ export interface TeamMember {
 
 export interface Expense {
   id: string;
-  name: string;
+  workItemId?: string;
+  phaseId?: string;
+  phaseName?: string;
+  departmentId?: string;
+  departmentName?: string;
   category: ExpenseCategory;
-  allocatedBudget: number;
-  spentAmount: number;
-  // Integration point: Each expense category maps to a 3D object/flow
-  object3DId?: string;
+  amount: number;
+  description?: string;
+  occurredAt: string;
 }
 
 export type ExpenseCategory =
-  | "salaries"
-  | "tools"
-  | "marketing"
-  | "operations"
-  | "events";
+  | "SALARY"
+  | "TOOLS"
+  | "MARKETING"
+  | "OPERATIONS"
+  | "EVENT"
+  | "OTHER";
 
 export type FinancialStatus = "healthy" | "warning" | "risk";
+
+export type IncomeType = "INVESTMENT" | "REVENUE";
+
+export interface Income {
+  id: string;
+  workItemId: string;
+  phaseId?: string;
+  phaseName?: string;      
+  type: IncomeType;
+  amount: number;
+  source?: string;
+  description?: string;
+  receivedAt: string;       
+}
 
 export interface EventData {
   estimatedAttendance: number;

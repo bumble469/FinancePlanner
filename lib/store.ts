@@ -12,6 +12,7 @@ import type {
   SimulationModifiers,
   Department,
   Module,
+  Income,
 } from "./types";
 
 
@@ -72,6 +73,15 @@ interface PlanDashboardStore {
   updateDepartment: (id: string, d: Partial<Department>) => void;
   removeDepartment: (id: string) => void;
 
+  income: Income[];
+  setIncome: (income: Income[]) => void;
+  addIncome: (income: Income) => void;
+  updateIncome: (id: string, income: Partial<Income>) => void;
+  removeIncome: (id: string) => void;
+
+  budget: number;
+  setBudget: (budget: number) => void;
+
   modules: Module[];
   setModules: (m: Module[]) => void;
   addModule: (m: Module) => void;
@@ -84,6 +94,7 @@ interface PlanDashboardStore {
     modules?: Module[];
     currency?: string;
     teamMembers: TeamMember[];
+    phases?: Module[];
   }) => void;
 
   syncToPlan: (planId: string, plan: Plan) => void;
@@ -193,7 +204,27 @@ export const useFinancialStore = create<FinancialStore>()(
           teamMembers: state.teamMembers.filter((m) => m.id !== id),
         })),
 
-      // ================= EXPENSES =================
+      // ================= REVENUE & EXPENSES =================
+      income: [],
+      setIncome: (income) => set({ income }),
+
+      addIncome: (entry) =>
+        set((state) => ({ income: [...state.income, entry] })),
+
+      updateIncome: (id, entry) =>
+        set((state) => ({
+          income: state.income.map((i) => i.id === id ? { ...i, ...entry } : i),
+        })),
+
+      removeIncome: (id) =>
+        set((state) => ({ income: state.income.filter((i) => i.id !== id) })),
+
+      // ================= BUDGET =================
+
+      budget: 0,
+      setBudget: (budget) => set({ budget }),
+
+      // ================= PHASES =================
 
       expenses: [],
       setExpenses: (expenses) => set({ expenses }),
@@ -307,6 +338,8 @@ export const useFinancialStore = create<FinancialStore>()(
           modules: data.modules || [],
           currency: data.currency || "INR",
           teamMembers: data.teamMembers || [],
+          budget: Number(data.eventBudget) || 0,  // ← add
+          phases: data.phases || [],
         })),
 
       // ================= SYNC =================
@@ -341,7 +374,7 @@ export function calculateMetrics(
   const totalBudget = expenses.reduce((s, e) => s + e.allocatedBudget, 0);
 
   let totalSpent =
-    expenses.reduce((s, e) => s + e.spentAmount, 0) *
+    expenses.reduce((s, e) => s + e.amount, 0) *
     simulation.costMultiplier;
 
   totalSpent += simulation.additionalMembers * 8000;
