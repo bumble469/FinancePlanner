@@ -35,51 +35,36 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getAuthUser();
     if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
-
-    const account = await prisma.account.findUnique({
-      where: { userId: user.sub },
-    });
-
+ 
+    const account = await prisma.account.findUnique({ where: { userId: user.sub } });
     if (!account) {
-      return NextResponse.json(
-        { success: false, error: 'Account not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: 'Account not found' }, { status: 404 });
     }
-
+ 
     const body = await request.json();
-    const { name, type, budget, description, status, currency } = body;
-
-    // ✅ validation
+    const {
+      name, type, budget, description, status, currency,
+      startDate, endDate, methodology,
+      eventDate, venue,
+    } = body;
+ 
     if (!name?.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'Name is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'Name is required' }, { status: 400 });
     }
-
+ 
     if (!type || !Object.values(WorkItemType).includes(type)) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid type. Must be PROJECT, EVENT or PLAN',
-        },
+        { success: false, error: 'Invalid type. Must be PROJECT, EVENT or PLAN' },
         { status: 400 }
       );
     }
-
+ 
     if (!budget || isNaN(budget) || budget <= 0) {
-      return NextResponse.json(
-        { success: false, error: 'Budget must be a positive number' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'Budget must be a positive number' }, { status: 400 });
     }
-
+ 
     const plan = await prisma.$transaction(async (tx) => {
       const workItem = await tx.workItem.create({
         data: {
@@ -87,12 +72,13 @@ export async function POST(request: NextRequest) {
           name: name.trim(),
           type,
           budget,
-          description,
-          status,
-          currency
+          description: description?.trim() || null,
+          status: status || 'ACTIVE',
+          currency: currency || 'USD',
         },
       });
-
+ 
+      // creator is always ADMIN
       await tx.workItemMember.create({
         data: {
           workItemId: workItem.id,
@@ -100,21 +86,31 @@ export async function POST(request: NextRequest) {
           role: MemberRole.ADMIN,
         },
       });
-
+ 
+      // type-specific record
       if (type === WorkItemType.PROJECT) {
         await tx.project.create({
-          data: { workItemId: workItem.id },
+          data: {
+            workItemId: workItem.id,
+            startDate: startDate ? new Date(startDate) : null,
+            endDate: endDate ? new Date(endDate) : null,
+            methodology: methodology?.trim() || null,
+          },
         });
       } else if (type === WorkItemType.EVENT) {
         await tx.event.create({
-          data: { workItemId: workItem.id },
+          data: {
+            workItemId: workItem.id,
+            eventDate: eventDate ? new Date(eventDate) : null,
+            venue: venue?.trim() || null,
+          },
         });
       } else if (type === WorkItemType.PLAN) {
         await tx.planInfo.create({
           data: { workItemId: workItem.id },
         });
       }
-
+ 
       return tx.workItem.findUnique({
         where: { id: workItem.id },
         include: {
@@ -123,20 +119,14 @@ export async function POST(request: NextRequest) {
           planInfo: true,
           departments: true,
           phases: true,
-          members: true, // include members if relation exists
+          members: true,
         },
       });
     });
-
-    return NextResponse.json(
-      { success: true, data: plan },
-      { status: 201 }
-    );
+ 
+    return NextResponse.json({ success: true, data: plan }, { status: 201 });
   } catch (error) {
     console.error('[Plan POST] Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
   }
 }

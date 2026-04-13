@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { WorkItemStatus } from '@prisma/client';
+import { WorkItemStatus, WorkItemType, MemberRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getAuthUser } from '@/lib/auth';
 
@@ -10,6 +10,9 @@ async function getPlanAndVerifyOwner(planId: string, userId: string) {
   const plan = await prisma.workItem.findFirst({
     where: { id: planId, accountId: account.id },
     include: {
+      project: true,
+      event: true,
+      planInfo: true,
       departments: true,
       phases: true,
       members: {
@@ -32,7 +35,8 @@ async function getPlanAndVerifyOwner(planId: string, userId: string) {
   return plan;
 }
 
-// GET /api/plan/[id]
+// ─── GET /api/plan/[id] ────────────────────────────────────────────────────
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -51,76 +55,105 @@ export async function GET(
   }
 }
 
-// PATCH /api/plan/[id]
+// ─── PATCH /api/plan/[id] ──────────────────────────────────────────────────
+
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> } // params is now a Promise
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // unwrap the params promise
     const { id: planId } = await params;
 
     if (!planId) {
-      return NextResponse.json({ success: false, error: "Missing plan ID" }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Missing plan ID' }, { status: 400 });
     }
 
     const user = await getAuthUser();
-    if (!user) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
     const existing = await getPlanAndVerifyOwner(planId, user.sub);
-    if (!existing) {
-      return NextResponse.json({ success: false, error: "Plan not found" }, { status: 404 });
-    }
+    if (!existing) return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
 
     const body = await request.json();
-    const { name, status, budget, description, currency, type } = body;
+    const {
+      name, status, budget, description, currency,
+      startDate, endDate, methodology,
+      eventDate, venue,
+    } = body;
 
     if (status && !Object.values(WorkItemStatus).includes(status)) {
-      return NextResponse.json({ success: false, error: "Invalid status" }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Invalid status' }, { status: 400 });
     }
 
-    const updated = await prisma.workItem.update({
-      where: { id: planId },
-      data: {
-        ...(name ? { name: name.trim() } : {}),
-        ...(status ? { status } : {}),
-        ...(budget !== undefined ? { budget } : {}),
-        ...(description ? { description } : {}),
-        ...(currency ? { currency } : {}),
-        ...(type ? { type } : {}),
-      },
-      include: {
-        project: true,
-        event: true,
-        planInfo: true,
-        departments: true,
-        phases: true,
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      // update base workItem
+      await tx.workItem.update({
+        where: { id: planId },
+        data: {
+          ...(name        ? { name: name.trim() } : {}),
+          ...(status      ? { status }             : {}),
+          ...(budget !== undefined ? { budget }    : {}),
+          ...(description !== undefined ? { description: description?.trim() || null } : {}),
+          ...(currency    ? { currency }            : {}),
+        },
+      });
+
+      // update type-specific record
+      if (existing.type === WorkItemType.PROJECT) {
+        await tx.project.update({
+          where: { workItemId: planId },
+          data: {
+            ...(startDate   !== undefined ? { startDate: startDate ? new Date(startDate) : null }   : {}),
+            ...(endDate    !== undefined ? { endDate: endDate ? new Date(endDate) : null }       : {}),
+            ...(methodology !== undefined ? { methodology: methodology?.trim() || null }             : {}),
+          },
+        });
+      } else if (existing.type === WorkItemType.EVENT) {
+        await tx.event.update({
+          where: { workItemId: planId },
+          data: {
+            ...(eventDate !== undefined ? { eventDate: eventDate ? new Date(eventDate) : null } : {}),
+            ...(venue     !== undefined ? { venue: venue?.trim() || null }                      : {}),
+          },
+        });
+      }
+
+      return tx.workItem.findUnique({
+        where: { id: planId },
+        include: {
+          project: true,
+          event: true,
+          planInfo: true,
+          departments: true,
+          phases: true,
+        },
+      });
     });
 
     return NextResponse.json({ success: true, data: updated }, { status: 200 });
   } catch (error) {
-    console.error("[Plan PATCH/:id] Error:", error);
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
+    console.error('[Plan PATCH/:id] Error:', error);
+    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
   }
 }
 
-// DELETE /api/plan/[id]
+// ─── DELETE /api/plan/[id] ─────────────────────────────────────────────────
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: planId } = await params;
+
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
-    const existing = await getPlanAndVerifyOwner((await params).id, user.sub);
+    const existing = await getPlanAndVerifyOwner(planId, user.sub);
     if (!existing) return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
 
-    await prisma.workItem.delete({ where: { id: (await params).id } });
-    // cascades to project/event/planInfo/departments/phases automatically
+    // cascades to project/event/planInfo/departments/phases/members automatically
+    await prisma.workItem.delete({ where: { id: planId } });
 
     return NextResponse.json({ success: true, message: 'Plan deleted successfully' }, { status: 200 });
   } catch (error) {

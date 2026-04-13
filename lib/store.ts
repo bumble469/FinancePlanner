@@ -371,15 +371,13 @@ export function calculateMetrics(
   mode: Mode,
   eventData: EventData
 ) {
-  const totalBudget = expenses.reduce((s, e) => s + e.allocatedBudget, 0);
-
   let totalSpent =
     expenses.reduce((s, e) => s + e.amount, 0) *
     simulation.costMultiplier;
 
   totalSpent += simulation.additionalMembers * 8000;
 
-  let estimatedProfitLoss = totalBudget - totalSpent;
+  let estimatedProfitLoss = eventData.eventBudget - totalSpent;
 
   if (mode === "event") {
     estimatedProfitLoss =
@@ -389,9 +387,8 @@ export function calculateMetrics(
   }
 
   return {
-    totalBudget,
     totalSpent,
-    remainingBalance: totalBudget - totalSpent,
+    remainingBalance: eventData.eventBudget - totalSpent,
     estimatedProfitLoss,
   };
 }

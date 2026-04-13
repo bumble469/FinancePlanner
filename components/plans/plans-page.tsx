@@ -25,6 +25,8 @@ function mapWorkItemToPlan(workItem: any): Plan {
     description: workItem.description ?? undefined,
     createdAt: new Date(workItem.createdAt),
     teamMembers: [],
+    project: workItem.project ?? null,
+    event: workItem.event ?? null,
     expenses: [],
     eventData: undefined,
     simulation: {
@@ -38,8 +40,7 @@ function mapWorkItemToPlan(workItem: any): Plan {
 }
 
 export function PlansPage() {
-  const { plans, account, setPlans, setIsLoading, setError, isLoading, error } =
-    useFinancialStore();
+  const { plans, account, setPlans, setIsLoading, setError, isLoading, error } = useFinancialStore();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
 
@@ -70,6 +71,7 @@ export function PlansPage() {
   const completedPlans = plans.filter((p) => p.status === "completed");
 
   const handleEditPlan = (plan: Plan) => {
+    console.log("plan to edit: ", plan)
     setEditingPlan(plan);
     setIsCreateDialogOpen(true);
   };  

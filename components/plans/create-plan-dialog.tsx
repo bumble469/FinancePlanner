@@ -46,15 +46,22 @@ export function CreatePlanDialog({
   const [name, setName] = useState("");
   const [type, setType] = useState<PlanType>("project");
   const [budget, setBudget] = useState("");
-
   const [description, setDescription] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [isActive, setIsActive] = useState(true);
 
+  // project-specific
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setDeadline] = useState("");
+  const [methodology, setMethodology] = useState("");
+
+  // event-specific
+  const [eventDate, setEventDate] = useState("");
+  const [venue, setVenue] = useState("");
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ PREFILL WHEN EDITING
   useEffect(() => {
     if (initialData) {
       setName(initialData.name);
@@ -63,16 +70,31 @@ export function CreatePlanDialog({
       setDescription(initialData.description || "");
       setCurrency(initialData.currency);
       setIsActive(initialData.status === "active");
+
+      if (initialData.project) {
+        setStartDate(initialData.project.startDate?.split("T")[0] ?? "");
+        setDeadline(initialData.project.deadline?.split("T")[0] ?? "");
+        setMethodology(initialData.project.methodology ?? "");
+      }
+
+      if (initialData.event) {
+        setEventDate(initialData.event.eventDate?.split("T")[0] ?? "");
+        setVenue(initialData.event.venue ?? "");
+      }
     } else {
-      // reset when switching back to create mode
       setName("");
       setType("project");
       setBudget("");
       setDescription("");
       setCurrency("USD");
       setIsActive(true);
+      setStartDate("");
+      setDeadline("");
+      setMethodology("");
+      setEventDate("");
+      setVenue("");
     }
-  }, [initialData]);
+  }, [initialData, open]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -86,6 +108,7 @@ export function CreatePlanDialog({
     try {
       const url = isEditMode ? `/api/plan/${initialData?.id}` : "/api/plan";
       const method = isEditMode ? "PATCH" : "POST";
+
       const { data } = await authClient.request(url, {
         method,
         data: {
@@ -95,10 +118,19 @@ export function CreatePlanDialog({
           description: description.trim(),
           currency,
           status: isActive ? "ACTIVE" : "INACTIVE",
+          // type-specific
+          ...(type === "project" && {
+            startDate: startDate || undefined,
+            endDate: endDate || undefined,
+            methodology: methodology.trim() || undefined,
+          }),
+          ...(type === "event" && {
+            eventDate: eventDate || undefined,
+            venue: venue.trim() || undefined,
+          }),
         },
       });
 
-      // only add on create
       if (!isEditMode) {
         addPlan(data.data);
       }
@@ -107,8 +139,7 @@ export function CreatePlanDialog({
       onOpenChange(false);
     } catch (err) {
       setError(
-        `Failed to ${isEditMode ? "update" : "create"} plan: ${
-          (err as Error).message
+        `Failed to ${isEditMode ? "update" : "create"} plan: ${(err as Error).message
         }`
       );
     } finally {
@@ -153,16 +184,101 @@ export function CreatePlanDialog({
               value={type}
               onValueChange={(v) => setType(v as PlanType)}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 rounded-lg border border-border px-4 py-3 cursor-pointer has-[:checked]:border-foreground has-[:checked]:bg-muted/40 transition-colors">
                 <RadioGroupItem value="project" id="project" />
-                <Label htmlFor="project">Project</Label>
+                <Label htmlFor="project" className="cursor-pointer">Project</Label>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 rounded-lg border border-border px-4 py-3 cursor-pointer has-[:checked]:border-foreground has-[:checked]:bg-muted/40 transition-colors">
                 <RadioGroupItem value="event" id="event" />
-                <Label htmlFor="event">Event</Label>
+                <Label htmlFor="event" className="cursor-pointer">Event</Label>
               </div>
             </RadioGroup>
           </div>
+
+          {/* PROJECT-SPECIFIC FIELDS */}
+          {type === "project" && (
+            <div className="space-y-4 rounded-lg border border-border p-4">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Project details
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>
+                    Start date{" "}
+                    <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>
+                    Est. end date{" "}
+                    <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    disabled={isLoading}
+                    min={startDate || undefined}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>
+                  Methodology{" "}
+                  <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Input
+                  placeholder="e.g., Agile, Waterfall, Scrum"
+                  value={methodology}
+                  onChange={(e) => setMethodology(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* EVENT-SPECIFIC FIELDS */}
+          {type === "event" && (
+            <div className="space-y-4 rounded-lg border border-border p-4">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Event details
+              </p>
+
+              <div className="space-y-2">
+                <Label>
+                  Event date{" "}
+                  <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Input
+                  type="date"
+                  value={eventDate}
+                  onChange={(e) => setEventDate(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>
+                  Venue{" "}
+                  <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Input
+                  placeholder="e.g., NSCI Dome, Mumbai"
+                  value={venue}
+                  onChange={(e) => setVenue(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+          )}
 
           {/* BUDGET */}
           <div className="space-y-2">
@@ -179,12 +295,17 @@ export function CreatePlanDialog({
 
           {/* DESCRIPTION */}
           <div className="space-y-2">
-            <Label>Description</Label>
+            <Label>
+              Description{" "}
+              <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+            </Label>
             <Textarea
-              placeholder="Optional: Add details about this plan..."
+              placeholder="Add details about this plan..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={isLoading}
+              className="resize-none"
+              rows={2}
             />
           </div>
 
@@ -229,7 +350,6 @@ export function CreatePlanDialog({
             >
               Cancel
             </Button>
-
             <Button
               type="submit"
               disabled={isLoading || !name.trim() || !budget.trim()}
@@ -240,8 +360,8 @@ export function CreatePlanDialog({
                   ? "Updating..."
                   : "Creating..."
                 : isEditMode
-                ? "Update Plan"
-                : "Create Plan"}
+                  ? "Update Plan"
+                  : "Create Plan"}
             </Button>
           </div>
         </form>

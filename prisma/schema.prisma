@@ -248,7 +248,8 @@ model DepartmentMember {
 
 model Project {
   workItemId  String    @id
-  deadline    DateTime?
+  startDate   DateTime?
+  endDate    DateTime?
   methodology String?
 
   workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)

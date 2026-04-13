@@ -36,12 +36,13 @@ export interface Plan {
   createdAt: Date;
   // Plan-specific data
   teamMembers: TeamMember[];
+  project: any;
+  event: any;
   expenses: Expense[];
   eventData?: EventData;
   simulation: SimulationModifiers;
   currency: string;
   description: string;
-  // For event plans: mode is always "event", for project plans: mode is "company"
   mode: "project" | "event";
 }
 
