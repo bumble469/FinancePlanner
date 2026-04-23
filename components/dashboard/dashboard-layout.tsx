@@ -6,7 +6,7 @@ import { Sidebar } from "./sidebar";
 import { OverviewSection } from "./sections/overview-section";
 import { TeamSection } from "./sections/team_role_section/team-section";
 import { ExpenseSection } from "./sections/rev_exp_section/rev-exp_section";
-import { EventSection } from "./sections/planning-section/planning-section";
+import { PlanningSection } from "./sections/planning-section/planning-section";
 import { SimulationSection } from "./sections/simulation-section";
 import { Menu, X, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -54,7 +54,7 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
       case "expenses":
         return <ExpenseSection planId={planId} />;
       case "event":
-        return <EventSection />;
+        return <PlanningSection />;
       case "simulation":
         return <SimulationSection />;
       default:
@@ -68,9 +68,9 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:block">
+      <div className="hidden lg:block h-screen shrink-0">
         <Sidebar
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
@@ -139,7 +139,7 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto pt-14 lg:pt-0">
+      <main className="flex-1 overflow-y-auto pt-14 lg:pt-0">
         <div className="mx-auto max-w-7xl p-6 lg:p-8">{renderSection()}</div>
       </main>
     </div>

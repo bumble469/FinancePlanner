@@ -14,6 +14,7 @@ async function getPlanAndVerifyOwner(planId: string, userId: string) {
       event: true,
       planInfo: true,
       departments: true,
+      tasks: true,
       phases: true,
       members: {
         include: {

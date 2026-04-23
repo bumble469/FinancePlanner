@@ -2,184 +2,212 @@
 import { useState, useEffect } from "react";
 import { useFinancialStore } from "@/lib/store";
 import { authClient } from "@/lib/auth-client";
-import { Department } from "@/lib/types";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
-import {
-  Users,
-  Ticket,
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
-  AlertCircle,
-  CheckCircle2,
-  ArrowRight,
-  Calculator,
-} from "lucide-react";
+import { Department, Milestone, MilestoneStatus, MilestoneTask, MilestoneFormData } from "@/lib/types";
+import { Flag, Plus, CheckCircle2, Circle, Clock, AlertTriangle, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddDeptDialog } from "./components/add-dept-dialog";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
-import { getCurrencySymbol } from "@/lib/currency";
 import { DepartmentListView } from "./components/dept-list-view";
 import { DepartmentDetailView } from "./components/dept-detail-view";
+import { MilestoneDialog } from "./components/milestones-dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
-function formatCurrency(value: number, currency: string): string {
-  const symbol = getCurrencySymbol(currency);
-  return `${symbol} ${value.toLocaleString("en-IN")}`;
+const STATUS_CONFIG: Record<
+  MilestoneStatus,
+  { label: string; icon: typeof Circle; className: string; badgeClass: string }
+> = {
+  UPCOMING: { label: "Upcoming", icon: Circle, className: "text-muted-foreground", badgeClass: "bg-muted text-muted-foreground" },
+  IN_PROGRESS: { label: "In Progress", icon: Clock, className: "text-yellow-600 dark:text-yellow-400", badgeClass: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400" },
+  ACHIEVED: { label: "Achieved", icon: CheckCircle2, className: "text-green-600 dark:text-green-400", badgeClass: "bg-green-500/10 text-green-600 dark:text-green-400" },
+  MISSED: { label: "Missed", icon: AlertTriangle, className: "text-destructive", badgeClass: "bg-destructive/10 text-destructive" },
+};
+
+function getMilestoneProgress(tasks: MilestoneTask[]) {
+  if (tasks.length === 0) return 0;
+  return Math.round((tasks.filter((t) => t.status === "DONE").length / tasks.length) * 100);
 }
 
-export function EventSection() {
-  const { currentPlanId, mode, eventData, updateEventData, expenses, simulation, departments, addDepartment, updateDepartment, removeDepartment,
-    modules, addModule, updateModule, removeModule, currency
-  } = useFinancialStore();
-  const isEvent = mode === "event";
-  const isProject = mode === "project";
-  // const metrics = calculateMetrics(expenses, simulation, mode, eventData);
-  const eventProfit = eventData.expectedRevenue - eventData.eventBudget * simulation.costMultiplier;
-  const isProfit = eventProfit >= 0;
+function MilestoneCard({
+  milestone,
+  onEdit,
+  onDelete,
+}: {
+  milestone: Milestone;
+  onEdit: (m: Milestone) => void;
+  onDelete: (id: string) => void;
+}) {
+  const cfg = STATUS_CONFIG[milestone.status];
+  const StatusIcon = cfg.icon;
+  const progress = getMilestoneProgress(milestone.tasks);
+  const doneTasks = milestone.tasks.filter((t) => t.status === "DONE").length;
 
-  //dept vars
+  return (
+    <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <StatusIcon className={cn("h-4 w-4 mt-0.5 shrink-0", cfg.className)} />
+          <div className="min-w-0">
+            <p className="font-medium text-foreground truncate">{milestone.title}</p>
+            {milestone.description && (
+              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{milestone.description}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" onClick={() => onEdit(milestone)}>
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive cursor-pointer" onClick={() => onDelete(milestone.id)}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Meta row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", cfg.badgeClass)}>
+          {cfg.label}
+        </span>
+        {milestone.dueDate && (
+          <span className="text-xs text-muted-foreground">
+            Due {new Date(milestone.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+          </span>
+        )}
+      </div>
+
+      {/* Task progress */}
+      {milestone.tasks.length > 0 ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Tasks</span>
+            <span>{doneTasks}/{milestone.tasks.length} done</span>
+          </div>
+          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all",
+                progress === 100 ? "bg-green-500" : progress > 0 ? "bg-yellow-500" : "bg-muted-foreground/30"
+              )}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="flex flex-col gap-1 pt-1">
+            {milestone.tasks.map((task) => (
+              <div key={task.id} className="flex items-center gap-2 text-xs">
+                {task.status === "DONE" ? (
+                  <CheckCircle2 className="h-3 w-3 text-green-600 dark:text-green-400 shrink-0" />
+                ) : task.status === "IN_PROGRESS" ? (
+                  <Clock className="h-3 w-3 text-yellow-600 dark:text-yellow-400 shrink-0" />
+                ) : (
+                  <Circle className="h-3 w-3 text-muted-foreground shrink-0" />
+                )}
+                <span className={cn(
+                  task.status === "DONE" ? "line-through text-muted-foreground" : "text-foreground"
+                )}>
+                  {task.title}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">No tasks found</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
+
+export function PlanningSection() {
+  const {
+    currentPlanId, mode, eventData, expenses, simulation,
+    departments, addDepartment, updateDepartment, removeDepartment,
+    modules, addModule, updateModule, removeModule, currency, tasks
+  } = useFinancialStore();
+
+  const isProject = mode === "project";
+
+  // dept state
   const [editingDept, setEditingDept] = useState<Department | null>(null);
   const [deptDialogOpen, setDeptDialogOpen] = useState(false);
   const [deleteDeptId, setDeleteDeptId] = useState<string | null>(null);
   const [confirmDeptOpen, setConfirmDeptOpen] = useState(false);
-
   const [activeDept, setActiveDept] = useState<Department | null>(null);
-
   const [deleteModuleId, setDeleteModuleId] = useState<string | null>(null);
   const [confirmModuleOpen, setConfirmModuleOpen] = useState(false);
 
-  const breakEvenAttendees = Math.ceil(
-    eventData.eventBudget / eventData.ticketPrice
-  );
-  const profitPerAttendee = eventData.ticketPrice - eventData.eventBudget / eventData.estimatedAttendance;
+  // milestone state
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [milestoneFilter, setMilestoneFilter] = useState<MilestoneStatus | "ALL">("ALL");
+  const [milestoneDialogOpen, setMilestoneDialogOpen] = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
+  const [deleteMilestoneId, setDeleteMilestoneId] = useState<string | null>(null);
+  const [confirmMilestoneOpen, setConfirmMilestoneOpen] = useState(false);
 
-  useEffect(() => {
-    fetchDepartments();
-  }, [currentPlanId])
+  const remainingBudget = (eventData.eventBudget || 0) - departments
+    .filter((d) => d.id !== editingDept?.id)
+    .reduce((sum, d) => sum + Number(d.budget || 0), 0);
+
+  // ── dept effects & handlers ──────────────────────────────────────────────
+
+  useEffect(() => { fetchDepartments(); }, [currentPlanId]);
+  useEffect(() => { if (activeDept) fetchPhases(activeDept.id); }, [activeDept]);
+  useEffect(() => { fetchMilestones(); }, [currentPlanId]);
 
   const fetchDepartments = async () => {
     if (!currentPlanId) return;
-
     try {
-      const res = await authClient.request(
-        `/api/plan/${currentPlanId}/departments`
-      );
-      const data = res.data;
+      const res = await authClient.request(`/api/plan/${currentPlanId}/departments`);
       useFinancialStore.getState().setDepartments(
-        data.map((d: any) => ({ ...d, budget: Number(d.budget) }))
+        res.data.map((d: any) => ({ ...d, budget: Number(d.budget) }))
       );
-
-    } catch (err) {
-      console.error("Fetch departments failed:", err);
-    }
+    } catch (err) { console.error("Fetch departments failed:", err); }
   };
 
-  const createDepartment = async (
-    id: string,
-    name: string,
-    budget: number
-  ) => {
+  const createDepartment = async (id: string, name: string, budget: number) => {
     if (!currentPlanId) return;
-
-    const tempDept = { id, name, budget };
-    const newDept = { name, budget };
-
-    addDepartment(tempDept);
-
+    addDepartment({ id, name, budget });
     try {
-      await authClient.request(
-        `/api/plan/${currentPlanId}/departments`,
-        {
-          method: "POST",
-          data: newDept,
-        }
-      );
+      await authClient.request(`/api/plan/${currentPlanId}/departments`, { method: "POST", data: { name, budget } });
     } catch (err) {
       console.error("Create department failed:", err);
       removeDepartment(id);
     }
   };
 
-  const updateDepartmentHandler = async (
-    id: string,
-    data: Partial<{ name: string; budget: number }>
-  ) => {
+  const updateDepartmentHandler = async (id: string, data: Partial<{ name: string; budget: number }>) => {
     if (!currentPlanId) return;
-
     updateDepartment(id, data);
-
     try {
-      await authClient.request(
-        `/api/plan/${currentPlanId}/departments/${id}`,
-        {
-          method: "PATCH",
-          data
-        }
-      );
-    } catch (err) {
-      console.error("Update failed:", err);
-    }
+      await authClient.request(`/api/plan/${currentPlanId}/departments/${id}`, { method: "PATCH", data });
+    } catch (err) { console.error("Update failed:", err); }
   };
 
   const deleteDepartmentHandler = async (id: string) => {
     if (!currentPlanId) return;
-
     removeDepartment(id);
-
     try {
-      await authClient.request(
-        `/api/plan/${currentPlanId}/departments/${id}`,
-        { method: "DELETE" }
-      );
-    } catch (err) {
-      console.error("Delete failed:", err);
-    }
+      await authClient.request(`/api/plan/${currentPlanId}/departments/${id}`, { method: "DELETE" });
+    } catch (err) { console.error("Delete failed:", err); }
   };
 
-  const remainingBudget = (eventData.eventBudget || 0) - departments
-    .filter((d) => d.id !== editingDept?.id)
-    .reduce((sum, d) => sum + Number(d.budget || 0), 0);
-
-
-  useEffect(() => {
-    if (activeDept) {
-      fetchPhases(activeDept.id);
-    }
-  }, [activeDept]);
-
-  // api calls for phases(modules)
   const fetchPhases = async (deptId: string) => {
     if (!currentPlanId) return;
     try {
-      const res = await authClient.request(
-        `/api/plan/${currentPlanId}/departments/${deptId}/phases`
-      );
-      useFinancialStore.getState().setModules(
-        res.data.map((p: any) => ({ ...p }))
-      );
-    } catch (err) {
-      console.error("Fetch phases failed:", err);
-    }
+      const res = await authClient.request(`/api/plan/${currentPlanId}/departments/${deptId}/phases`);
+      useFinancialStore.getState().setModules(res.data.map((p: any) => ({ ...p })));
+    } catch (err) { console.error("Fetch phases failed:", err); }
   };
 
   const createPhase = async (deptId: string, name: string) => {
     if (!currentPlanId) return;
-
     const tempId = crypto.randomUUID();
-    const optimistic = { id: tempId, name, departmentId: deptId };
-
-    addModule(optimistic);
-
+    addModule({ id: tempId, name, departmentId: deptId });
     try {
-      const res = await authClient.request(
-        `/api/plan/${currentPlanId}/departments/${deptId}/phases`,
-        {
-          method: "POST",
-          data: { name },
-        }
-      );
+      const res = await authClient.request(`/api/plan/${currentPlanId}/departments/${deptId}/phases`, { method: "POST", data: { name } });
       useFinancialStore.getState().updateModule(tempId, res.data.id);
     } catch (err) {
       console.error("Create phase failed:", err);
@@ -187,422 +215,311 @@ export function EventSection() {
     }
   };
 
-  const updatePhaseHandler = async (
-    deptId: string,
-    phaseId: string,
-    data: Partial<{ name: string; startDate: string; endDate: string }>
-  ) => {
+  const updatePhaseHandler = async (deptId: string, phaseId: string, data: Partial<{ name: string; startDate: string; endDate: string }>) => {
     if (!currentPlanId) return;
-
     updateModule(phaseId, data);
-
     try {
-      await authClient.request(
-        `/api/plan/${currentPlanId}/departments/${deptId}/phases/${phaseId}`,
-        {
-          method: "PATCH",
-          data,
-        }
-      );
-    } catch (err) {
-      console.error("Update phase failed:", err);
-    }
+      await authClient.request(`/api/plan/${currentPlanId}/departments/${deptId}/phases/${phaseId}`, { method: "PATCH", data });
+    } catch (err) { console.error("Update phase failed:", err); }
   };
 
   const deletePhaseHandler = async (phaseId: string) => {
     if (!currentPlanId || !activeDept) return;
     removeModule(phaseId);
     try {
-      await authClient.request(
-        `/api/plan/${currentPlanId}/departments/${activeDept.id}/phases/${phaseId}`,
-        { method: "DELETE" }
+      await authClient.request(`/api/plan/${currentPlanId}/departments/${activeDept.id}/phases/${phaseId}`, { method: "DELETE" });
+    } catch (err) { console.error("Delete phase failed:", err); }
+  };
+
+  // ── milestone handlers ───────────────────────────────────────────────────
+
+  const fetchMilestones = async () => {
+    if (!currentPlanId) return;
+    try {
+      const res = await authClient.request(`/api/plan/${currentPlanId}/milestones`);
+      setMilestones(res.data ?? []);
+    } catch (err) {
+      console.error("Fetch milestones failed:", err);
+    }
+  };
+
+  const createMilestone = async (data: MilestoneFormData) => {
+    if (!currentPlanId) return;
+
+    const tempId = crypto.randomUUID();
+
+    // optimistic add
+    const optimistic: Milestone = {
+      id: tempId,
+      title: data.title,
+      description: data.description,
+      dueDate: data.dueDate,
+      status: data.status,
+      tasks: tasks
+        .filter((t) => data.taskIds.includes(t.id))
+        .map((t) => ({ id: t.id, title: t.title, status: t.status })),
+    };
+    setMilestones((prev) => [...prev, optimistic]);
+
+    try {
+      const res = await authClient.request(`/api/plan/${currentPlanId}/milestones`, {
+        method: "POST",
+        data: {
+          title: data.title,
+          description: data.description,
+          dueDate: data.dueDate,
+          status: data.status,
+          departmentId: data.departmentId,
+          phaseId: data.phaseId,
+          taskIds: data.taskIds,
+        },
+      });
+
+      // replace optimistic with real
+      setMilestones((prev) =>
+        prev.map((m) => (m.id === tempId ? res.data : m))
       );
     } catch (err) {
-      console.error("Delete phase failed:", err);
+      console.error("Create milestone failed:", err);
+      // rollback
+      setMilestones((prev) => prev.filter((m) => m.id !== tempId));
     }
+  };
+
+  const updateMilestone = async (id: string, data: MilestoneFormData) => {
+    if (!currentPlanId) return;
+
+    // optimistic update
+    setMilestones((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? {
+            ...m,
+            title: data.title,
+            description: data.description,
+            dueDate: data.dueDate,
+            status: data.status,
+            departmentId: data.departmentId,
+            phaseId: data.phaseId,
+            tasks: tasks
+              .filter((t) => data.taskIds.includes(t.id))
+              .map((t) => ({ id: t.id, title: t.title, status: t.status })),
+          }
+          : m
+      )
+    );
+
+    try {
+      await authClient.request(`/api/plan/${currentPlanId}/milestones/${id}`, {
+        method: "PATCH",
+        data: {
+          title: data.title,
+          description: data.description,
+          dueDate: data.dueDate,
+          status: data.status,
+          departmentId: data.departmentId,
+          phaseId: data.phaseId,
+          taskIds: data.taskIds,
+        },
+      });
+    } catch (err) {
+      console.error("Update milestone failed:", err);
+      fetchMilestones(); // revert to server state on failure
+    }
+  };
+
+  const deleteMilestoneHandler = async (id: string) => {
+    // optimistic remove
+    setMilestones((prev) => prev.filter((m) => m.id !== id));
+    try {
+      await authClient.request(`/api/plan/${currentPlanId}/milestones/${id}`, {
+        method: "DELETE",
+      });
+    } catch (err) {
+      console.error("Delete milestone failed:", err);
+      fetchMilestones(); // revert
+    }
+  };
+
+  const filteredMilestones = milestones.filter(
+    (m) => milestoneFilter === "ALL" || m.status === milestoneFilter
+  );
+
+  const milestoneCounts = {
+    UPCOMING: milestones.filter((m) => m.status === "UPCOMING").length,
+    IN_PROGRESS: milestones.filter((m) => m.status === "IN_PROGRESS").length,
+    ACHIEVED: milestones.filter((m) => m.status === "ACHIEVED").length,
+    MISSED: milestones.filter((m) => m.status === "MISSED").length,
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Event Planning</h1>
-          <p className="mt-1 text-muted-foreground">
-            Plan your event finances and calculate expected outcomes
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Planning</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage departments, phases, tasks and milestones
+        </p>
       </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Event Configuration */}
-        <div className="space-y-6 lg:col-span-2">
-          {/* Departments */}
-          <div className="rounded-xl border p-6">
-
-            {/* Panel header — hide add button when drilled in */}
-            <div
-              className={`flex items-center justify-between ${
-                activeDept ? "" : "mb-4"
-              }`}
-            >
-              {!activeDept && <h2 className="font-semibold">Departments</h2>}
-
-              {!activeDept && (
-                <>
-                  <AddDeptDialog
-                    onCreate={createDepartment}
-                    onUpdate={(id, name, budget) =>
-                      updateDepartmentHandler(id, { name, budget })
-                    }
-                    onDeptCreated={fetchDepartments}
-                    maxBudget={remainingBudget}
-                    editingDept={editingDept}
-                    open={deptDialogOpen}
-                    setOpen={(v) => {
-                      setDeptDialogOpen(v);
-                      if (!v) setEditingDept(null);
-                    }}
-                  />
-                  <ConfirmDeleteDialog
-                    open={confirmDeptOpen}
-                    type={"department"}
-                    setOpen={setConfirmDeptOpen}
-                    onConfirm={() => {
-                      if (deleteDeptId) {
-                        deleteDepartmentHandler(deleteDeptId);
-                        setDeleteDeptId(null);
-                      }
-                    }}
-                  />
-                </>
-              )}
-
-              {/* Module confirm delete — always mounted */}
-              <ConfirmDeleteDialog
-                open={confirmModuleOpen}
-                type={"module"}
-                setOpen={setConfirmModuleOpen}
-                onConfirm={() => {
-                  if (deleteModuleId) {
-                    deletePhaseHandler(deleteModuleId);
-                    setDeleteModuleId(null);
-                  }
-                }}
-              />
-            </div>
-
-            {/* Conditional view */}
-            {activeDept ? (
-              <DepartmentDetailView
-                dept={activeDept}
-                modules={modules}
-                currency={currency}
-                onBack={() => setActiveDept(null)}
-                onAddModule={(name) => createPhase(activeDept.id, name)}
-                onEditModule={(module, name) =>
-                  updatePhaseHandler(activeDept.id, module.id, { name })
-                }
-                onDeleteModule={(id) => {
-                  setDeleteModuleId(id);
-                  setConfirmModuleOpen(true);
-                }}
-              />
-            ) : (
-              <DepartmentListView
-                departments={departments}
-                currency={currency}
-                isProject={isProject}
-                onEdit={(d) => {
-                  setEditingDept(d);
-                  setDeptDialogOpen(true);
-                }}
-                onDelete={(id) => {
-                  setDeleteDeptId(id);
-                  setConfirmDeptOpen(true);
-                }}
-                onDrillDown={(d) => setActiveDept(d)}
-              />
-            )}
-          </div>
-
-          {/* Attendance & Tickets */}
-          {isEvent && (
-            <div className="rounded-xl border border-border bg-card p-6">
-              <h2 className="mb-6 flex items-center gap-2 font-semibold text-foreground">
-                <Users className="h-5 w-5 text-primary" />
-                Attendance & Tickets
-              </h2>
-
-              <div className="space-y-6">
-                {/* Estimated Attendance */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>Estimated Attendance</Label>
-                    <span className="font-mono text-lg font-medium text-foreground">
-                      {eventData.estimatedAttendance.toLocaleString()}
-                    </span>
-                  </div>
-                  <Slider
-                    value={[eventData.estimatedAttendance]}
-                    onValueChange={([v]) =>
-                      updateEventData({
-                        estimatedAttendance: v,
-                        expectedRevenue: v * eventData.ticketPrice,
-                      })
-                    }
-                    min={50}
-                    max={5000}
-                    step={50}
-                    className="py-2"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Drag to adjust expected number of attendees
-                  </p>
-                </div>
-
-                {/* Ticket Price */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>Ticket Price</Label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">$</span>
-                      <Input
-                        type="number"
-                        value={eventData.ticketPrice}
-                        onChange={(e) =>
-                          updateEventData({
-                            ticketPrice: Number(e.target.value),
-                            expectedRevenue:
-                              eventData.estimatedAttendance * Number(e.target.value),
-                          })
-                        }
-                        className="h-9 w-24 text-right font-mono"
-                      />
-                    </div>
-                  </div>
-                  <Slider
-                    value={[eventData.ticketPrice]}
-                    onValueChange={([v]) =>
-                      updateEventData({
-                        ticketPrice: v,
-                        expectedRevenue: eventData.estimatedAttendance * v,
-                      })
-                    }
-                    min={10}
-                    max={500}
-                    step={5}
-                    className="py-2"
-                  />
-                </div>
-              </div>
-            </div>
+      {/* ── Departments block ── */}
+      <div className="rounded-xl border border-border p-6">
+        <div className={`flex items-center justify-between ${activeDept ? "" : "mb-5"}`}>
+          {!activeDept && (
+            <h2 className="font-semibold text-foreground">Departments</h2>
           )}
 
-          {/* Event Expenses */}
-          <div className="rounded-xl border border-border bg-card p-6">
-            <h2 className="mb-6 flex items-center gap-2 font-semibold text-foreground">
-              <DollarSign className="h-5 w-5 text-primary" />
-              Event Expenses
-            </h2>
+          {!activeDept && (
+            <>
+              <AddDeptDialog
+                onCreate={createDepartment}
+                onUpdate={(id, name, budget) => updateDepartmentHandler(id, { name, budget })}
+                onDeptCreated={fetchDepartments}
+                maxBudget={remainingBudget}
+                editingDept={editingDept}
+                open={deptDialogOpen}
+                setOpen={(v) => { setDeptDialogOpen(v); if (!v) setEditingDept(null); }}
+              />
+              <ConfirmDeleteDialog
+                open={confirmDeptOpen}
+                type="department"
+                setOpen={setConfirmDeptOpen}
+                onConfirm={() => {
+                  if (deleteDeptId) { deleteDepartmentHandler(deleteDeptId); setDeleteDeptId(null); }
+                }}
+              />
+            </>
+          )}
 
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>Total Event Expenses</Label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">$</span>
-                    <Input
-                      type="number"
-                      value={eventData.eventBudget}
-                      onChange={(e) =>
-                        updateEventData({ eventBudget: Number(e.target.value) })
-                      }
-                      className="h-9 w-32 text-right font-mono"
-                    />
-                  </div>
-                </div>
-                <Slider
-                  value={[eventData.eventBudget]}
-                  onValueChange={([v]) => updateEventData({ eventBudget: v })}
-                  min={1000}
-                  max={100000}
-                  step={500}
-                  className="py-2"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Includes venue, catering, equipment, marketing, etc.
-                </p>
-              </div>
-
-              {/* Expense breakdown suggestions */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg border border-border bg-secondary/30 p-3">
-                  <p className="text-xs text-muted-foreground">Venue (est.)</p>
-                  <p className="font-mono text-sm text-foreground">
-                    {formatCurrency(eventData.eventBudget * 0.35, currency)}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border bg-secondary/30 p-3">
-                  <p className="text-xs text-muted-foreground">Catering (est.)</p>
-                  <p className="font-mono text-sm text-foreground">
-                    {formatCurrency(eventData.eventBudget * 0.25, currency)}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border bg-secondary/30 p-3">
-                  <p className="text-xs text-muted-foreground">Marketing (est.)</p>
-                  <p className="font-mono text-sm text-foreground">
-                    {formatCurrency(eventData.eventBudget * 0.2, currency)}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border bg-secondary/30 p-3">
-                  <p className="text-xs text-muted-foreground">Other (est.)</p>
-                  <p className="font-mono text-sm text-foreground">
-                    {formatCurrency(eventData.eventBudget * 0.2, currency)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <ConfirmDeleteDialog
+            open={confirmModuleOpen}
+            type="module"
+            setOpen={setConfirmModuleOpen}
+            onConfirm={() => {
+              if (deleteModuleId) { deletePhaseHandler(deleteModuleId); setDeleteModuleId(null); }
+            }}
+          />
         </div>
 
-        {/* Financial Outcome */}
-        <div className="space-y-4">
-          {/* Revenue Card */}
-          <div className="rounded-xl border border-success/30 bg-success/5 p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/20">
-                <Ticket className="h-5 w-5 text-success" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Expected Revenue</p>
-                <p className="text-2xl font-bold text-success">
-                  {formatCurrency(eventData.expectedRevenue, currency)}
-                </p>
-              </div>
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              {eventData.estimatedAttendance.toLocaleString()} attendees ×{" "}
-              {formatCurrency(eventData.ticketPrice, currency)}
-            </p>
-          </div>
+        {activeDept ? (
+          <DepartmentDetailView
+            dept={activeDept}
+            modules={modules}
+            currency={currency}
+            onBack={() => setActiveDept(null)}
+            onAddModule={(name) => createPhase(activeDept.id, name)}
+            onEditModule={(module, name) => updatePhaseHandler(activeDept.id, module.id, { name })}
+            onDeleteModule={(id) => { setDeleteModuleId(id); setConfirmModuleOpen(true); }}
+          />
+        ) : (
+          <DepartmentListView
+            departments={departments}
+            currency={currency}
+            isProject={isProject}
+            onEdit={(d) => { setEditingDept(d); setDeptDialogOpen(true); }}
+            onDelete={(id) => { setDeleteDeptId(id); setConfirmDeptOpen(true); }}
+            onDrillDown={(d) => setActiveDept(d)}
+          />
+        )}
+      </div>
 
-          {/* Expenses Card */}
-          <div className="rounded-xl border border-warning/30 bg-warning/5 p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/20">
-                <DollarSign className="h-5 w-5 text-warning" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Event Expenses</p>
-                <p className="text-2xl font-bold text-warning">
-                  {formatCurrency(eventData.eventBudget, currency)}
-                </p>
-              </div>
-            </div>
+      {/* ── Milestones block ── */}
+      <div className="rounded-xl border border-border p-6 space-y-5">
+        {/* Milestones header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Flag className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-semibold text-foreground">Milestones</h2>
+            <span className="text-sm text-muted-foreground">({milestones.length})</span>
           </div>
-
-          {/* Calculation Visual */}
-          <div className="flex items-center justify-center gap-2 py-2 text-muted-foreground">
-            <span className="text-success">{formatCurrency(eventData.expectedRevenue, currency)}</span>
-            <ArrowRight className="h-4 w-4" />
-            <span className="text-warning">-{formatCurrency(eventData.eventBudget, currency)}</span>
-          </div>
-
-          {/* Profit/Loss Card */}
-          <div
-            className={cn(
-              "rounded-xl border p-5",
-              isProfit
-                ? "border-success/30 bg-success/5"
-                : "border-danger/30 bg-danger/5"
-            )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 h-8 hover:text-gray-400 cursor-pointer"
+            onClick={() => { setEditingMilestone(null); setMilestoneDialogOpen(true); }}
           >
-            <div className="flex items-center gap-3">
-              <div
-                className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-lg",
-                  isProfit ? "bg-success/20" : "bg-danger/20"
-                )}
-              >
-                {isProfit ? (
-                  <TrendingUp className={cn("h-5 w-5", "text-success")} />
-                ) : (
-                  <TrendingDown className={cn("h-5 w-5", "text-danger")} />
-                )}
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {isProfit ? "Expected Profit" : "Expected Loss"}
-                </p>
-                <p
-                  className={cn(
-                    "text-2xl font-bold",
-                    isProfit ? "text-success" : "text-danger"
-                  )}
-                >
-                  {formatCurrency(Math.abs(eventProfit), currency)}
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              {isProfit ? (
-                <CheckCircle2 className="h-4 w-4 text-success" />
-              ) : (
-                <AlertCircle className="h-4 w-4 text-danger" />
-              )}
-              <span
-                className={cn(
-                  "text-sm font-medium",
-                  isProfit ? "text-success" : "text-danger"
-                )}
-              >
-                {isProfit ? "Profitable Event" : "Loss Expected"}
-              </span>
-            </div>
-          </div>
-
-          {/* Break-even Analysis */}
-          <div className="rounded-xl border border-border bg-card p-5">
-            <h3 className="flex items-center gap-2 font-semibold text-foreground">
-              <Calculator className="h-4 w-4 text-primary" />
-              Break-even Analysis
-            </h3>
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Break-even Point</span>
-                <span className="font-mono font-medium text-foreground">
-                  {breakEvenAttendees.toLocaleString()} attendees
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Profit per Attendee</span>
-                <span
-                  className={cn(
-                    "font-mono font-medium",
-                    profitPerAttendee >= 0 ? "text-success" : "text-danger"
-                  )}
-                >
-                  {formatCurrency(profitPerAttendee, currency)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Safety Margin</span>
-                <span
-                  className={cn(
-                    "font-mono font-medium",
-                    eventData.estimatedAttendance > breakEvenAttendees
-                      ? "text-success"
-                      : "text-danger"
-                  )}
-                >
-                  {eventData.estimatedAttendance - breakEvenAttendees} attendees
-                </span>
-              </div>
-            </div>
-          </div>
+            <Plus className="h-3.5 w-3.5" />
+            Add milestone
+          </Button>
         </div>
+
+        {/* Summary chips */}
+        <div className="flex flex-wrap gap-2">
+          {(["ALL", "UPCOMING", "IN_PROGRESS", "ACHIEVED", "MISSED"] as const).map((f) => {
+            const count = f === "ALL" ? milestones.length : milestoneCounts[f];
+            const cfg = f !== "ALL" ? STATUS_CONFIG[f] : null;
+            return (
+              <button
+                key={f}
+                onClick={() => setMilestoneFilter(f)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs border transition-colors inline-flex items-center gap-1.5",
+                  milestoneFilter === f
+                    ? "bg-foreground text-background border-foreground"
+                    : "border-border text-muted-foreground hover:border-foreground/40"
+                )}
+              >
+                {f === "ALL" ? "All" : STATUS_CONFIG[f].label}
+                <span className={cn(
+                  "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                  milestoneFilter === f ? "bg-background/20" : "bg-muted"
+                )}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Milestone cards */}
+        {filteredMilestones.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border py-12 text-center">
+            <Flag className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No milestones yet</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2 text-xs"
+              onClick={() => { setEditingMilestone(null); setMilestoneDialogOpen(true); }}
+            >
+              Add your first milestone
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {filteredMilestones.map((milestone) => (
+              <MilestoneCard
+                key={milestone.id}
+                milestone={milestone}
+                onEdit={(m) => { setEditingMilestone(m); setMilestoneDialogOpen(true); }}
+                onDelete={(id) => { setDeleteMilestoneId(id); setConfirmMilestoneOpen(true); }}
+              />
+            ))}
+          </div>
+        )}
+
+        <ConfirmDeleteDialog
+          open={confirmMilestoneOpen}
+          type="milestone"
+          setOpen={setConfirmMilestoneOpen}
+          onConfirm={() => {
+            if (deleteMilestoneId) { deleteMilestoneHandler(deleteMilestoneId); setDeleteMilestoneId(null); }
+          }}
+        />
+
+        <MilestoneDialog
+          open={milestoneDialogOpen}
+          onOpenChange={setMilestoneDialogOpen}
+          editing={editingMilestone}
+          departments={departments}
+          availableTasks={tasks}
+          onCreate={createMilestone}
+          onUpdate={updateMilestone}
+          onClose={() => {
+            setMilestoneDialogOpen(false);
+            setEditingMilestone(null);
+          }}
+        />
       </div>
     </div>
   );

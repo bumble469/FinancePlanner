@@ -22,11 +22,11 @@ export default function PlanDashboardPage() {
           method: "GET"
         });
         const data = res.data.data;
-
         useFinancialStore.getState().setPlanMeta({
           eventBudget: data.budget,
           departments: data.departments || [],
           modules: data.modules || [],
+          tasks: data.tasks || [],
           currency: data.currency,
           teamMembers: data.members || [],
         });

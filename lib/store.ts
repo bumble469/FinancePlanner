@@ -12,6 +12,7 @@ import type {
   SimulationModifiers,
   Department,
   Module,
+  Task,
   Income,
 } from "./types";
 
@@ -88,10 +89,17 @@ interface PlanDashboardStore {
   updateModule: (id: string, m: Partial<Module>) => void;
   removeModule: (id: string) => void;
 
+  tasks: Task[];
+  setTasks: (tasks: Task[]) => void;
+  addTask: (task: Task) => void;
+  updateTask: (id: string, task: Partial<Task>) => void;
+  removeTask: (id: string) => void;
+
   setPlanMeta: (data: {
     eventBudget: number;
     departments: Department[];
     modules?: Module[];
+    tasks?: Task[];
     currency?: string;
     teamMembers: TeamMember[];
     phases?: Module[];
@@ -326,6 +334,26 @@ export const useFinancialStore = create<FinancialStore>()(
           modules: state.modules.filter((m) => m.id !== id),
         })),
 
+        tasks: [],
+        setTasks: (tasks) => set({ tasks }),
+
+        addTask: (task) =>
+          set((state) => ({
+            tasks: [...state.tasks, task],
+          })),
+
+        updateTask: (id, data) =>
+          set((state) => ({
+            tasks: state.tasks.map((t) =>
+              t.id === id ? { ...t, ...data } : t
+            ),
+          })),
+
+        removeTask: (id) =>
+          set((state) => ({
+            tasks: state.tasks.filter((t) => t.id !== id),
+          })),
+
       // ================= LOAD PLAN META =================
 
       setPlanMeta: (data) =>
@@ -336,9 +364,10 @@ export const useFinancialStore = create<FinancialStore>()(
           },
           departments: data.departments || [],
           modules: data.modules || [],
+          tasks: data.tasks || [],
           currency: data.currency || "INR",
           teamMembers: data.teamMembers || [],
-          budget: Number(data.eventBudget) || 0,  // ← add
+          budget: Number(data.eventBudget) || 0,  
           phases: data.phases || [],
         })),
 

@@ -144,6 +144,35 @@ export interface FinancialMetrics {
   estimatedProfitLoss: number;
 }
 
+// ================= MILESTONE =================
+
+export type MilestoneStatus = "UPCOMING" | "IN_PROGRESS" | "ACHIEVED" | "MISSED";
+
+export interface MilestoneTask {
+  id: string;
+  title: string;
+  status: "TODO" | "IN_PROGRESS" | "DONE";
+}
+
+export interface Milestone {
+  id: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+  status: MilestoneStatus;
+  achievedAt?: string;
+  tasks: MilestoneTask[];
+}
+
+export interface MilestoneFormData {
+  title: string;
+  description?: string;
+  dueDate?: string;
+  status: MilestoneStatus;
+  departmentId?: string;
+  phaseId?: string;
+  taskIds: string[];
+}
 // ================= TASKS =================
 
 export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";

@@ -221,7 +221,6 @@ model Department {
 
   phases Phase[]
   tasks  Task[]
-  milestones Milestone[]
 
   @@unique([workItemId, name])
   @@map("departments")
@@ -297,7 +296,6 @@ model Phase {
   income       Income[]
   tasks        Task[]
   phaseMembers PhaseMember[]
-  milestones Milestone[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -363,8 +361,6 @@ model Expense {
 model Milestone {
   id           String          @id @default(uuid())
   workItemId   String
-  phaseId      String?
-  departmentId String?
   title        String
   description  String?
   dueDate      DateTime?       // soft deadline, optional
@@ -372,8 +368,6 @@ model Milestone {
   achievedAt   DateTime?       // auto-set when all tasks done
 
   workItem   WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  phase      Phase?      @relation(fields: [phaseId], references: [id], onDelete: SetNull)
-  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   tasks     MilestoneTask[]   // linked tasks
   createdBy String            // userId of creator
