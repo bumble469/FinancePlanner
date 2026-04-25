@@ -184,7 +184,6 @@ class AuthClient {
     } catch (error: any) {
       // 🔥 HANDLE 401
       if (error.response?.status === 401) {
-        // 🔒 lock refresh
         if (!this.refreshPromise) {
           this.refreshPromise = this.refresh().then((res) => {
             this.refreshPromise = null;
@@ -195,18 +194,16 @@ class AuthClient {
         const success = await this.refreshPromise;
 
         if (success) {
-          return makeRequest(); // retry
+          return await makeRequest();
         } else {
-          // ❌ logout user
           this.accessToken = null;
           this.user = null;
 
-          if (typeof window !== "undefined") {
-            window.location.href = "/login";
-          }
-
           throw error;
         }
+      }
+      if (error.response?.status === 500) {
+        console.error('[API 500]', error.response?.data); // log the server response body
       }
 
       throw error;

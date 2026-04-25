@@ -14,6 +14,7 @@ import type {
   Module,
   Task,
   Income,
+  Milestone
 } from "./types";
 
 
@@ -95,14 +96,20 @@ interface PlanDashboardStore {
   updateTask: (id: string, task: Partial<Task>) => void;
   removeTask: (id: string) => void;
 
+  milestones: Milestone[];
+  setMilestones: (milestones: Milestone[]) => void;
+  addMilestone: (milestone: Milestone) => void;
+  updateMilestone: (id: string, milestone: Partial<Milestone>) => void;
+  removeMilestone: (id: string) => void;
+
   setPlanMeta: (data: {
     eventBudget: number;
     departments: Department[];
     modules?: Module[];
     tasks?: Task[];
+    milestones?: Milestone[];
     currency?: string;
     teamMembers: TeamMember[];
-    phases?: Module[];
   }) => void;
 
   syncToPlan: (planId: string, plan: Plan) => void;
@@ -334,25 +341,45 @@ export const useFinancialStore = create<FinancialStore>()(
           modules: state.modules.filter((m) => m.id !== id),
         })),
 
-        tasks: [],
-        setTasks: (tasks) => set({ tasks }),
+      tasks: [],
+      setTasks: (tasks) => set({ tasks }),
 
-        addTask: (task) =>
-          set((state) => ({
-            tasks: [...state.tasks, task],
-          })),
+      addTask: (task) =>
+        set((state) => ({
+          tasks: [...state.tasks, task],
+        })),
 
-        updateTask: (id, data) =>
-          set((state) => ({
-            tasks: state.tasks.map((t) =>
-              t.id === id ? { ...t, ...data } : t
-            ),
-          })),
+      updateTask: (id, data) =>
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            t.id === id ? { ...t, ...data } : t
+          ),
+        })),
 
-        removeTask: (id) =>
-          set((state) => ({
-            tasks: state.tasks.filter((t) => t.id !== id),
-          })),
+      removeTask: (id) =>
+        set((state) => ({
+          tasks: state.tasks.filter((t) => t.id !== id),
+        })),
+
+      milestones: [],
+      setMilestones: (milestones) => set({ milestones }),
+
+      addMilestone: (milestone) =>
+        set((state) => ({
+          milestones: [...state.milestones, milestone],
+        })),
+
+      updateMilestone: (id, data) =>
+        set((state) => ({
+          milestones: state.milestones.map((m) =>
+            m.id === id ? { ...m, ...data } : m
+          ),
+        })),
+
+      removeMilestone: (id) =>
+        set((state) => ({
+          milestones: state.milestones.filter((m) => m.id !== id),
+        })),
 
       // ================= LOAD PLAN META =================
 
@@ -365,10 +392,10 @@ export const useFinancialStore = create<FinancialStore>()(
           departments: data.departments || [],
           modules: data.modules || [],
           tasks: data.tasks || [],
+          milestones: data.milestones || [], 
           currency: data.currency || "INR",
           teamMembers: data.teamMembers || [],
-          budget: Number(data.eventBudget) || 0,  
-          phases: data.phases || [],
+          budget: Number(data.eventBudget) || 0,
         })),
 
       // ================= SYNC =================

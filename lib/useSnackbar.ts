@@ -1,15 +1,19 @@
 import { create } from 'zustand';
 
+type SnackbarType = 'success' | 'error' | 'warning' | 'info';
+
 type SnackbarState = {
   message: string | null;
-  show: (msg: string) => void;
+  type: SnackbarType;
+  show: (msg: string, type?: SnackbarType) => void;
   hide: () => void;
 };
 
 export const useSnackbar = create<SnackbarState>((set) => ({
   message: null,
-  show: (msg) => {
-    set({ message: msg });
+  type: 'info',
+  show: (msg, type = 'info') => {
+    set({ message: msg, type });
     setTimeout(() => set({ message: null }), 3000);
   },
   hide: () => set({ message: null }),

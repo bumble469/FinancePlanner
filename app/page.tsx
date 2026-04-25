@@ -12,7 +12,6 @@ import { FeaturesSection } from "@/components/landing/features";
 import { HowItWorksSection } from "@/components/landing/how-it-works";
 import { CTASection } from "@/components/landing/cta-section";
 import { LandingFooter } from "@/components/landing/footer";
-import { Snackbar } from '@/components/ui/snackbar-main';
 import { useFinancialStore } from '@/lib/store';
 
 
@@ -43,7 +42,6 @@ export default function Home() {
 
   return (
     <>
-      <Snackbar />
       {isAuthenticated ? (
         <div className="min-h-screen bg-background">
           <TopNav />

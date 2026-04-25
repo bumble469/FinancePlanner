@@ -11,7 +11,8 @@ import { DepartmentListView } from "./components/dept-list-view";
 import { DepartmentDetailView } from "./components/dept-detail-view";
 import { MilestoneDialog } from "./components/milestones-dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Building2 } from "lucide-react";
+import { useSnackbar } from "@/lib/useSnackbar";
 
 const STATUS_CONFIG: Record<
   MilestoneStatus,
@@ -125,7 +126,7 @@ export function PlanningSection() {
   const {
     currentPlanId, mode, eventData, expenses, simulation,
     departments, addDepartment, updateDepartment, removeDepartment,
-    modules, addModule, updateModule, removeModule, currency, tasks
+    modules, addModule, updateModule, removeModule, currency, tasks, milestones, addMilestone, updateMilestone, removeMilestone,
   } = useFinancialStore();
 
   const isProject = mode === "project";
@@ -140,7 +141,6 @@ export function PlanningSection() {
   const [confirmModuleOpen, setConfirmModuleOpen] = useState(false);
 
   // milestone state
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [milestoneFilter, setMilestoneFilter] = useState<MilestoneStatus | "ALL">("ALL");
   const [milestoneDialogOpen, setMilestoneDialogOpen] = useState(false);
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
@@ -157,6 +157,8 @@ export function PlanningSection() {
   useEffect(() => { if (activeDept) fetchPhases(activeDept.id); }, [activeDept]);
   useEffect(() => { fetchMilestones(); }, [currentPlanId]);
 
+  const { show } = useSnackbar();
+
   const fetchDepartments = async () => {
     if (!currentPlanId) return;
     try {
@@ -164,7 +166,10 @@ export function PlanningSection() {
       useFinancialStore.getState().setDepartments(
         res.data.map((d: any) => ({ ...d, budget: Number(d.budget) }))
       );
-    } catch (err) { console.error("Fetch departments failed:", err); }
+    } catch (err) {
+      console.error("Fetch departments failed:", err);
+      show("Failed to fetch departments", "error");
+    }
   };
 
   const createDepartment = async (id: string, name: string, budget: number) => {
@@ -172,9 +177,11 @@ export function PlanningSection() {
     addDepartment({ id, name, budget });
     try {
       await authClient.request(`/api/plan/${currentPlanId}/departments`, { method: "POST", data: { name, budget } });
+      show("Department created", "success");
     } catch (err) {
       console.error("Create department failed:", err);
       removeDepartment(id);
+      show("Failed to create department", "error");
     }
   };
 
@@ -183,7 +190,11 @@ export function PlanningSection() {
     updateDepartment(id, data);
     try {
       await authClient.request(`/api/plan/${currentPlanId}/departments/${id}`, { method: "PATCH", data });
-    } catch (err) { console.error("Update failed:", err); }
+      show("Department updated", "success");
+    } catch (err) {
+      console.error("Update failed:", err);
+      show("Failed to update department", "error");
+    }
   };
 
   const deleteDepartmentHandler = async (id: string) => {
@@ -191,7 +202,11 @@ export function PlanningSection() {
     removeDepartment(id);
     try {
       await authClient.request(`/api/plan/${currentPlanId}/departments/${id}`, { method: "DELETE" });
-    } catch (err) { console.error("Delete failed:", err); }
+      show("Department deleted", "success");
+    } catch (err) {
+      console.error("Delete failed:", err);
+      show("Failed to delete department", "error");
+    }
   };
 
   const fetchPhases = async (deptId: string) => {
@@ -199,7 +214,10 @@ export function PlanningSection() {
     try {
       const res = await authClient.request(`/api/plan/${currentPlanId}/departments/${deptId}/phases`);
       useFinancialStore.getState().setModules(res.data.map((p: any) => ({ ...p })));
-    } catch (err) { console.error("Fetch phases failed:", err); }
+    } catch (err) {
+      console.error("Fetch phases failed:", err);
+      show("Failed to fetch phases", "error");
+    }
   };
 
   const createPhase = async (deptId: string, name: string) => {
@@ -209,9 +227,11 @@ export function PlanningSection() {
     try {
       const res = await authClient.request(`/api/plan/${currentPlanId}/departments/${deptId}/phases`, { method: "POST", data: { name } });
       useFinancialStore.getState().updateModule(tempId, res.data.id);
+      show("Phase created", "success");
     } catch (err) {
       console.error("Create phase failed:", err);
       removeModule(tempId);
+      show("Failed to create phase", "error");
     }
   };
 
@@ -220,7 +240,11 @@ export function PlanningSection() {
     updateModule(phaseId, data);
     try {
       await authClient.request(`/api/plan/${currentPlanId}/departments/${deptId}/phases/${phaseId}`, { method: "PATCH", data });
-    } catch (err) { console.error("Update phase failed:", err); }
+      show("Phase updated", "success");
+    } catch (err) {
+      console.error("Update phase failed:", err);
+      show("Failed to update phase", "error");
+    }
   };
 
   const deletePhaseHandler = async (phaseId: string) => {
@@ -228,27 +252,27 @@ export function PlanningSection() {
     removeModule(phaseId);
     try {
       await authClient.request(`/api/plan/${currentPlanId}/departments/${activeDept.id}/phases/${phaseId}`, { method: "DELETE" });
-    } catch (err) { console.error("Delete phase failed:", err); }
+      show("Phase deleted", "success");
+    } catch (err) {
+      console.error("Delete phase failed:", err);
+      show("Failed to delete phase", "error");
+    }
   };
-
-  // ── milestone handlers ───────────────────────────────────────────────────
 
   const fetchMilestones = async () => {
     if (!currentPlanId) return;
     try {
       const res = await authClient.request(`/api/plan/${currentPlanId}/milestones`);
-      setMilestones(res.data ?? []);
+      useFinancialStore.getState().setMilestones(res.data ?? []);
     } catch (err) {
       console.error("Fetch milestones failed:", err);
+      show("Failed to fetch milestones", "error");
     }
   };
 
   const createMilestone = async (data: MilestoneFormData) => {
     if (!currentPlanId) return;
-
     const tempId = crypto.randomUUID();
-
-    // optimistic add
     const optimistic: Milestone = {
       id: tempId,
       title: data.title,
@@ -259,8 +283,7 @@ export function PlanningSection() {
         .filter((t) => data.taskIds.includes(t.id))
         .map((t) => ({ id: t.id, title: t.title, status: t.status })),
     };
-    setMilestones((prev) => [...prev, optimistic]);
-
+    addMilestone(optimistic);
     try {
       const res = await authClient.request(`/api/plan/${currentPlanId}/milestones`, {
         method: "POST",
@@ -274,41 +297,26 @@ export function PlanningSection() {
           taskIds: data.taskIds,
         },
       });
-
-      // replace optimistic with real
-      setMilestones((prev) =>
-        prev.map((m) => (m.id === tempId ? res.data : m))
-      );
+      useFinancialStore.getState().updateMilestone(tempId, res.data);
+      show("Milestone created", "success");
     } catch (err) {
       console.error("Create milestone failed:", err);
-      // rollback
-      setMilestones((prev) => prev.filter((m) => m.id !== tempId));
+      removeMilestone(tempId);
+      show("Failed to create milestone", "error");
     }
   };
 
-  const updateMilestone = async (id: string, data: MilestoneFormData) => {
+  const updateMilestoneHandler = async (id: string, data: MilestoneFormData) => {
     if (!currentPlanId) return;
-
-    // optimistic update
-    setMilestones((prev) =>
-      prev.map((m) =>
-        m.id === id
-          ? {
-            ...m,
-            title: data.title,
-            description: data.description,
-            dueDate: data.dueDate,
-            status: data.status,
-            departmentId: data.departmentId,
-            phaseId: data.phaseId,
-            tasks: tasks
-              .filter((t) => data.taskIds.includes(t.id))
-              .map((t) => ({ id: t.id, title: t.title, status: t.status })),
-          }
-          : m
-      )
-    );
-
+    updateMilestone(id, {
+      title: data.title,
+      description: data.description,
+      dueDate: data.dueDate,
+      status: data.status,
+      tasks: tasks
+        .filter((t) => data.taskIds.includes(t.id))
+        .map((t) => ({ id: t.id, title: t.title, status: t.status })),
+    });
     try {
       await authClient.request(`/api/plan/${currentPlanId}/milestones/${id}`, {
         method: "PATCH",
@@ -322,22 +330,23 @@ export function PlanningSection() {
           taskIds: data.taskIds,
         },
       });
+      show("Milestone updated", "success");
     } catch (err) {
       console.error("Update milestone failed:", err);
-      fetchMilestones(); // revert to server state on failure
+      fetchMilestones();
+      show("Failed to update milestone", "error");
     }
   };
 
   const deleteMilestoneHandler = async (id: string) => {
-    // optimistic remove
-    setMilestones((prev) => prev.filter((m) => m.id !== id));
+    removeMilestone(id);
     try {
-      await authClient.request(`/api/plan/${currentPlanId}/milestones/${id}`, {
-        method: "DELETE",
-      });
+      await authClient.request(`/api/plan/${currentPlanId}/milestones/${id}`, { method: "DELETE" });
+      show("Milestone deleted", "success");
     } catch (err) {
       console.error("Delete milestone failed:", err);
-      fetchMilestones(); // revert
+      fetchMilestones();
+      show("Failed to delete milestone", "error");
     }
   };
 
@@ -353,24 +362,35 @@ export function PlanningSection() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Planning</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage departments, phases, tasks and milestones
-        </p>
+    <div className="space-y-5">
+      {/* ── Page Header ── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Planning</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Departments, phases, tasks and milestones
+          </p>
+        </div>
       </div>
 
       {/* ── Departments block ── */}
-      <div className="rounded-xl border border-border p-6">
-        <div className={`flex items-center justify-between ${activeDept ? "" : "mb-5"}`}>
-          {!activeDept && (
-            <h2 className="font-semibold text-foreground">Departments</h2>
-          )}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        {/* block header bar */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-background border border-border">
+              <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+            <span className="font-medium text-sm text-foreground">Departments</span>
+            {!activeDept && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground font-medium">
+                {departments.length}
+              </span>
+            )}
+          </div>
 
           {!activeDept && (
-            <>
+            <div className="flex items-center gap-2">
               <AddDeptDialog
                 onCreate={createDepartment}
                 onUpdate={(id, name, budget) => updateDepartmentHandler(id, { name, budget })}
@@ -388,9 +408,10 @@ export function PlanningSection() {
                   if (deleteDeptId) { deleteDepartmentHandler(deleteDeptId); setDeleteDeptId(null); }
                 }}
               />
-            </>
+            </div>
           )}
 
+          {/* module confirm delete — always mounted */}
           <ConfirmDeleteDialog
             open={confirmModuleOpen}
             type="module"
@@ -401,41 +422,48 @@ export function PlanningSection() {
           />
         </div>
 
-        {activeDept ? (
-          <DepartmentDetailView
-            dept={activeDept}
-            modules={modules}
-            currency={currency}
-            onBack={() => setActiveDept(null)}
-            onAddModule={(name) => createPhase(activeDept.id, name)}
-            onEditModule={(module, name) => updatePhaseHandler(activeDept.id, module.id, { name })}
-            onDeleteModule={(id) => { setDeleteModuleId(id); setConfirmModuleOpen(true); }}
-          />
-        ) : (
-          <DepartmentListView
-            departments={departments}
-            currency={currency}
-            isProject={isProject}
-            onEdit={(d) => { setEditingDept(d); setDeptDialogOpen(true); }}
-            onDelete={(id) => { setDeleteDeptId(id); setConfirmDeptOpen(true); }}
-            onDrillDown={(d) => setActiveDept(d)}
-          />
-        )}
+        {/* block body */}
+        <div className="p-6">
+          {activeDept ? (
+            <DepartmentDetailView
+              dept={activeDept}
+              modules={modules}
+              currency={currency}
+              onBack={() => setActiveDept(null)}
+              onAddModule={(name) => createPhase(activeDept.id, name)}
+              onEditModule={(module, name) => updatePhaseHandler(activeDept.id, module.id, { name })}
+              onDeleteModule={(id) => { setDeleteModuleId(id); setConfirmModuleOpen(true); }}
+            />
+          ) : (
+            <DepartmentListView
+              departments={departments}
+              currency={currency}
+              isProject={isProject}
+              onEdit={(d) => { setEditingDept(d); setDeptDialogOpen(true); }}
+              onDelete={(id) => { setDeleteDeptId(id); setConfirmDeptOpen(true); }}
+              onDrillDown={(d) => setActiveDept(d)}
+            />
+          )}
+        </div>
       </div>
 
       {/* ── Milestones block ── */}
-      <div className="rounded-xl border border-border p-6 space-y-5">
-        {/* Milestones header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Flag className="h-4 w-4 text-muted-foreground" />
-            <h2 className="font-semibold text-foreground">Milestones</h2>
-            <span className="text-sm text-muted-foreground">({milestones.length})</span>
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        {/* block header bar */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-background border border-border">
+              <Flag className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+            <span className="font-medium text-sm text-foreground">Milestones</span>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground font-medium">
+              {milestones.length}
+            </span>
           </div>
           <Button
             size="sm"
             variant="outline"
-            className="gap-1.5 h-8 hover:text-gray-400 cursor-pointer"
+            className="gap-1.5 h-8 text-xs font-medium hover:text-gray-400 cursor-pointer"
             onClick={() => { setEditingMilestone(null); setMilestoneDialogOpen(true); }}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -443,84 +471,100 @@ export function PlanningSection() {
           </Button>
         </div>
 
-        {/* Summary chips */}
-        <div className="flex flex-wrap gap-2">
-          {(["ALL", "UPCOMING", "IN_PROGRESS", "ACHIEVED", "MISSED"] as const).map((f) => {
-            const count = f === "ALL" ? milestones.length : milestoneCounts[f];
-            const cfg = f !== "ALL" ? STATUS_CONFIG[f] : null;
-            return (
-              <button
-                key={f}
-                onClick={() => setMilestoneFilter(f)}
-                className={cn(
-                  "rounded-full px-3 py-1 text-xs border transition-colors inline-flex items-center gap-1.5",
-                  milestoneFilter === f
-                    ? "bg-foreground text-background border-foreground"
-                    : "border-border text-muted-foreground hover:border-foreground/40"
-                )}
-              >
-                {f === "ALL" ? "All" : STATUS_CONFIG[f].label}
-                <span className={cn(
-                  "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                  milestoneFilter === f ? "bg-background/20" : "bg-muted"
-                )}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+        <div className="p-6 space-y-5">
+          {/* status filter chips */}
+          <div className="flex flex-wrap gap-1.5">
+            {(["ALL", "UPCOMING", "IN_PROGRESS", "ACHIEVED", "MISSED"] as const).map((f) => {
+              const count = f === "ALL" ? milestones.length : milestoneCounts[f];
+              return (
+                <button
+                  key={f}
+                  onClick={() => setMilestoneFilter(f)}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-medium border transition-all inline-flex items-center gap-1.5",
+                    milestoneFilter === f
+                      ? "bg-foreground text-background border-foreground shadow-sm"
+                      : "border-border text-muted-foreground bg-background hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  {f === "ALL" ? "All" : STATUS_CONFIG[f].label}
+                  <span className={cn(
+                    "rounded-full min-w-[18px] text-center px-1 py-0.5 text-[10px] font-semibold",
+                    milestoneFilter === f
+                      ? "bg-background/20 text-background"
+                      : "bg-muted text-muted-foreground"
+                  )}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* milestone grid */}
+          {filteredMilestones.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-14 text-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                <Flag className="h-5 w-5 text-muted-foreground/50" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">No milestones</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {milestoneFilter === "ALL"
+                    ? "Create your first milestone to track progress"
+                    : `No ${STATUS_CONFIG[milestoneFilter as keyof typeof STATUS_CONFIG]?.label.toLowerCase()} milestones`}
+                </p>
+              </div>
+              {milestoneFilter === "ALL" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs mt-1"
+                  onClick={() => { setEditingMilestone(null); setMilestoneDialogOpen(true); }}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  Add milestone
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {filteredMilestones.map((milestone) => (
+                <MilestoneCard
+                  key={milestone.id}
+                  milestone={milestone}
+                  onEdit={(m) => { setEditingMilestone(m); setMilestoneDialogOpen(true); }}
+                  onDelete={(id) => { setDeleteMilestoneId(id); setConfirmMilestoneOpen(true); }}
+                />
+              ))}
+            </div>
+          )}
         </div>
-
-        {/* Milestone cards */}
-        {filteredMilestones.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border py-12 text-center">
-            <Flag className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">No milestones yet</p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-2 text-xs"
-              onClick={() => { setEditingMilestone(null); setMilestoneDialogOpen(true); }}
-            >
-              Add your first milestone
-            </Button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {filteredMilestones.map((milestone) => (
-              <MilestoneCard
-                key={milestone.id}
-                milestone={milestone}
-                onEdit={(m) => { setEditingMilestone(m); setMilestoneDialogOpen(true); }}
-                onDelete={(id) => { setDeleteMilestoneId(id); setConfirmMilestoneOpen(true); }}
-              />
-            ))}
-          </div>
-        )}
-
-        <ConfirmDeleteDialog
-          open={confirmMilestoneOpen}
-          type="milestone"
-          setOpen={setConfirmMilestoneOpen}
-          onConfirm={() => {
-            if (deleteMilestoneId) { deleteMilestoneHandler(deleteMilestoneId); setDeleteMilestoneId(null); }
-          }}
-        />
-
-        <MilestoneDialog
-          open={milestoneDialogOpen}
-          onOpenChange={setMilestoneDialogOpen}
-          editing={editingMilestone}
-          departments={departments}
-          availableTasks={tasks}
-          onCreate={createMilestone}
-          onUpdate={updateMilestone}
-          onClose={() => {
-            setMilestoneDialogOpen(false);
-            setEditingMilestone(null);
-          }}
-        />
       </div>
+
+      {/* ── Dialogs ── */}
+      <ConfirmDeleteDialog
+        open={confirmMilestoneOpen}
+        type="milestone"
+        setOpen={setConfirmMilestoneOpen}
+        onConfirm={() => {
+          if (deleteMilestoneId) { deleteMilestoneHandler(deleteMilestoneId); setDeleteMilestoneId(null); }
+        }}
+      />
+
+      <MilestoneDialog
+        open={milestoneDialogOpen}
+        onOpenChange={setMilestoneDialogOpen}
+        editing={editingMilestone}
+        departments={departments}
+        availableTasks={tasks}
+        onCreate={createMilestone}
+        onUpdate={updateMilestoneHandler}
+        onClose={() => {
+          setMilestoneDialogOpen(false);
+          setEditingMilestone(null);
+        }}
+      />
     </div>
   );
 }

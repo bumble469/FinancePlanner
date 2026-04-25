@@ -15,6 +15,19 @@ async function getPlanAndVerifyOwner(planId: string, userId: string) {
       planInfo: true,
       departments: true,
       tasks: true,
+      milestones: {
+        include: {
+          tasks: {
+            include: {
+              task: true,
+            },
+          },
+          creator: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      },
       phases: true,
       members: {
         include: {
@@ -32,8 +45,21 @@ async function getPlanAndVerifyOwner(planId: string, userId: string) {
       },
     },
   });
+  
+  if (!plan) return null;
+  const formattedPlan = {
+    ...plan,
+    milestones: plan.milestones.map((m) => ({
+      ...m,
+      tasks: m.tasks.map((mt) => ({
+        id: mt.task.id,
+        title: mt.task.title,
+        status: mt.task.status,
+      })),
+    })),
+  };
 
-  return plan;
+  return formattedPlan;
 }
 
 // ─── GET /api/plan/[id] ────────────────────────────────────────────────────

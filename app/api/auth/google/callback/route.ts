@@ -142,21 +142,21 @@ export async function GET(request: NextRequest) {
       name: 'refresh_token',
       value: refreshToken,
       httpOnly: true,
-      sameSite: 'strict',
+      sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
       maxAge: REFRESH_TOKEN_TTL / 1000,
       path: '/',
     });
 
-    response.cookies.set({
-      name: 'access_token',
-      value: accessToken,
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 1 * 60,
-      path: '/',
-    });
+    // response.cookies.set({
+    //   name: 'access_token',
+    //   value: accessToken,
+    //   httpOnly: true,
+    //   sameSite: 'lax',
+    //   secure: process.env.NODE_ENV === 'production',
+    //   maxAge: 1 * 60,
+    //   path: '/',
+    // });
 
     return response;
   } catch (error) {

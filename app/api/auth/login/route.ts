@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
       name: 'refresh_token',
       value: refreshToken,
       httpOnly: true,
-      sameSite: 'strict',
+      sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
       maxAge: REFRESH_TOKEN_TTL / 1000,
       path: '/',

@@ -136,8 +136,17 @@ export async function POST(
         },
       },
     });
+    
+    const formatted = {
+      ...milestone,
+      tasks: milestone.tasks.map((mt) => ({
+        id: mt.task.id,
+        title: mt.task.title,
+        status: mt.task.status,
+      })),
+    };
 
-    return NextResponse.json(milestone, { status: 201 });
+    return NextResponse.json(formatted, { status: 201 });
   } catch (err) {
     console.error("[POST /milestones]", err);
     return NextResponse.json(

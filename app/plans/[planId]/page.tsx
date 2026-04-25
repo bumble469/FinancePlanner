@@ -29,6 +29,7 @@ export default function PlanDashboardPage() {
           tasks: data.tasks || [],
           currency: data.currency,
           teamMembers: data.members || [],
+          milestones: data.milestones || [],
         });
       } catch (err) {
         console.error("Failed to fetch plan:", err);
