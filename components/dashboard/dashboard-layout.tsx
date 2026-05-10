@@ -7,6 +7,7 @@ import { OverviewSection } from "./sections/overview-section";
 import { TeamSection } from "./sections/team_role_section/team-section";
 import { ExpenseSection } from "./sections/rev_exp_section/rev-exp_section";
 import { PlanningSection } from "./sections/planning-section/planning-section";
+import { ReportsSection } from "./sections/reports-section/page";
 import { SimulationSection } from "./sections/simulation-section";
 import { Menu, X, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,8 +56,10 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
         return <ExpenseSection planId={planId} />;
       case "event":
         return <PlanningSection />;
-      case "simulation":
-        return <SimulationSection />;
+      case "reports":
+        return <ReportsSection />;
+      // case "simulation":
+      //   return <SimulationSection />;
       default:
         return <OverviewSection />;
     }

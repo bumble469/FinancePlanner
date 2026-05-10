@@ -6,7 +6,7 @@ import {
   Users,
   Receipt,
   CalendarDays,
-  FlaskConical,
+  FileBarChart,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -22,8 +22,9 @@ const navItems = [
   { id: "event", label: "Planning", icon: CalendarDays },
   { id: "team", label: "Team & Roles", icon: Users },
   { id: "expenses", label: "Revenue and Expenses", icon: Receipt },
-  { id: "simulation", label: "What-If Mode", icon: FlaskConical },
+  { id: "reports", label: "Reports & Docs", icon: FileBarChart }
 ];
+
 
 export function Sidebar({
   activeSection,
