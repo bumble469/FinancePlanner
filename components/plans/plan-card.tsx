@@ -22,15 +22,104 @@ import type { Plan } from "@/lib/types";
 import { authClient } from "@/lib/auth-client";
 
 interface PlanCardProps {
-  plan: Plan;
+  plan: any;
   onEdit: (plan: Plan) => void;
+  variant?: "default" | "invitation";
+  onRefresh?: () => void;
 }
 
-export function PlanCard({ plan, onEdit }: PlanCardProps) {
+export function PlanCard({
+  plan,
+  onEdit,
+  variant = "default",
+  onRefresh,
+}: PlanCardProps) {
   const { removePlan } = useFinancialStore();
   const [deleting, setDeleting] = useState(false);
 
-  const spent = plan.expenses.reduce((sum, e) => sum + e.spentAmount, 0);
+  const isInvitation = variant === "invitation";
+
+  const handleInvitation = async (
+    action: "accept" | "reject"
+  ) => {
+    try {
+      await authClient.request(
+        `/api/invitations/${plan.id}/${action}`,
+        {
+          method: "POST",
+        }
+      );
+
+      onRefresh?.();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  if (isInvitation) {
+    return (
+      <Card className="border border-border bg-card p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">
+            {plan.workItem.name}
+          </h3>
+
+          <div className="mt-2 flex gap-2">
+            <Badge variant="outline">
+              {plan.workItem.type}
+            </Badge>
+
+            <Badge className="bg-warning text-warning-foreground">
+              {plan.status}
+            </Badge>
+          </div>
+        </div>
+
+        {plan.workItem.description && (
+          <p className="text-sm text-muted-foreground">
+            {plan.workItem.description}
+          </p>
+        )}
+
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">
+              Invited By
+            </span>
+            <span>{plan.invitedBy?.name || "Unknown"}</span>
+          </div>
+
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Role</span>
+            <span>{plan.role}</span>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            className="flex-1"
+            onClick={() => handleInvitation("accept")}
+          >
+            Accept
+          </Button>
+
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => handleInvitation("reject")}
+          >
+            Reject
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  const spent = plan.expenses.reduce(
+    (sum: number, e: any) => sum + e.amount,
+    0
+  );
+
   const profitLoss = plan.budget - spent;
   const spentPercent = (spent / plan.budget) * 100;
   const isEvent = plan.type === "event";
@@ -38,7 +127,8 @@ export function PlanCard({ plan, onEdit }: PlanCardProps) {
   const isRisk = spentPercent > 90;
 
   const getStatusColor = () => {
-    if (plan.status === "completed") return "bg-muted text-muted-foreground";
+    if (plan.status === "completed")
+      return "bg-muted text-muted-foreground";
     if (isRisk) return "bg-danger text-danger-foreground";
     if (isWarning) return "bg-warning text-warning-foreground";
     return "bg-success text-success-foreground";
@@ -56,7 +146,7 @@ export function PlanCard({ plan, onEdit }: PlanCardProps) {
       setDeleting(true);
 
       await authClient.request(`/api/plan/${plan.id}`, {
-        method: "DELETE"
+        method: "DELETE",
       });
 
       removePlan(plan.id);
@@ -69,7 +159,6 @@ export function PlanCard({ plan, onEdit }: PlanCardProps) {
 
   return (
     <Card className="relative border border-border bg-card p-6 transition-all hover:shadow-lg">
-      {/* Header */}
       <div className="mb-4 flex items-start justify-between">
         <Button
           size="icon"
@@ -79,14 +168,17 @@ export function PlanCard({ plan, onEdit }: PlanCardProps) {
         >
           <Pencil className="h-4 w-4" />
         </Button>
+
         <div className="space-y-2">
           <h3 className="text-lg font-semibold text-foreground line-clamp-2">
             {plan.name}
           </h3>
+
           <div className="flex gap-2">
             <Badge variant="outline" className="text-xs">
               {plan.type === "project" ? "Project" : "Event"}
             </Badge>
+
             <Badge className={`text-xs ${getStatusColor()}`}>
               {getStatusLabel()}
             </Badge>
@@ -94,7 +186,6 @@ export function PlanCard({ plan, onEdit }: PlanCardProps) {
         </div>
       </div>
 
-      {/* Metrics */}
       <div className="mb-6 space-y-3">
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Budget</span>
@@ -109,53 +200,8 @@ export function PlanCard({ plan, onEdit }: PlanCardProps) {
             ${spent.toLocaleString()} ({spentPercent.toFixed(1)}%)
           </span>
         </div>
-
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={`h-full transition-all ${
-              isRisk
-                ? "bg-danger"
-                : isWarning
-                ? "bg-warning"
-                : "bg-success"
-            }`}
-            style={{ width: `${Math.min(spentPercent, 100)}%` }}
-          />
-        </div>
-
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">
-            {profitLoss >= 0 ? "Remaining" : "Over Budget"}
-          </span>
-          <span
-            className={`font-semibold ${
-              profitLoss >= 0 ? "text-success" : "text-danger"
-            }`}
-          >
-            ${Math.abs(profitLoss).toLocaleString()}
-          </span>
-        </div>
       </div>
 
-      {/* Event Info */}
-      {isEvent && plan.eventData && (
-        <div className="mb-6 space-y-2 rounded-lg bg-muted/50 p-3">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Attendance</span>
-            <span className="font-semibold text-foreground">
-              {plan.eventData.estimatedAttendance.toLocaleString()}
-            </span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Revenue</span>
-            <span className="font-semibold text-foreground">
-              ${plan.eventData.expectedRevenue.toLocaleString()}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Footer */}
       <div className="flex gap-2">
         <Link href={`/plans/${plan.id}`} className="flex-1">
           <Button className="w-full gap-2" size="sm">
@@ -164,13 +210,12 @@ export function PlanCard({ plan, onEdit }: PlanCardProps) {
           </Button>
         </Link>
 
-        {/* ✅ THEMED DELETE DIALOG */}
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              className="text-destructive"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -182,8 +227,7 @@ export function PlanCard({ plan, onEdit }: PlanCardProps) {
                 Delete Plan?
               </AlertDialogTitle>
               <AlertDialogDescription>
-                This action cannot be undone. This will permanently delete your
-                plan and all associated data.
+                This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
 
@@ -192,7 +236,6 @@ export function PlanCard({ plan, onEdit }: PlanCardProps) {
               <AlertDialogAction
                 onClick={handleDeletePlan}
                 disabled={deleting}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
                 {deleting ? "Deleting..." : "Delete"}
               </AlertDialogAction>

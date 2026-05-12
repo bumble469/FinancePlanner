@@ -36,7 +36,7 @@ interface TeamMember {
   name: string;
   role: AllowedRole;
   departmentIds: string[];
-  monthlyCost?: number; // ✅ optional
+  monthlyCost?: number;
 }
 
 interface Props {
@@ -44,7 +44,7 @@ interface Props {
   planId: string;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: TeamMember) => void;
-  initialData?: {          
+  initialData?: {
     id: string;
     name: string;
     email: string;
@@ -54,8 +54,16 @@ interface Props {
   } | null;
 }
 
-export function AddEditMemberDialog({ open, planId, onOpenChange, onSubmit, initialData }: Props) {
+export function AddEditMemberDialog({
+  open,
+  planId,
+  onOpenChange,
+  onSubmit,
+  initialData,
+}: Props) {
   const { departments } = useFinancialStore();
+
+  const isEditMode = !!initialData;
 
   const [formData, setFormData] = useState({
     id: "",
@@ -66,8 +74,14 @@ export function AddEditMemberDialog({ open, planId, onOpenChange, onSubmit, init
     monthlyCost: "",
   });
 
+  const [users, setUsers] = useState<any[]>([]);
+  const [loadingUser, setLoadingUser] = useState(false);
+  const [userSelected, setUserSelected] = useState(false);
+
   useEffect(() => {
-    if (open && initialData) {
+    if (!open) return;
+
+    if (initialData) {
       setFormData({
         id: initialData.id,
         email: initialData.email,
@@ -76,18 +90,18 @@ export function AddEditMemberDialog({ open, planId, onOpenChange, onSubmit, init
         departmentIds: initialData.departmentIds,
         monthlyCost: initialData.monthlyCost?.toString() ?? "",
       });
-      setUserSelected(true);   
+
+      setUserSelected(true);
       setUsers([]);
+    } else {
+      resetForm();
     }
   }, [open, initialData]);
 
-  const [users, setUsers] = useState<any[]>([]);
-  const [loadingUser, setLoadingUser] = useState(false);
-  const [userSelected, setUserSelected] = useState(false);
-
-  // 🔥 SEARCH USERS
   useEffect(() => {
-    if (!formData.email) {
+    if (isEditMode) return;
+
+    if (!formData.email.trim()) {
       setUsers([]);
       setUserSelected(false);
       return;
@@ -99,7 +113,10 @@ export function AddEditMemberDialog({ open, planId, onOpenChange, onSubmit, init
 
         const res = await authClient.request("/api/users/by-email", {
           method: "GET",
-          params: { email: formData.email, planId },
+          params: {
+            email: formData.email,
+            planId,
+          },
         });
 
         setUsers(res.data || []);
@@ -111,7 +128,7 @@ export function AddEditMemberDialog({ open, planId, onOpenChange, onSubmit, init
     }, 300);
 
     return () => clearTimeout(timeout);
-  }, [formData.email]);
+  }, [formData.email, planId, isEditMode]);
 
   const handleSelectUser = (user: any) => {
     setFormData((prev) => ({
@@ -147,6 +164,7 @@ export function AddEditMemberDialog({ open, planId, onOpenChange, onSubmit, init
       departmentIds: [],
       monthlyCost: "",
     });
+
     setUsers([]);
     setUserSelected(false);
   };
@@ -158,11 +176,12 @@ export function AddEditMemberDialog({ open, planId, onOpenChange, onSubmit, init
       id: formData.id,
       name: formData.name,
       role: formData.role as AllowedRole,
-      departmentIds: formData.departmentIds,
-      monthlyCost:
-        formData.role === "CO_ADMIN" || !formData.monthlyCost
+      departmentIds: isEditMode ? formData.departmentIds : [],
+      monthlyCost: isEditMode
+        ? formData.role === "CO_ADMIN" || !formData.monthlyCost
           ? undefined
-          : Number(formData.monthlyCost),
+          : Number(formData.monthlyCost)
+        : undefined,
     });
 
     resetForm();
@@ -182,70 +201,96 @@ export function AddEditMemberDialog({ open, planId, onOpenChange, onSubmit, init
       .join("-");
 
   const showDepartments =
-    userSelected &&
-    formData.role &&
-    formData.role !== "CO_ADMIN";
+    isEditMode && formData.role && formData.role !== "CO_ADMIN";
 
   const showCost =
-    userSelected &&
-    formData.role &&
-    formData.role !== "CO_ADMIN";
+    isEditMode && formData.role && formData.role !== "CO_ADMIN";
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{initialData ? "Edit Member" : "Add Member"}</DialogTitle>
+          <DialogTitle>
+            {isEditMode ? "Edit Member" : "Invite Member"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 pt-4">
+          {/* Invite Mode */}
+          {!isEditMode && (
+            <div className="space-y-2 relative">
+              <Label>Email</Label>
+              <Input
+                placeholder="Search user by email"
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    email: e.target.value,
+                  }))
+                }
+              />
 
-          {/* EMAIL SEARCH */}
-          <div className="space-y-2 relative">
-            <Label>Email</Label>
-            <Input
-              placeholder="Search user by email"
-              value={formData.email}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  email: e.target.value,
-                }))
-              }
-            />
+              {loadingUser && (
+                <p className="text-xs text-muted-foreground">
+                  Searching...
+                </p>
+              )}
 
-            {loadingUser && (
-              <p className="text-xs text-muted-foreground">
-                Searching...
-              </p>
-            )}
+              {users.length > 0 && !userSelected && (
+                <div className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md">
+                  {users.map((user) => (
+                    <div
+                      key={user.id}
+                      className="cursor-pointer px-3 py-2 hover:bg-accent text-sm"
+                      onClick={() => handleSelectUser(user)}
+                    >
+                      {user.email}
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        ({user.name || "No name"})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-            {users.length > 0 && !userSelected && (
-              <div className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md">
-                {users.map((user) => (
-                  <div
-                    key={user.id}
-                    className="cursor-pointer px-3 py-2 hover:bg-accent text-sm"
-                    onClick={() => handleSelectUser(user)}
-                  >
-                    {user.email}{" "}
-                    <span className="text-xs text-muted-foreground">
-                      ({user.name || "No name"})
-                    </span>
+              {userSelected && (
+                <>
+                  <p className="text-xs text-green-600">
+                    Selected: {formData.name}
+                  </p>
+
+                  <div className="space-y-2 mt-3">
+                    <Label>Role</Label>
+                    <Select
+                      value={formData.role}
+                      onValueChange={(v) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          role: v as AllowedRole,
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ALL_ROLES.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {formatRole(role)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                </>
+              )}
+            </div>
+          )}
 
-          {/* AFTER USER SELECTED */}
-          {userSelected && (
+          {/* Edit Mode */}
+          {isEditMode && (
             <>
-              <p className="text-xs text-green-600">
-                Selected: {formData.name}
-              </p>
-
-              {/* ROLE */}
               <div className="space-y-2">
                 <Label>Role</Label>
                 <Select
@@ -272,7 +317,6 @@ export function AddEditMemberDialog({ open, planId, onOpenChange, onSubmit, init
                 </Select>
               </div>
 
-              {/* DEPARTMENTS */}
               {showDepartments && (
                 <div className="space-y-2">
                   <Label>Departments</Label>
@@ -286,7 +330,7 @@ export function AddEditMemberDialog({ open, planId, onOpenChange, onSubmit, init
                           key={d.id}
                           type="button"
                           onClick={() => toggleDepartment(d.id)}
-                          className={`p-2 rounded border text-sm transition ${
+                          className={`rounded border p-2 text-sm transition ${
                             selected
                               ? "bg-primary text-white"
                               : "bg-background hover:bg-muted"
@@ -300,7 +344,6 @@ export function AddEditMemberDialog({ open, planId, onOpenChange, onSubmit, init
                 </div>
               )}
 
-              {/* MONTHLY COST */}
               {showCost && (
                 <div className="space-y-2">
                   <Label>Monthly Cost (optional)</Label>
@@ -320,17 +363,21 @@ export function AddEditMemberDialog({ open, planId, onOpenChange, onSubmit, init
             </>
           )}
 
-          {/* ACTIONS */}
           <div className="flex justify-end gap-3 pt-4">
-            <Button variant="outline" onClick={handleClose} className="cursor-pointer hover:text-gray-600">
+            <Button
+              variant="outline"
+              onClick={handleClose}
+              className="cursor-pointer hover:text-gray-600"
+            >
               Cancel
             </Button>
+
             <Button
               onClick={handleSubmit}
               disabled={!userSelected || !formData.role}
               className="cursor-pointer"
             >
-              {initialData ? "Save Changes" : "Add Member"}
+              {isEditMode ? "Save Changes" : "Send Invitation"}
             </Button>
           </div>
         </div>

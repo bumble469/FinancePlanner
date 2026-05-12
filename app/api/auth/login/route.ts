@@ -6,7 +6,7 @@ import {
   generateRefreshToken,
   REFRESH_TOKEN_TTL,
 } from '@/lib/jwt';
-
+import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 interface LoginRequestBody {
@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
         revokedAt: new Date(),
       },
     });
+  
 
     const accessToken = await generateAccessToken({
       sub: user.id,

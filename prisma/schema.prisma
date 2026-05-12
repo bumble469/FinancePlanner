@@ -47,6 +47,12 @@ enum MemberRole {
   MEMBER 
 }
 
+enum MembershipStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 enum IncomeType {
   INVESTMENT
   REVENUE
@@ -84,8 +90,8 @@ model User {
   workItemMemberships WorkItemMember[]
   departmentMembers   DepartmentMember[]
   phaseMemberships    PhaseMember[]
-  assignedTasks       Task[]
   createdMilestones Milestone[] @relation("MilestoneCreator")
+  sentInvitations WorkItemMemberInvitation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -167,6 +173,7 @@ model WorkItem {
 
   // collaboration
   members WorkItemMember[]
+  invitations WorkItemMemberInvitation[]
 
   // departments and phases
   departments Department[]
@@ -197,11 +204,31 @@ model WorkItemMember {
 
   departmentMembers DepartmentMember[]
   phaseMembers      PhaseMember[]
+  taskMembers TaskMember[]
 
   joinedAt DateTime @default(now())
 
   @@unique([workItemId, userId]) // user can't be added twice to same work item
   @@map("work_item_members")
+}
+
+model WorkItemMemberInvitation {
+  id          String           @id @default(uuid())
+  workItemId  String
+  invitedById String
+  email       String
+  role        MemberRole       @default(MEMBER)
+  status      MembershipStatus @default(PENDING)
+  
+  token       String           @unique
+  expiresAt   DateTime
+  respondedAt DateTime?
+
+  workItem    WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  invitedBy   User @relation(fields: [invitedById], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 //////////////////////
@@ -390,9 +417,6 @@ model Task {
   departmentId String?
   phaseId      String?
 
-  assignedToId String?
-  assignedTo   User?   @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
-
   dueDate     DateTime?   
   completedAt DateTime?   
   priority    Int         @default(0)  
@@ -401,11 +425,24 @@ model Task {
   department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   phase      Phase?      @relation(fields: [phaseId], references: [id], onDelete: SetNull)
   milestones   MilestoneTask[]
+  members TaskMember[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("tasks")
+}
+
+model TaskMember {
+  id               String @id @default(uuid())
+  taskId           String
+  workItemMemberId String
+
+  task           Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  workItemMember WorkItemMember @relation(fields: [workItemMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, workItemMemberId])
+  @@map("task_members")
 }
 
 model MilestoneTask {

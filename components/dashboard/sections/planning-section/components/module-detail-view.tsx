@@ -1,4 +1,3 @@
-// components/module-detail-view.tsx
 "use client";
 import { useState, useEffect } from "react";
 import { Module, Task } from "@/lib/types";
@@ -33,6 +32,7 @@ export function ModuleDetailView({
 
   useEffect(() => {
     fetchTasks();
+    console.log("module: ", module);
   }, [module.id]);
 
   const fetchTasks = async () => {
@@ -149,6 +149,9 @@ export function ModuleDetailView({
       ) : (
         <TaskListView
           tasks={tasks}
+          workItemId={currentPlanId!}
+          deptId={module.departmentId!}
+          phaseId={module.id}
           onStatusChange={(id, status) => updateTask(id, { status })}
           onEdit={(task) => setTaskDialog({ open: true, editing: task })}
           onDelete={(id) => {

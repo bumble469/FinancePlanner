@@ -36,8 +36,6 @@ export async function GET(
         status: true,
         phaseId: true,
         departmentId: true,
-        assignedToId: true,
-        assignedTo: { select: { id: true, name: true, image: true } },
         createdAt: true,
         updatedAt: true,
       },
@@ -69,7 +67,7 @@ export async function POST(
     if (!phase) return NextResponse.json({ error: "Phase not found" }, { status: 404 });
 
     const body = await req.json();
-    const { title, description, assignedToId } = body;
+    const { title, description } = body;
 
     if (!title || typeof title !== "string" || !title.trim()) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
@@ -83,7 +81,6 @@ export async function POST(
         workItemId,
         departmentId: deptId,
         phaseId,
-        assignedToId: assignedToId ?? null,
       },
       select: {
         id: true,
@@ -92,8 +89,6 @@ export async function POST(
         status: true,
         phaseId: true,
         departmentId: true,
-        assignedToId: true,
-        assignedTo: { select: { id: true, name: true, image: true } },
         createdAt: true,
         updatedAt: true,
       },

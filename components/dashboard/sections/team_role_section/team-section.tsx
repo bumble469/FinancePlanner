@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 import { useFinancialStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -11,43 +12,38 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Users, DollarSign, Box } from "lucide-react";
-import type { TeamMember, Role } from "@/lib/types";
+import type { TeamMember } from "@/lib/types";
 import { ROLES } from "@/lib/types";
 import { getCurrencySymbol } from "@/lib/currency";
 import { AddEditMemberDialog } from "./components/member-dialog";
 import { authClient } from "@/lib/auth-client";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
+import { useSnackbar } from '@/lib/useSnackbar';
+
 function formatCurrency(value: number | undefined, currency: string): string {
   const symbol = getCurrencySymbol(currency);
   return `${symbol} ${(value ?? 0).toLocaleString("en-IN")}`;
 }
 
-type FormData = {
-  id: string;
-  name: string;
-  email: string;
-  role: Role | "";
-  departmentIds: string[];
-  monthlyCost: string;
-};
-
-const defaultFormData: FormData = {
-  id: "",
-  name: "",
-  email: "",
-  role: "",
-  departmentIds: [],
-  monthlyCost: "",
-};
-
 export function TeamSection({ planId }: { planId: string }) {
-  const { teamMembers, removeTeamMember, currency, departments, currentUser, setTeamMembers } = useFinancialStore();
+  const {
+    teamMembers,
+    removeTeamMember,
+    currency,
+    departments,
+    currentUser,
+    setTeamMembers,
+  } = useFinancialStore();
+
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
-  const [formData, setFormData] = useState<FormData>(defaultFormData);
   const [deletingMember, setDeletingMember] = useState<TeamMember | null>(null);
-
-  const totalMonthlyCost = teamMembers.reduce((sum, m) => sum + m.monthlyCost, 0);
+  const { show } = useSnackbar();
+  
+  const totalMonthlyCost = teamMembers.reduce(
+    (sum, m) => sum + m.monthlyCost,
+    0
+  );
 
   const deptSummary = departments.map((d) => {
     const members = teamMembers.filter((m) =>
@@ -69,6 +65,7 @@ export function TeamSection({ planId }: { planId: string }) {
   const roleSummary = ROLES.reduce(
     (acc, role) => {
       const members = teamMembers.filter((m) => m.role === role);
+
       if (members.length > 0) {
         acc.push({
           role,
@@ -76,6 +73,7 @@ export function TeamSection({ planId }: { planId: string }) {
           cost: members.reduce((sum, m) => sum + m.monthlyCost, 0),
         });
       }
+
       return acc;
     },
     [] as { role: string; count: number; cost: number }[]
@@ -86,8 +84,9 @@ export function TeamSection({ planId }: { planId: string }) {
       const res = await authClient.request(`/api/plan/${planId}/members`, {
         method: "GET",
       });
+
       setTeamMembers(res.data);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
     }
   };
@@ -100,64 +99,48 @@ export function TeamSection({ planId }: { planId: string }) {
     monthlyCost?: number;
   }) => {
     try {
-      await authClient.request(`/api/plan/${planId}/members`, {
-        method: "POST",
-        data: {
-          userId: data.id,
-          role: data.role,
-          departmentIds: data.departmentIds,
-          monthlyCost: data.monthlyCost,
-        },
-      });
-
-      setIsAddOpen(false);
-      fetchTeamData();
-    } catch (err: any) {
-      console.error(err);
-      alert(err?.response?.data?.error || "Failed to add member");
-    }
-  };
-
-  const handleEditSubmit = async (data: {
-    id: string;
-    name: string;
-    role: string;
-    departmentIds: string[];
-    monthlyCost?: number;
-  }) => {
-    if (!editingMember) return;
-    try {
-      await authClient.request(`/api/plan/${planId}/members/${editingMember.id}`, {
-        method: "PATCH",
-        data: {
-          role: data.role,
-          departmentIds: data.departmentIds,
-          monthlyCost: data.monthlyCost,
-        },
-      });
+      if (!editingMember) {
+        // invite mode
+        await authClient.request(`/api/plan/${planId}/members/invitation`, {
+          method: "POST",
+          data: {
+            invitedUserId: data.id,
+          },
+        });
+        show("User Invited", "success");
+      } else {
+        // edit mode
+        await authClient.request(
+          `/api/plan/${planId}/members/${editingMember.id}`,
+          {
+            method: "PATCH",
+            data: {
+              role: data.role,
+              departmentIds: data.departmentIds,
+              monthlyCost: data.monthlyCost,
+            },
+          }
+        );
+      }
 
       setIsAddOpen(false);
       setEditingMember(null);
       fetchTeamData();
+      show("Member Updated", "success");
     } catch (err: any) {
       console.error(err);
-      alert(err?.response?.data?.error || "Failed to update member");
+
+      alert(
+        err?.response?.data?.error ||
+          (editingMember
+            ? "Failed to update member"
+            : "Failed to send invitation")
+      );
     }
   };
 
-  const handleEdit = (member: any) => {
+  const handleEdit = (member: TeamMember) => {
     setEditingMember(member);
-
-    setFormData({
-      id: member.userId,
-      email: member.user?.email || "",
-      name: member.user?.name || "",
-      role: member.role,
-      departmentIds: member.departmentMembers?.map(
-        (dm: any) => dm.departmentId
-      ) ?? [],
-      monthlyCost: member.monthlyCost?.toString() || "",
-    });
     setIsAddOpen(true);
   };
 
@@ -165,9 +148,12 @@ export function TeamSection({ planId }: { planId: string }) {
     if (!deletingMember) return;
 
     try {
-      await authClient.request(`/api/plan/${planId}/members/${deletingMember.id}`, {
-        method: "DELETE",
-      });
+      await authClient.request(
+        `/api/plan/${planId}/members/${deletingMember.id}`,
+        {
+          method: "DELETE",
+        }
+      );
 
       removeTeamMember(deletingMember.id);
       setDeletingMember(null);
@@ -188,8 +174,15 @@ export function TeamSection({ planId }: { planId: string }) {
             Manage your team members and their associated costs
           </p>
         </div>
+
         <div className="flex items-center gap-2">
-          <Button className="cursor-pointer" onClick={() => setIsAddOpen(true)}>
+          <Button
+            className="cursor-pointer"
+            onClick={() => {
+              setEditingMember(null);
+              setIsAddOpen(true);
+            }}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Add Member
           </Button>
@@ -197,25 +190,37 @@ export function TeamSection({ planId }: { planId: string }) {
           <AddEditMemberDialog
             open={isAddOpen}
             planId={planId}
-            onOpenChange={setIsAddOpen}
-            onSubmit={editingMember ? handleEditSubmit : handleSubmit}
+            onOpenChange={(open) => {
+              setIsAddOpen(open);
+
+              if (!open) {
+                setEditingMember(null);
+              }
+            }}
+            onSubmit={handleSubmit}
             initialData={
               editingMember
                 ? {
-                  id: editingMember.id,
-                  email: editingMember.user?.email ?? "",
-                  name: editingMember.user?.name ?? "",
-                  role: editingMember.role as any,
-                  departmentIds: editingMember.departmentMembers?.map((dm: any) => dm.departmentId) ?? [],
-                  monthlyCost: editingMember.monthlyCost,
-                }
+                    id: editingMember.userId,
+                    email: editingMember.user?.email ?? "",
+                    name: editingMember.user?.name ?? "",
+                    role: editingMember.role as any,
+                    departmentIds:
+                      editingMember.departmentMembers?.map(
+                        (dm: any) => dm.departmentId
+                      ) ?? [],
+                    monthlyCost: editingMember.monthlyCost,
+                  }
                 : null
             }
           />
+
           <ConfirmDeleteDialog
             open={!!deletingMember}
             type="member"
-            setOpen={(open) => { if (!open) setDeletingMember(null); }}
+            setOpen={(open) => {
+              if (!open) setDeletingMember(null);
+            }}
             onConfirm={confirmMemberDelete}
           />
         </div>
@@ -230,23 +235,29 @@ export function TeamSection({ planId }: { planId: string }) {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Members</p>
-              <p className="text-2xl font-bold text-foreground">{teamMembers.length}</p>
+              <p className="text-2xl font-bold text-foreground">
+                {teamMembers.length}
+              </p>
             </div>
           </div>
         </div>
+
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/10">
               <DollarSign className="h-5 w-5 text-success" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Total Monthly Cost</p>
+              <p className="text-sm text-muted-foreground">
+                Total Monthly Cost
+              </p>
               <p className="text-2xl font-bold text-success">
                 {formatCurrency(totalMonthlyCost, currency)}
               </p>
             </div>
           </div>
         </div>
+
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/10">
@@ -254,7 +265,9 @@ export function TeamSection({ planId }: { planId: string }) {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">3D Nodes Ready</p>
-              <p className="text-2xl font-bold text-warning">{teamMembers.length}</p>
+              <p className="text-2xl font-bold text-warning">
+                {teamMembers.length}
+              </p>
             </div>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
@@ -263,31 +276,27 @@ export function TeamSection({ planId }: { planId: string }) {
         </div>
       </div>
 
-      {/* Main Content Grid */}
+      {/* Main Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Team Table */}
         <div className="lg:col-span-2">
           <div className="w-full overflow-x-auto">
             <Table className="min-w-[700px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="min-w-[180px]">Name</TableHead>
-                  <TableHead className="min-w-[120px]">Role</TableHead>
-                  <TableHead className="min-w-[220px]">Departments</TableHead>
-                  <TableHead className="text-right min-w-[140px]">
-                    Monthly Cost
-                  </TableHead>
-                  <TableHead className="w-[100px]">Actions</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Departments</TableHead>
+                  <TableHead className="text-right">Monthly Cost</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
 
               <TableBody>
                 {teamMembers.map((member) => (
                   <TableRow key={member.id}>
-                    {/* Name */}
                     <TableCell className="font-medium whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <span>{member?.user?.name || "-"}</span>
+                        <span>{member.user?.name || "-"}</span>
 
                         {member.userId === currentUser?.id && (
                           <span className="rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium">
@@ -297,35 +306,31 @@ export function TeamSection({ planId }: { planId: string }) {
                       </div>
                     </TableCell>
 
-                    {/* Role */}
-                    <TableCell className="whitespace-nowrap">
-                      {member.role}
-                    </TableCell>
+                    <TableCell>{member.role}</TableCell>
 
-                    {/* Departments → CHIPS */}
                     <TableCell>
                       <div className="flex flex-wrap gap-1 max-w-[220px]">
-                        {member?.departmentMembers?.length ? (
+                        {member.departmentMembers?.length ? (
                           member.departmentMembers.map((dm) => (
                             <span
                               key={dm.department.id}
-                              className="rounded-full bg-secondary px-2 py-1 text-xs whitespace-nowrap"
+                              className="rounded-full bg-secondary px-2 py-1 text-xs"
                             >
                               {dm.department?.name || "—"}
                             </span>
                           ))
                         ) : (
-                          <span className="text-muted-foreground text-xs">-</span>
+                          <span className="text-muted-foreground text-xs">
+                            -
+                          </span>
                         )}
                       </div>
                     </TableCell>
 
-                    {/* Cost */}
-                    <TableCell className="text-right font-mono whitespace-nowrap">
+                    <TableCell className="text-right font-mono">
                       {formatCurrency(member.monthlyCost || 0, currency)}
                     </TableCell>
 
-                    {/* Actions */}
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Button
@@ -358,33 +363,47 @@ export function TeamSection({ planId }: { planId: string }) {
 
         {/* Summaries */}
         <div className="space-y-4">
-          {/* Cost by Dept */}
           <div className="rounded-xl border border-border bg-card p-5">
             <h3 className="font-semibold text-foreground">Cost by Team</h3>
             <div className="mt-4 space-y-3">
-              {deptSummary.filter((t) => t.count > 0).map((item) => (
-                <div key={item.id} className="flex items-center justify-between">  {/* Fix 8 */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-foreground">{item.name}</span>  {/* Fix 9 */}
-                    <span className="text-xs text-muted-foreground">({item.count})</span>
+              {deptSummary
+                .filter((t) => t.count > 0)
+                .map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-foreground">
+                        {item.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        ({item.count})
+                      </span>
+                    </div>
+                    <span className="font-mono text-sm text-success">
+                      {formatCurrency(item.cost, currency)}
+                    </span>
                   </div>
-                  <span className="font-mono text-sm text-success">
-                    {formatCurrency(item.cost, currency)}
-                  </span>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
 
-          {/* Cost by Role */}
           <div className="rounded-xl border border-border bg-card p-5">
             <h3 className="font-semibold text-foreground">Cost by Role</h3>
             <div className="mt-4 space-y-3">
               {roleSummary.slice(0, 5).map((item) => (
-                <div key={item.role} className="flex items-center justify-between">
+                <div
+                  key={item.role}
+                  className="flex items-center justify-between"
+                >
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-foreground">{item.role}</span>
-                    <span className="text-xs text-muted-foreground">({item.count})</span>
+                    <span className="text-sm text-foreground">
+                      {item.role}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      ({item.count})
+                    </span>
                   </div>
                   <span className="font-mono text-sm text-success">
                     {formatCurrency(item.cost, currency)}

@@ -5,6 +5,12 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { useFinancialStore } from "@/lib/store";
 import { PlanCard } from "./plan-card";
 import { CreatePlanDialog } from "./create-plan-dialog";
@@ -40,25 +46,46 @@ function mapWorkItemToPlan(workItem: any): Plan {
 }
 
 export function PlansPage() {
-  const { plans, account, setPlans, setIsLoading, setError, isLoading, error } = useFinancialStore();
+  const {
+    plans,
+    setPlans,
+    account,
+    setIsLoading,
+    setError,
+    isLoading,
+    error,
+  } = useFinancialStore();
+
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
 
+  const [collaborations, setCollaborations] = useState<Plan[]>([]);
+  const [invitations, setInvitations] = useState<any[]>([]);
+
   useEffect(() => {
     fetchPlans();
-  }, [])
+  }, []);
 
   const fetchPlans = async () => {
     setIsLoading(true);
     setError(null);
+
     try {
       const { data } = await authClient.request("/api/plan", {
-        method: "GET"
+        method: "GET",
       });
-      setPlans(data.data.map(mapWorkItemToPlan));
+
+      setPlans(data.data.myPlans.map(mapWorkItemToPlan));
+      setCollaborations(
+        data.data.collaborations.map(mapWorkItemToPlan)
+      );
+
+      setInvitations(data.data.invitations);
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.error || "Failed to fetch plans");
+        setError(
+          err.response?.data?.error || "Failed to fetch plans"
+        );
       } else {
         setError("Something went wrong");
       }
@@ -67,14 +94,49 @@ export function PlansPage() {
     }
   };
 
-  const activePlans = plans.filter((p) => p.status === "active");
-  const completedPlans = plans.filter((p) => p.status === "completed");
-
   const handleEditPlan = (plan: Plan) => {
-    console.log("plan to edit: ", plan)
     setEditingPlan(plan);
     setIsCreateDialogOpen(true);
-  };  
+  };
+
+  const renderPlans = (
+    items: any[],
+    emptyText: string,
+    showCreateButton = false,
+    variant: "default" | "invitation" = "default"
+  ) => {
+    if (items.length === 0) {
+      return (
+        <Card className="border border-border bg-card/50 p-8 text-center">
+          <p className="text-muted-foreground">{emptyText}</p>
+
+          {showCreateButton && (
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={() => setIsCreateDialogOpen(true)}
+            >
+              Create your first plan
+            </Button>
+          )}
+        </Card>
+      );
+    }
+
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {items.map((plan) => (
+          <PlanCard
+            key={plan.id}
+            plan={plan}
+            onEdit={handleEditPlan}
+            variant={variant}
+            onRefresh={fetchPlans}
+          />
+        ))}
+      </div>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -94,70 +156,73 @@ export function PlansPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold text-foreground">Plans</h1>
-        <p className="text-muted-foreground">
-          Manage financial plans for {account?.name}
-        </p>
-      </div>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">
+            Plans
+          </h1>
+          <p className="text-muted-foreground">
+            Manage financial plans for {account?.name}
+          </p>
+        </div>
 
-      {/* Create Plan Button */}
-      <div className="flex justify-end">
-        <Button onClick={() => setIsCreateDialogOpen(true)} className="gap-2">
+        <Button
+          onClick={() => setIsCreateDialogOpen(true)}
+          className="gap-2"
+        >
           <Plus className="h-4 w-4" />
           Create Plan
         </Button>
       </div>
 
-      {/* Active Plans Section */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <h2 className="text-2xl font-semibold text-foreground">Active Plans</h2>
-          <Badge variant="secondary" className="text-xs">
-            {activePlans.length}
-          </Badge>
-        </div>
+      <Tabs defaultValue="my-plans" className="space-y-6">
+        <TabsList>
+          <TabsTrigger
+            value="my-plans"
+            className="gap-2 cursor-pointer"
+          >
+            My Plans
+            <Badge variant="secondary">{plans.length}</Badge>
+          </TabsTrigger>
 
-        {activePlans.length === 0 ? (
-          <Card className="border border-border bg-card/50 p-8 text-center">
-            <p className="text-muted-foreground">No active plans yet.</p>
-            <Button
-              variant="outline"
-              className="mt-4 bg-transparent"
-              onClick={() => setIsCreateDialogOpen(true)}
-            >
-              Create your first plan
-            </Button>
-          </Card>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {activePlans.map((plan) => (
-              <PlanCard key={plan.id} plan={plan} onEdit={handleEditPlan} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Completed Plans Section */}
-      {completedPlans.length > 0 && (
-        <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-semibold text-foreground">
-              Completed Plans
-            </h2>
-            <Badge variant="secondary" className="text-xs">
-              {completedPlans.length}
+          <TabsTrigger
+            value="collaborations"
+            className="gap-2 cursor-pointer"
+          >
+            Collaborations
+            <Badge variant="secondary">
+              {collaborations.length}
             </Badge>
-          </div>
+          </TabsTrigger>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {completedPlans.map((plan) => (
-              <PlanCard key={plan.id} plan={plan} onEdit={handleEditPlan} />
-            ))}
-          </div>
-        </section>
-      )}
+          <TabsTrigger
+            value="invitations"
+            className="gap-2 cursor-pointer"
+          >
+            Invitations
+            <Badge variant="secondary">
+              {invitations.length}
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="my-plans">
+          {renderPlans(plans, "No plans created yet.", true)}
+        </TabsContent>
+
+        <TabsContent value="collaborations">
+          {renderPlans(collaborations, "No collaborations yet.")}
+        </TabsContent>
+
+        <TabsContent value="invitations">
+          {renderPlans(
+            invitations,
+            "No pending invitations.",
+            false,
+            "invitation"
+          )}
+        </TabsContent>
+      </Tabs>
 
       <CreatePlanDialog
         open={isCreateDialogOpen}

@@ -1,0 +1,269 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getAuthUser } from "@/lib/auth";
+
+async function resolveTask(
+  workItemId: string,
+  deptId: string,
+  phaseId: string,
+  taskId: string
+) {
+  return prisma.task.findFirst({
+    where: {
+      id: taskId,
+      workItemId,
+      departmentId: deptId,
+      phaseId,
+    },
+  });
+}
+
+async function checkMembership(workItemId: string, userId: string) {
+  return prisma.workItemMember.findUnique({
+    where: {
+      workItemId_userId: {
+        workItemId,
+        userId,
+      },
+    },
+  });
+}
+
+export async function GET(
+  req: NextRequest,
+  {
+    params,
+  }: {
+    params: Promise<{
+      id: string;
+      deptId: string;
+      phaseId: string;
+      taskId: string;
+    }>;
+  }
+) {
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id, deptId, phaseId, taskId } = await params;
+
+    const membership = await checkMembership(id, user.sub);
+    if (!membership) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const task = await resolveTask(id, deptId, phaseId, taskId);
+    if (!task) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
+    const assignedMembers = await prisma.taskMember.findMany({
+      where: { taskId },
+      select: {
+        id: true,
+        workItemMember: {
+          select: {
+            id: true,
+            role: true,
+            user: {
+              select: { id: true, name: true, image: true, email: true },
+            },
+          },
+        },
+      },
+    });
+
+    const assignedWorkItemMemberIds = assignedMembers.map(
+      (m) => m.workItemMember.id
+    );
+
+    const eligibleMembers = await prisma.workItemMember.findMany({
+      where: {
+        workItemId: id,
+        id: { notIn: assignedWorkItemMemberIds },
+        role: {
+          not: "ADMIN",
+        }
+      },
+      select: {
+        id: true,
+        role: true,
+        user: {
+          select: { id: true, name: true, image: true },
+        },
+      },
+    });
+
+    return NextResponse.json({
+      assigned: assignedMembers,
+      eligible: eligibleMembers,
+    });
+  } catch (err) {
+    console.error("[GET task members]", err);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(
+  req: NextRequest,
+  {
+    params,
+  }: {
+    params: {
+      id: string;
+      deptId: string;
+      phaseId: string;
+      taskId: string;
+    };
+  }
+) {
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const { id, deptId, phaseId, taskId } = await params;
+
+    const membership = await checkMembership(id, user.sub);
+    if (!membership) {
+      return NextResponse.json(
+        { error: "Forbidden" },
+        { status: 403 }
+      );
+    }
+
+    const task = await resolveTask(id, deptId, phaseId, taskId);
+    if (!task) {
+      return NextResponse.json(
+        { error: "Task not found" },
+        { status: 404 }
+      );
+    }
+
+    const body = await req.json();
+    const { workItemMemberId } = body;
+
+    if (!workItemMemberId) {
+      return NextResponse.json(
+        { error: "workItemMemberId required" },
+        { status: 400 }
+      );
+    }
+
+    const taskMember = await prisma.taskMember.create({
+      data: {
+        taskId,
+        workItemMemberId,
+      },
+      select: {
+        id: true,
+        workItemMember: {
+          select: {
+            id: true,
+            role: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return NextResponse.json(taskMember, { status: 201 });
+  } catch (err: any) {
+    console.error("[POST task member]", err);
+
+    if (err.code === "P2002") {
+      return NextResponse.json(
+        { error: "Member already assigned" },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  {
+    params,
+  }: {
+    params: {
+      id: string;
+      deptId: string;
+      phaseId: string;
+      taskId: string;
+    };
+  }
+) {
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const { id, deptId, phaseId, taskId } = await params;
+
+    const membership = await checkMembership(id, user.sub);
+    if (!membership) {
+      return NextResponse.json(
+        { error: "Forbidden" },
+        { status: 403 }
+      );
+    }
+
+    const task = await resolveTask(id, deptId, phaseId, taskId);
+    if (!task) {
+      return NextResponse.json(
+        { error: "Task not found" },
+        { status: 404 }
+      );
+    }
+
+    const { searchParams } = new URL(req.url);
+    const workItemMemberId = searchParams.get("workItemMemberId");
+
+    if (!workItemMemberId) {
+      return NextResponse.json(
+        { error: "workItemMemberId required" },
+        { status: 400 }
+      );
+    }
+
+    await prisma.taskMember.deleteMany({
+      where: {
+        taskId,
+        workItemMemberId,
+      },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("[DELETE task member]", err);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

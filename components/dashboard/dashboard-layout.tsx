@@ -32,8 +32,9 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
       syncToPlan(planId, plan);
       setCurrentPlan(plan);
     } else {
-      router.push("/plans");
+      router.replace("/plans");
     }
+
   }, [planId, plans, syncToPlan, router]);
 
   if (!currentPlan) {
