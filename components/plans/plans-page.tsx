@@ -103,7 +103,7 @@ export function PlansPage() {
     items: any[],
     emptyText: string,
     showCreateButton = false,
-    variant: "default" | "invitation" = "default"
+    variant: "default" | "invitation" | "collaboration" = "default"
   ) => {
     if (items.length === 0) {
       return (
@@ -211,7 +211,7 @@ export function PlansPage() {
         </TabsContent>
 
         <TabsContent value="collaborations">
-          {renderPlans(collaborations, "No collaborations yet.")}
+          {renderPlans(collaborations, "No collaborations yet.", false, "collaboration")}  // add variant
         </TabsContent>
 
         <TabsContent value="invitations">

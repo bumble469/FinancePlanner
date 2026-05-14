@@ -180,6 +180,7 @@ model WorkItem {
   phases      Phase[]
   tasks       Task[]
   income     Income[]
+  expenses Expense[]
   milestones Milestone[]
 
   createdAt DateTime @default(now())
@@ -244,6 +245,7 @@ model Department {
   workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
 
   members  DepartmentMember[]
+  income Income[]
   expenses Expense[]
 
   phases Phase[]
@@ -350,37 +352,43 @@ model PhaseMember {
 
 // merged Investment + Revenue into a single Income model
 model Income {
-  id          String     @id @default(uuid())
-  workItemId  String                          
-  phaseId     String?                         
-  type        IncomeType
-  amount      Decimal    @db.Decimal(12, 2)
-  description String?
-  source      String?                         
-  receivedAt  DateTime   @default(now())
+  id          String   @id @default(uuid())
 
-  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  phase    Phase?   @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  workItemId  String
+  phaseId     String?
+  departmentId String?
+
+  type        IncomeType
+  amount      Decimal  @db.Decimal(12,2)
+  description String?
+  source      String?
+  receivedAt  DateTime @default(now())
+
+  workItem   WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  phase      Phase?      @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   @@map("income")
 }
 
 model Expense {
-  id          String          @id @default(uuid())
-  category    ExpenseCategory
-  description String?
-  amount      Decimal         @db.Decimal(12, 2)
-  occurredAt  DateTime        @default(now())
+  id            String          @id @default(uuid())
 
-  phaseId String?
-  phase   Phase?  @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  workItemId    String
+  phaseId       String?
+  departmentId  String?
 
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  category      ExpenseCategory
+  description   String?
+  amount        Decimal         @db.Decimal(12,2)
 
-  loggedById String?
+  loggedById    String?
+  occurredAt    DateTime        @default(now())
+  createdAt     DateTime        @default(now())
 
-  createdAt DateTime @default(now())
+  workItem   WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  phase      Phase?      @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   @@map("expenses")
 }

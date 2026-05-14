@@ -3,63 +3,117 @@ import { WorkItemStatus, WorkItemType, MemberRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getAuthUser } from '@/lib/auth';
 
-async function getPlanAndVerifyOwner(planId: string, userId: string) {
-  const account = await prisma.account.findUnique({ where: { userId } });
-  if (!account) return null;
+// ─── SHARED INCLUDE ────────────────────────────────────────────────────────
 
-  const plan = await prisma.workItem.findFirst({
-    where: { id: planId, accountId: account.id },
+const planInclude = {
+  project: true,
+  event: true,
+  planInfo: true,
+  departments: true,
+  tasks: {
     include: {
-      project: true,
-      event: true,
-      planInfo: true,
-      departments: true,
-      tasks: true,
-      milestones: {
-        include: {
-          tasks: {
-            include: {
-              task: true,
-            },
-          },
-          creator: {
-            select: { id: true, name: true, email: true },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      },
-      phases: true,
       members: {
         include: {
-          user: {
-            select: { name: true, email: true, image: true },
-          },
-          departmentMembers: {
+          workItemMember: {
             include: {
-              department: {
-                select: { id: true, name: true },
-              },
+              user: { select: { id: true, name: true, email: true, image: true } },
             },
           },
         },
       },
     },
-  });
-  
-  if (!plan) return null;
-  const formattedPlan = {
+  },
+  milestones: {
+    include: {
+      tasks: {
+        include: {
+          task: true,
+        },
+      },
+      creator: {
+        select: { id: true, name: true, email: true },
+      },
+    },
+    orderBy: { createdAt: "desc" as const },
+  },
+  phases: true,
+  members: {
+    include: {
+      user: {
+        select: { id: true, name: true, email: true, image: true },
+      },
+      departmentMembers: {
+        include: {
+          department: {
+            select: { id: true, name: true },
+          },
+        },
+      },
+    },
+  },
+  income: true,
+  expenses: true,
+};
+
+// ─── FORMAT PLAN ───────────────────────────────────────────────────────────
+
+function formatPlan(plan: any) {
+  return {
     ...plan,
-    milestones: plan.milestones.map((m) => ({
+    milestones: plan.milestones.map((m: any) => ({
       ...m,
-      tasks: m.tasks.map((mt) => ({
+      tasks: m.tasks.map((mt: any) => ({
         id: mt.task.id,
         title: mt.task.title,
         status: mt.task.status,
       })),
     })),
   };
+}
 
-  return formattedPlan;
+// ─── ACCESS RESOLVER ───────────────────────────────────────────────────────
+
+type AccessResult =
+  | { plan: any; isOwner: true; role: "OWNER"; departmentIds: null }
+  | { plan: any; isOwner: false; role: MemberRole; departmentIds: string[] }
+  | null;
+
+async function getPlanWithAccess(planId: string, userId: string): Promise<AccessResult> {
+  // Path 1: owner check
+  const account = await prisma.account.findUnique({ where: { userId } });
+  if (account) {
+    const plan = await prisma.workItem.findFirst({
+      where: { id: planId, accountId: account.id },
+      include: planInclude,
+    });
+    if (plan) {
+      return { plan: formatPlan(plan), isOwner: true, role: "OWNER", departmentIds: null };
+    }
+  }
+
+  // Path 2: collaborator check
+  const membership = await prisma.workItemMember.findFirst({
+    where: { workItemId: planId, userId },
+    include: {
+      departmentMembers: {
+        select: { departmentId: true },
+      },
+      workItem: {
+        include: planInclude,
+      },
+    },
+  });
+
+  if (!membership) return null;
+
+  const departmentIds = membership.departmentMembers.map((d) => d.departmentId);
+
+  return {
+    plan: formatPlan(membership.workItem),
+    isOwner: false,
+    role: membership.role,
+    departmentIds,
+  };
 }
 
 // ─── GET /api/plan/[id] ────────────────────────────────────────────────────
@@ -72,10 +126,21 @@ export async function GET(
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
-    const plan = await getPlanAndVerifyOwner(params.id, user.sub);
-    if (!plan) return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
+    const result = await getPlanWithAccess(params.id, user.sub);
+    if (!result) return NextResponse.json({ success: false, error: 'Plan not found or access denied' }, { status: 404 });
 
-    return NextResponse.json({ success: true, data: plan }, { status: 200 });
+    const { plan, isOwner, role, departmentIds } = result;
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...plan,
+        // these three fields tell the frontend exactly what to render
+        isOwner,
+        role,
+        departmentIds, // null for owner, string[] for collaborators
+      },
+    }, { status: 200 });
   } catch (error) {
     console.error('[Plan GET/:id] Error:', error);
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
@@ -90,48 +155,46 @@ export async function PATCH(
 ) {
   try {
     const { id: planId } = await params;
-
-    if (!planId) {
-      return NextResponse.json({ success: false, error: 'Missing plan ID' }, { status: 400 });
-    }
+    if (!planId) return NextResponse.json({ success: false, error: 'Missing plan ID' }, { status: 400 });
 
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
-    const existing = await getPlanAndVerifyOwner(planId, user.sub);
+    // PATCH is owner-only
+    const account = await prisma.account.findUnique({ where: { userId: user.sub } });
+    if (!account) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
+
+    const existing = await prisma.workItem.findFirst({
+      where: { id: planId, accountId: account.id },
+      include: { project: true, event: true },
+    });
     if (!existing) return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
 
     const body = await request.json();
-    const {
-      name, status, budget, description, currency,
-      startDate, endDate, methodology,
-      eventDate, venue,
-    } = body;
+    const { name, status, budget, description, currency, startDate, endDate, methodology, eventDate, venue } = body;
 
     if (status && !Object.values(WorkItemStatus).includes(status)) {
       return NextResponse.json({ success: false, error: 'Invalid status' }, { status: 400 });
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      // update base workItem
       await tx.workItem.update({
         where: { id: planId },
         data: {
-          ...(name        ? { name: name.trim() } : {}),
-          ...(status      ? { status }             : {}),
-          ...(budget !== undefined ? { budget }    : {}),
-          ...(description !== undefined ? { description: description?.trim() || null } : {}),
-          ...(currency    ? { currency }            : {}),
+          ...(name        ? { name: name.trim() }                                              : {}),
+          ...(status      ? { status }                                                          : {}),
+          ...(budget !== undefined ? { budget }                                                 : {}),
+          ...(description !== undefined ? { description: description?.trim() || null }          : {}),
+          ...(currency    ? { currency }                                                        : {}),
         },
       });
 
-      // update type-specific record
       if (existing.type === WorkItemType.PROJECT) {
         await tx.project.update({
           where: { workItemId: planId },
           data: {
             ...(startDate   !== undefined ? { startDate: startDate ? new Date(startDate) : null }   : {}),
-            ...(endDate    !== undefined ? { endDate: endDate ? new Date(endDate) : null }       : {}),
+            ...(endDate     !== undefined ? { endDate: endDate ? new Date(endDate) : null }         : {}),
             ...(methodology !== undefined ? { methodology: methodology?.trim() || null }             : {}),
           },
         });
@@ -147,13 +210,7 @@ export async function PATCH(
 
       return tx.workItem.findUnique({
         where: { id: planId },
-        include: {
-          project: true,
-          event: true,
-          planInfo: true,
-          departments: true,
-          phases: true,
-        },
+        include: { project: true, event: true, planInfo: true, departments: true, phases: true },
       });
     });
 
@@ -176,10 +233,15 @@ export async function DELETE(
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
-    const existing = await getPlanAndVerifyOwner(planId, user.sub);
+    // DELETE is owner-only
+    const account = await prisma.account.findUnique({ where: { userId: user.sub } });
+    if (!account) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
+
+    const existing = await prisma.workItem.findFirst({
+      where: { id: planId, accountId: account.id },
+    });
     if (!existing) return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
 
-    // cascades to project/event/planInfo/departments/phases/members automatically
     await prisma.workItem.delete({ where: { id: planId } });
 
     return NextResponse.json({ success: true, message: 'Plan deleted successfully' }, { status: 200 });

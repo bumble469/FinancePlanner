@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Users, DollarSign, Box } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, DollarSign, Box, RefreshCw } from "lucide-react";
 import type { TeamMember } from "@/lib/types";
 import { ROLES } from "@/lib/types";
 import { getCurrencySymbol } from "@/lib/currency";
@@ -39,7 +39,7 @@ export function TeamSection({ planId }: { planId: string }) {
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [deletingMember, setDeletingMember] = useState<TeamMember | null>(null);
   const { show } = useSnackbar();
-  
+
   const totalMonthlyCost = teamMembers.reduce(
     (sum, m) => sum + m.monthlyCost,
     0
@@ -130,11 +130,12 @@ export function TeamSection({ planId }: { planId: string }) {
     } catch (err: any) {
       console.error(err);
 
-      alert(
+      show(
         err?.response?.data?.error ||
-          (editingMember
-            ? "Failed to update member"
-            : "Failed to send invitation")
+        (editingMember
+          ? "Failed to update member"
+          : "Failed to send invitation"),
+        "error"
       );
     }
   };
@@ -187,6 +188,17 @@ export function TeamSection({ planId }: { planId: string }) {
             Add Member
           </Button>
 
+          <Button
+            className="cursor-pointer"
+            onClick={() => {
+              fetchTeamData();
+              show("Members Reloaded", "success");
+            }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Reload
+          </Button>
+
           <AddEditMemberDialog
             open={isAddOpen}
             planId={planId}
@@ -201,16 +213,16 @@ export function TeamSection({ planId }: { planId: string }) {
             initialData={
               editingMember
                 ? {
-                    id: editingMember.userId,
-                    email: editingMember.user?.email ?? "",
-                    name: editingMember.user?.name ?? "",
-                    role: editingMember.role as any,
-                    departmentIds:
-                      editingMember.departmentMembers?.map(
-                        (dm: any) => dm.departmentId
-                      ) ?? [],
-                    monthlyCost: editingMember.monthlyCost,
-                  }
+                  id: editingMember.userId,
+                  email: editingMember.user?.email ?? "",
+                  name: editingMember.user?.name ?? "",
+                  role: editingMember.role as any,
+                  departmentIds:
+                    editingMember.departmentMembers?.map(
+                      (dm: any) => dm.departmentId
+                    ) ?? [],
+                  monthlyCost: editingMember.monthlyCost,
+                }
                 : null
             }
           />
