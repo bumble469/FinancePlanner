@@ -13,6 +13,7 @@ import { MilestoneDialog } from "./components/milestones-dialog";
 import { Button } from "@/components/ui/button";
 import { Building2 } from "lucide-react";
 import { useSnackbar } from "@/lib/useSnackbar";
+import type { PlanPermissions } from "@/lib/permissions";
 
 const STATUS_CONFIG: Record<
   MilestoneStatus,
@@ -122,7 +123,7 @@ function MilestoneCard({
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function PlanningSection() {
+export function PlanningSection({ permissions }: { permissions: PlanPermissions }) {
   const {
     currentPlanId, mode, eventData, expenses, simulation,
     departments, addDepartment, updateDepartment, removeDepartment,

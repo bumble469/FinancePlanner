@@ -17,6 +17,16 @@ import type {
   Milestone
 } from "./types";
 
+// Add this interface near the top of the file, before AccountStore
+export interface CurrentPlanMeta {
+  id: string;
+  name: string;
+  type: "project" | "event" | "plan";
+  status: string;
+  isOwner: boolean;
+  role: string; // "OWNER" | MemberRole
+  departmentIds: string[] | null;
+}
 
 interface AccountStore {
   account: Account | null;
@@ -39,6 +49,9 @@ interface AccountStore {
   setIsLoading: (loading: boolean) => void;
   error: string | null;
   setError: (error: string | null) => void;
+
+  currentPlanMeta: CurrentPlanMeta | null;
+  setCurrentPlanMeta: (meta: CurrentPlanMeta | null) => void;
 }
 
 // ================= DASHBOARD STORE =================
@@ -179,6 +192,9 @@ export const useFinancialStore = create<FinancialStore>()(
       // CURRENT PLAN
       currentPlanId: null,
       setCurrentPlanId: (planId) => set({ currentPlanId: planId }),
+
+      currentPlanMeta: null,
+      setCurrentPlanMeta: (meta) => set({ currentPlanMeta: meta }),
 
       getCurrentPlan: () => {
         const state = get();

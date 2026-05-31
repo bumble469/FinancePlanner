@@ -15,6 +15,7 @@ interface SidebarProps {
   onSectionChange: (section: string) => void;
   planName?: string;
   entityName: string;
+  isOwner?: boolean;
 }
 
 const navItems = [

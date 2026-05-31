@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useFinancialStore } from "@/lib/store";
 import type { Plan } from "@/lib/types";
+import { getPermissions } from "@/lib/permissions";
 
 interface DashboardLayoutProps {
   planId: string;
@@ -21,48 +22,31 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ planId }: DashboardLayoutProps) {
   const router = useRouter();
-  const { plans, syncToPlan, getCurrentPlan } = useFinancialStore();
+  const { currentPlanMeta } = useFinancialStore();   // ← use this instead of plans[]
   const [activeSection, setActiveSection] = useState("overview");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [currentPlan, setCurrentPlan] = useState<Plan | null>(null);
+  const permissions = getPermissions(currentPlanMeta);
 
-  useEffect(() => {
-    const plan = plans.find((p) => p.id === planId);
-    if (plan) {
-      syncToPlan(planId, plan);
-      setCurrentPlan(plan);
-    } else {
-      router.replace("/plans");
-    }
-
-  }, [planId, plans, syncToPlan, router]);
-
-  if (!currentPlan) {
+  // currentPlanMeta is set by the page before DashboardLayout renders,
+  // so we just wait for it — no redirect needed.
+  if (!currentPlanMeta || currentPlanMeta.id !== planId) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <p className="text-muted-foreground">Loading plan...</p>
-        </div>
+        <p className="text-muted-foreground">Loading plan...</p>
       </div>
     );
   }
 
+  const isOwner = currentPlanMeta.isOwner;
+
   const renderSection = () => {
     switch (activeSection) {
-      case "overview":
-        return <OverviewSection />;
-      case "team":
-        return <TeamSection planId={planId} />;
-      case "expenses":
-        return <ExpenseSection planId={planId} />;
-      case "event":
-        return <PlanningSection />;
-      case "reports":
-        return <ReportsSection />;
-      // case "simulation":
-      //   return <SimulationSection />;
-      default:
-        return <OverviewSection />;
+      case "overview":   return <OverviewSection />;
+      case "reports":    return <ReportsSection />;
+      case "team":       return <TeamSection planId={planId} permissions={permissions} />;
+      case "expenses":   return <ExpenseSection planId={planId} permissions={permissions} />;
+      case "event":      return <PlanningSection permissions={permissions} />;
+      default:           return <OverviewSection />;
     }
   };
 
@@ -78,19 +62,16 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
         <Sidebar
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
-          planName={currentPlan.name}
-          entityName={currentPlan.name}
+          planName={currentPlanMeta.name}
+          entityName={currentPlanMeta.name}
+          isOwner={isOwner}
         />
       </div>
 
       {/* Mobile Header */}
       <div className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between border-b border-border bg-background px-4 py-3 lg:hidden">
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push("/plans")}
-          >
+          <Button variant="ghost" size="icon" onClick={() => router.push("/plans")}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-2">
@@ -99,28 +80,20 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
             </div>
             <div className="flex flex-col">
               <span className="text-xs font-semibold text-muted-foreground">
-                {currentPlan.type === "project" ? "Project" : "Event"}
+                {currentPlanMeta.type === "project" ? "Project" : "Event"}
               </span>
               <span className="text-sm font-semibold text-foreground line-clamp-1">
-                {currentPlan.name}
+                {currentPlanMeta.name}
               </span>
             </div>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        >
-          {isMobileMenuOpen ? (
-            <X className="h-5 w-5" />
-          ) : (
-            <Menu className="h-5 w-5" />
-          )}
+        <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+          {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
       </div>
 
-      {/* Mobile Sidebar Overlay */}
+      {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div
           className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm lg:hidden"
@@ -129,16 +102,15 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
       )}
 
       {/* Mobile Sidebar */}
-      <div
-        className={cn(
-          "fixed left-0 top-0 z-40 h-full w-64 transform transition-transform duration-200 lg:hidden",
-          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
+      <div className={cn(
+        "fixed left-0 top-0 z-40 h-full w-64 transform transition-transform duration-200 lg:hidden",
+        isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
         <Sidebar
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
-          entityName={currentPlan.name}
+          entityName={currentPlanMeta.name}
+          isOwner={isOwner}
         />
       </div>
 

@@ -19,13 +19,14 @@ import { AddEditMemberDialog } from "./components/member-dialog";
 import { authClient } from "@/lib/auth-client";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { useSnackbar } from '@/lib/useSnackbar';
+import type { PlanPermissions } from "@/lib/permissions";
 
 function formatCurrency(value: number | undefined, currency: string): string {
   const symbol = getCurrencySymbol(currency);
   return `${symbol} ${(value ?? 0).toLocaleString("en-IN")}`;
 }
 
-export function TeamSection({ planId }: { planId: string }) {
+export function TeamSection({ planId, permissions }: { planId: string; permissions: PlanPermissions }) {
   const {
     teamMembers,
     removeTeamMember,
@@ -40,32 +41,19 @@ export function TeamSection({ planId }: { planId: string }) {
   const [deletingMember, setDeletingMember] = useState<TeamMember | null>(null);
   const { show } = useSnackbar();
 
-  const totalMonthlyCost = teamMembers.reduce(
-    (sum, m) => sum + m.monthlyCost,
-    0
-  );
+  const totalMonthlyCost = teamMembers.reduce((sum, m) => sum + m.monthlyCost, 0);
 
   const deptSummary = departments.map((d) => {
     const members = teamMembers.filter((m) =>
-      (m as any).departmentMembers?.some(
-        (dm: any) => dm.departmentId === d.id
-      )
+      (m as any).departmentMembers?.some((dm: any) => dm.departmentId === d.id)
     );
-
     const cost = members.reduce((sum, m) => sum + (m.monthlyCost || 0), 0);
-
-    return {
-      id: d.id,
-      name: d.name,
-      count: members.length,
-      cost,
-    };
+    return { id: d.id, name: d.name, count: members.length, cost };
   });
 
   const roleSummary = ROLES.reduce(
     (acc, role) => {
       const members = teamMembers.filter((m) => m.role === role);
-
       if (members.length > 0) {
         acc.push({
           role,
@@ -73,7 +61,6 @@ export function TeamSection({ planId }: { planId: string }) {
           cost: members.reduce((sum, m) => sum + m.monthlyCost, 0),
         });
       }
-
       return acc;
     },
     [] as { role: string; count: number; cost: number }[]
@@ -81,10 +68,7 @@ export function TeamSection({ planId }: { planId: string }) {
 
   const fetchTeamData = async () => {
     try {
-      const res = await authClient.request(`/api/plan/${planId}/members`, {
-        method: "GET",
-      });
-
+      const res = await authClient.request(`/api/plan/${planId}/members`, { method: "GET" });
       setTeamMembers(res.data);
     } catch (err) {
       console.error(err);
@@ -100,41 +84,30 @@ export function TeamSection({ planId }: { planId: string }) {
   }) => {
     try {
       if (!editingMember) {
-        // invite mode
         await authClient.request(`/api/plan/${planId}/members/invitation`, {
           method: "POST",
-          data: {
-            invitedUserId: data.id,
-          },
+          data: { invitedUserId: data.id },
         });
         show("User Invited", "success");
       } else {
-        // edit mode
-        await authClient.request(
-          `/api/plan/${planId}/members/${editingMember.id}`,
-          {
-            method: "PATCH",
-            data: {
-              role: data.role,
-              departmentIds: data.departmentIds,
-              monthlyCost: data.monthlyCost,
-            },
-          }
-        );
+        await authClient.request(`/api/plan/${planId}/members/${editingMember.id}`, {
+          method: "PATCH",
+          data: {
+            role: data.role,
+            departmentIds: data.departmentIds,
+            monthlyCost: data.monthlyCost,
+          },
+        });
       }
-
       setIsAddOpen(false);
       setEditingMember(null);
       fetchTeamData();
       show("Member Updated", "success");
     } catch (err: any) {
       console.error(err);
-
       show(
         err?.response?.data?.error ||
-        (editingMember
-          ? "Failed to update member"
-          : "Failed to send invitation"),
+          (editingMember ? "Failed to update member" : "Failed to send invitation"),
         "error"
       );
     }
@@ -147,15 +120,10 @@ export function TeamSection({ planId }: { planId: string }) {
 
   const confirmMemberDelete = async () => {
     if (!deletingMember) return;
-
     try {
-      await authClient.request(
-        `/api/plan/${planId}/members/${deletingMember.id}`,
-        {
-          method: "DELETE",
-        }
-      );
-
+      await authClient.request(`/api/plan/${planId}/members/${deletingMember.id}`, {
+        method: "DELETE",
+      });
       removeTeamMember(deletingMember.id);
       setDeletingMember(null);
       fetchTeamData();
@@ -164,6 +132,9 @@ export function TeamSection({ planId }: { planId: string }) {
       alert(err?.response?.data?.error || "Failed to delete member");
     }
   };
+
+  // Only show the Actions column if the viewer can do at least one action
+  const showActionsColumn = permissions.canEditMember || permissions.canDeleteMember;
 
   return (
     <div className="space-y-6">
@@ -177,19 +148,24 @@ export function TeamSection({ planId }: { planId: string }) {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            className="cursor-pointer"
-            onClick={() => {
-              setEditingMember(null);
-              setIsAddOpen(true);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Member
-          </Button>
+          {/* Invite — ADMIN / CO_ADMIN only */}
+          {permissions.canInviteMember && (
+            <Button
+              className="cursor-pointer"
+              onClick={() => {
+                setEditingMember(null);
+                setIsAddOpen(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Member
+            </Button>
+          )}
 
+          {/* Reload — everyone */}
           <Button
             className="cursor-pointer"
+            variant="outline"
             onClick={() => {
               fetchTeamData();
               show("Members Reloaded", "success");
@@ -199,42 +175,45 @@ export function TeamSection({ planId }: { planId: string }) {
             Reload
           </Button>
 
-          <AddEditMemberDialog
-            open={isAddOpen}
-            planId={planId}
-            onOpenChange={(open) => {
-              setIsAddOpen(open);
-
-              if (!open) {
-                setEditingMember(null);
+          {/* Dialog — only mounted when canInviteMember */}
+          {permissions.canInviteMember && (
+            <AddEditMemberDialog
+              open={isAddOpen}
+              planId={planId}
+              onOpenChange={(open) => {
+                setIsAddOpen(open);
+                if (!open) setEditingMember(null);
+              }}
+              onSubmit={handleSubmit}
+              initialData={
+                editingMember
+                  ? {
+                      id: editingMember.userId,
+                      email: editingMember.user?.email ?? "",
+                      name: editingMember.user?.name ?? "",
+                      role: editingMember.role as any,
+                      departmentIds:
+                        editingMember.departmentMembers?.map(
+                          (dm: any) => dm.departmentId
+                        ) ?? [],
+                      monthlyCost: editingMember.monthlyCost,
+                    }
+                  : null
               }
-            }}
-            onSubmit={handleSubmit}
-            initialData={
-              editingMember
-                ? {
-                  id: editingMember.userId,
-                  email: editingMember.user?.email ?? "",
-                  name: editingMember.user?.name ?? "",
-                  role: editingMember.role as any,
-                  departmentIds:
-                    editingMember.departmentMembers?.map(
-                      (dm: any) => dm.departmentId
-                    ) ?? [],
-                  monthlyCost: editingMember.monthlyCost,
-                }
-                : null
-            }
-          />
+            />
+          )}
 
-          <ConfirmDeleteDialog
-            open={!!deletingMember}
-            type="member"
-            setOpen={(open) => {
-              if (!open) setDeletingMember(null);
-            }}
-            onConfirm={confirmMemberDelete}
-          />
+          {/* Delete confirm — ADMIN only */}
+          {permissions.canDeleteMember && (
+            <ConfirmDeleteDialog
+              open={!!deletingMember}
+              type="member"
+              setOpen={(open) => {
+                if (!open) setDeletingMember(null);
+              }}
+              onConfirm={confirmMemberDelete}
+            />
+          )}
         </div>
       </div>
 
@@ -247,9 +226,7 @@ export function TeamSection({ planId }: { planId: string }) {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Members</p>
-              <p className="text-2xl font-bold text-foreground">
-                {teamMembers.length}
-              </p>
+              <p className="text-2xl font-bold text-foreground">{teamMembers.length}</p>
             </div>
           </div>
         </div>
@@ -260,9 +237,7 @@ export function TeamSection({ planId }: { planId: string }) {
               <DollarSign className="h-5 w-5 text-success" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">
-                Total Monthly Cost
-              </p>
+              <p className="text-sm text-muted-foreground">Total Monthly Cost</p>
               <p className="text-2xl font-bold text-success">
                 {formatCurrency(totalMonthlyCost, currency)}
               </p>
@@ -277,9 +252,7 @@ export function TeamSection({ planId }: { planId: string }) {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">3D Nodes Ready</p>
-              <p className="text-2xl font-bold text-warning">
-                {teamMembers.length}
-              </p>
+              <p className="text-2xl font-bold text-warning">{teamMembers.length}</p>
             </div>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
@@ -299,75 +272,84 @@ export function TeamSection({ planId }: { planId: string }) {
                   <TableHead>Role</TableHead>
                   <TableHead>Departments</TableHead>
                   <TableHead className="text-right">Monthly Cost</TableHead>
-                  <TableHead>Actions</TableHead>
+                  {/* Only render Actions column header if the viewer can act */}
+                  {showActionsColumn && <TableHead>Actions</TableHead>}
                 </TableRow>
               </TableHeader>
 
               <TableBody>
-                {teamMembers.map((member) => (
-                  <TableRow key={member.id}>
-                    <TableCell className="font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span>{member.user?.name || "-"}</span>
+                {teamMembers.map((member) => {
+                  const isSelf = member.userId === currentUser?.id;
 
-                        {member.userId === currentUser?.id && (
-                          <span className="rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium">
-                            You
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-
-                    <TableCell>{member.role}</TableCell>
-
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1 max-w-[220px]">
-                        {member.departmentMembers?.length ? (
-                          member.departmentMembers.map((dm) => (
-                            <span
-                              key={dm.department.id}
-                              className="rounded-full bg-secondary px-2 py-1 text-xs"
-                            >
-                              {dm.department?.name || "—"}
+                  return (
+                    <TableRow key={member.id}>
+                      <TableCell className="font-medium whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span>{member.user?.name || "-"}</span>
+                          {isSelf && (
+                            <span className="rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium">
+                              You
                             </span>
-                          ))
-                        ) : (
-                          <span className="text-muted-foreground text-xs">
-                            -
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
+                          )}
+                        </div>
+                      </TableCell>
 
-                    <TableCell className="text-right font-mono">
-                      {formatCurrency(member.monthlyCost || 0, currency)}
-                    </TableCell>
+                      <TableCell>{member.role}</TableCell>
 
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleEdit(member)}
-                          disabled={member.userId === currentUser?.id}
-                          className="cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1 max-w-[220px]">
+                          {member.departmentMembers?.length ? (
+                            member.departmentMembers.map((dm) => (
+                              <span
+                                key={dm.department.id}
+                                className="rounded-full bg-secondary px-2 py-1 text-xs"
+                              >
+                                {dm.department?.name || "—"}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
+                        </div>
+                      </TableCell>
 
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setDeletingMember(member)}
-                          disabled={member.userId === currentUser?.id}
-                          className="text-danger hover:text-danger cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      <TableCell className="text-right font-mono">
+                        {formatCurrency(member.monthlyCost || 0, currency)}
+                      </TableCell>
+
+                      {/* Actions cell — only rendered when the column exists */}
+                      {showActionsColumn && (
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            {/* Edit — ADMIN only, not self */}
+                            {permissions.canEditMember && !isSelf && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleEdit(member)}
+                                className="cursor-pointer"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
+
+                            {/* Delete — ADMIN only, not self */}
+                            {permissions.canDeleteMember && !isSelf && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setDeletingMember(member)}
+                                className="text-danger hover:text-danger cursor-pointer"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -381,17 +363,10 @@ export function TeamSection({ planId }: { planId: string }) {
               {deptSummary
                 .filter((t) => t.count > 0)
                 .map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between"
-                  >
+                  <div key={item.id} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-foreground">
-                        {item.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        ({item.count})
-                      </span>
+                      <span className="text-sm text-foreground">{item.name}</span>
+                      <span className="text-xs text-muted-foreground">({item.count})</span>
                     </div>
                     <span className="font-mono text-sm text-success">
                       {formatCurrency(item.cost, currency)}
@@ -405,17 +380,10 @@ export function TeamSection({ planId }: { planId: string }) {
             <h3 className="font-semibold text-foreground">Cost by Role</h3>
             <div className="mt-4 space-y-3">
               {roleSummary.slice(0, 5).map((item) => (
-                <div
-                  key={item.role}
-                  className="flex items-center justify-between"
-                >
+                <div key={item.role} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-foreground">
-                      {item.role}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      ({item.count})
-                    </span>
+                    <span className="text-sm text-foreground">{item.role}</span>
+                    <span className="text-xs text-muted-foreground">({item.count})</span>
                   </div>
                   <span className="font-mono text-sm text-success">
                     {formatCurrency(item.cost, currency)}

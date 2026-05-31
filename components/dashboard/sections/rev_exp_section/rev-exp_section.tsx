@@ -25,6 +25,7 @@ import { getCurrencySymbol } from "@/lib/currency";
 import type { Expense, Income, ExpenseCategory, FinancialStatus } from "@/lib/types";
 import { AddIncomeDialog } from "./components/add-income-dialog";
 import { AddExpenseDialog } from "./components/add-expense-dialog";
+import type { PlanPermissions } from "@/lib/permissions";
 // import { EditExpenseDialog } from "./components/edit-expense-dialog";
 // import { EditIncomeDialog } from "./components/edit-income-dialog";
 
@@ -533,7 +534,7 @@ function PLRow({
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
-export function ExpenseSection({planId}: {planId: string}) {
+export function ExpenseSection({ planId, permissions }: { planId: string; permissions: PlanPermissions }) {
   const {
     income,
     expenses,

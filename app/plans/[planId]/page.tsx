@@ -9,8 +9,9 @@ import { authClient } from "@/lib/auth-client";
 export default function PlanDashboardPage() {
   const params = useParams();
   const planId = params.planId as string;
-  const { updateEventData, setCurrentPlanId } = useFinancialStore();
+  const { setCurrentPlanId, setCurrentPlanMeta, setPlanMeta } = useFinancialStore();
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     if (!planId) return;
@@ -19,20 +20,36 @@ export default function PlanDashboardPage() {
       try {
         setCurrentPlanId(planId);
         const res = await authClient.request(`/api/plan/${planId}`, {
-          method: "GET"
+          method: "GET",
         });
         const data = res.data.data;
-        useFinancialStore.getState().setPlanMeta({
+
+        // Set identity meta — works for both owners and collaborators
+        setCurrentPlanMeta({
+          id: data.id,
+          name: data.name,
+          type: data.type?.toLowerCase() as "project" | "event" | "plan",
+          status: data.status?.toLowerCase(),
+          isOwner: data.isOwner,
+          role: data.role, // "OWNER" or MemberRole,
+          departmentIds: data.departmentIds,
+        });
+
+        // Load plan data into dashboard store
+        setPlanMeta({
           eventBudget: data.budget,
           departments: data.departments || [],
-          modules: data.modules || [],
+          modules: data.phases || [],
           tasks: data.tasks || [],
           currency: data.currency,
           teamMembers: data.members || [],
           milestones: data.milestones || [],
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to fetch plan:", err);
+        if (err?.response?.status === 404 || err?.response?.status === 403) {
+          setNotFound(true);
+        }
       } finally {
         setLoading(false);
       }
@@ -41,7 +58,21 @@ export default function PlanDashboardPage() {
     init();
   }, [planId]);
 
-  if (loading) return <div className="p-8 text-muted-foreground">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-muted-foreground">Loading plan...</p>
+      </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-destructive">Plan not found or access denied.</p>
+      </div>
+    );
+  }
 
   return <DashboardLayout planId={planId} />;
 }

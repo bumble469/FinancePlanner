@@ -211,7 +211,7 @@ export function PlansPage() {
         </TabsContent>
 
         <TabsContent value="collaborations">
-          {renderPlans(collaborations, "No collaborations yet.", false, "collaboration")}  // add variant
+          {renderPlans(collaborations, "No collaborations yet.", false, "collaboration")}
         </TabsContent>
 
         <TabsContent value="invitations">
