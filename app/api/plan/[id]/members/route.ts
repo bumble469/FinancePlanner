@@ -68,7 +68,6 @@ export async function POST(
         workItemId: planId,
         userId,
         role: role || "MEMBER",
-        status: "PENDING",
         monthlyCost
       },
     });

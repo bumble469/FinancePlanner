@@ -16,6 +16,7 @@ import type {
   Income,
   Milestone
 } from "./types";
+import type { CoAdminPermissions, ManagerPermissions, CoManagerPermissions } from "./permissions";
 
 // Add this interface near the top of the file, before AccountStore
 export interface CurrentPlanMeta {
@@ -26,6 +27,7 @@ export interface CurrentPlanMeta {
   isOwner: boolean;
   role: string; // "OWNER" | MemberRole
   departmentIds: string[] | null;
+  permissions: CoAdminPermissions | ManagerPermissions | CoManagerPermissions | null;
 }
 
 interface AccountStore {

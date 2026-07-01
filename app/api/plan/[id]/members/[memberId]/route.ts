@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 
-type Params = { params: { planId: string; memberId: string } };
+type Params = { params: Promise<{ id: string; memberId: string }> };
 
 // ─── PATCH /api/plan/[planId]/members/[memberId] ───────────────────────────
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { planId, memberId } = await params;
+    const { id: planId, memberId } = await params;
     const body = await req.json();
     const { role, departmentIds, monthlyCost } = body;
 
@@ -86,7 +86,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { planId, memberId } = await params;
+    const { id: planId, memberId } = await params;
 
     const workItem = await prisma.workItem.findFirst({
       where: {
