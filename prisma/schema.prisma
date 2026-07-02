@@ -58,6 +58,11 @@ enum IncomeType {
   REVENUE
 }
 
+enum DocType {
+  NOTE
+  DOCUMENT
+}
+
 enum MilestoneStatus {
   UPCOMING
   IN_PROGRESS  
@@ -92,6 +97,7 @@ model User {
   phaseMemberships    PhaseMember[]
   createdMilestones Milestone[] @relation("MilestoneCreator")
   sentInvitations WorkItemMemberInvitation[]
+  uploadedDocuments   WorkItemDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -183,6 +189,7 @@ model WorkItem {
   expenses Expense[]
   milestones Milestone[]
   permissionAuditLogs PermissionAuditLog[]
+  documents   WorkItemDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -484,4 +491,28 @@ model MilestoneTask {
 
   @@id([milestoneId, taskId])
   @@map("milestone_tasks")
+}
+
+//////////////////////
+// DOCUMENTS & NOTES
+//////////////////////
+
+model WorkItemDocument {
+  id           String   @id @default(uuid())
+  workItemId   String
+  type         DocType
+  title        String
+  content      String?  // for notes
+  fileName     String?  // for documents (future)
+  fileUrl      String?  // for documents (future)
+  fileSize     String?  // for documents (future)
+  uploadedById String
+
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  uploadedBy User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("work_item_documents")
 }

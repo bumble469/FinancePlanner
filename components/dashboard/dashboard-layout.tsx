@@ -8,7 +8,6 @@ import { TeamSection } from "./sections/team_role_section/team-section";
 import { ExpenseSection } from "./sections/rev_exp_section/rev-exp_section";
 import { PlanningSection } from "./sections/planning-section/planning-section";
 import { ReportsSection } from "./sections/reports-section/page";
-import { SimulationSection } from "./sections/simulation-section";
 import { Menu, X, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -27,8 +26,6 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const permissions = getPermissions(currentPlanMeta);
 
-  // currentPlanMeta is set by the page before DashboardLayout renders,
-  // so we just wait for it — no redirect needed.
   if (!currentPlanMeta || currentPlanMeta.id !== planId) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -41,12 +38,12 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
 
   const renderSection = () => {
     switch (activeSection) {
-      case "overview":   return <OverviewSection />;
-      case "reports":    return <ReportsSection />;
-      case "team":       return <TeamSection planId={planId} permissions={permissions} />;
-      case "expenses":   return <ExpenseSection planId={planId} permissions={permissions} />;
-      case "event":      return <PlanningSection permissions={permissions} />;
-      default:           return <OverviewSection />;
+      case "overview": return <OverviewSection />;
+      case "reports": return <ReportsSection planId={planId} />;
+      case "team": return <TeamSection planId={planId} permissions={permissions} />;
+      case "expenses": return <ExpenseSection planId={planId} permissions={permissions} />;
+      case "event": return <PlanningSection permissions={permissions} />;
+      default: return <OverviewSection />;
     }
   };
 

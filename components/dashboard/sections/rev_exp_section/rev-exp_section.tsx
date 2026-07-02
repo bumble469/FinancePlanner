@@ -35,12 +35,12 @@ const CATEGORY_CONFIG: Record<
   ExpenseCategory,
   { label: string; icon: typeof Users; colorClass: string; badgeClass: string }
 > = {
-  SALARY:     { label: "Salary",     icon: Users,      colorClass: "bg-chart-1/15 text-chart-1", badgeClass: "bg-chart-1/10 text-chart-1" },
-  MARKETING:  { label: "Marketing",  icon: Megaphone,  colorClass: "bg-chart-2/15 text-chart-2", badgeClass: "bg-chart-2/10 text-chart-2" },
-  TOOLS:      { label: "Tools",      icon: Wrench,     colorClass: "bg-chart-3/15 text-chart-3", badgeClass: "bg-chart-3/10 text-chart-3" },
-  OPERATIONS: { label: "Operations", icon: Building2,  colorClass: "bg-chart-4/15 text-chart-4", badgeClass: "bg-chart-4/10 text-chart-4" },
-  EVENT:      { label: "Event",      icon: PartyPopper,colorClass: "bg-chart-5/15 text-chart-5", badgeClass: "bg-chart-5/10 text-chart-5" },
-  OTHER:      { label: "Other",      icon: Wallet,     colorClass: "bg-muted text-muted-foreground", badgeClass: "bg-muted text-muted-foreground" },
+  SALARY: { label: "Salary", icon: Users, colorClass: "bg-chart-1/15 text-chart-1", badgeClass: "bg-chart-1/10 text-chart-1" },
+  MARKETING: { label: "Marketing", icon: Megaphone, colorClass: "bg-chart-2/15 text-chart-2", badgeClass: "bg-chart-2/10 text-chart-2" },
+  TOOLS: { label: "Tools", icon: Wrench, colorClass: "bg-chart-3/15 text-chart-3", badgeClass: "bg-chart-3/10 text-chart-3" },
+  OPERATIONS: { label: "Operations", icon: Building2, colorClass: "bg-chart-4/15 text-chart-4", badgeClass: "bg-chart-4/10 text-chart-4" },
+  EVENT: { label: "Event", icon: PartyPopper, colorClass: "bg-chart-5/15 text-chart-5", badgeClass: "bg-chart-5/10 text-chart-5" },
+  OTHER: { label: "Other", icon: Wallet, colorClass: "bg-muted text-muted-foreground", badgeClass: "bg-muted text-muted-foreground" },
 };
 
 const EXPENSE_CATEGORIES = Object.keys(CATEGORY_CONFIG) as ExpenseCategory[];
@@ -57,7 +57,7 @@ function fmt(value: number, currency: string) {
 function getStatus(spent: number, budget: number): FinancialStatus {
   const r = spent / budget;
   if (r <= 0.7) return "healthy";
-  if (r <= 1)   return "warning";
+  if (r <= 1) return "warning";
   return "risk";
 }
 
@@ -557,10 +557,10 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
   const budgetUsedPct = budget > 0 ? Math.round((totalExpenses / budget) * 100) : 0;
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: "income",    label: "Income" },
-    { key: "expenses",  label: "Expenses" },
+    { key: "income", label: "Income" },
+    { key: "expenses", label: "Expenses" },
     { key: "breakdown", label: "Breakdown" },
-    { key: "phases",    label: "Phase P&L" },
+    { key: "phases", label: "Phase P&L" },
   ];
 
   const handleEditIncome = (i: Income) => {
@@ -571,6 +571,28 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
   const handleEditExpense = (e: Expense) => {
     setEditingExpense(e);
     setExpenseDialogOpen(true);
+  };
+
+  const handleDeleteIncome = async (id: string) => {
+    try {
+      await import("@/lib/auth-client").then(({ authClient }) =>
+        authClient.request(`/api/plan/${planId}/income/${id}`, { method: "DELETE" })
+      );
+      removeIncome(id);
+    } catch (err) {
+      console.error("Failed to delete income:", err);
+    }
+  };
+
+  const handleDeleteExpense = async (id: string) => {
+    try {
+      await import("@/lib/auth-client").then(({ authClient }) =>
+        authClient.request(`/api/plan/${planId}/expenses/${id}`, { method: "DELETE" })
+      );
+      removeExpense(id);
+    } catch (err) {
+      console.error("Failed to delete expense:", err);
+    }
   };
 
   return (
@@ -611,8 +633,8 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
             budgetUsedPct <= 70
               ? "text-foreground"
               : budgetUsedPct <= 100
-              ? "text-yellow-600 dark:text-yellow-400"
-              : "text-destructive"
+                ? "text-yellow-600 dark:text-yellow-400"
+                : "text-destructive"
           }
         />
       </div>
@@ -643,7 +665,7 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
             currency={currency}
             onAdd={() => { setEditingIncome(null); setIncomeDialogOpen(true); }}
             onEdit={handleEditIncome}
-            onDelete={removeIncome}
+            onDelete={handleDeleteIncome}
           />
         )}
         {activeTab === "expenses" && (
@@ -652,7 +674,7 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
             currency={currency}
             onAdd={() => { setEditingExpense(null); setExpenseDialogOpen(true); }}
             onEdit={handleEditExpense}
-            onDelete={removeExpense}
+            onDelete={handleDeleteExpense}
           />
         )}
         {activeTab === "breakdown" && (
@@ -663,21 +685,21 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
         )}
       </div>
 
-        <AddIncomeDialog
-          open={incomeDialogOpen}
-          onOpenChange={setIncomeDialogOpen}
-          editing={editingIncome}
-          onClose={() => { setIncomeDialogOpen(false); setEditingIncome(null); }}
-          workItemId={planId}
-        />
+      <AddIncomeDialog
+        open={incomeDialogOpen}
+        onOpenChange={setIncomeDialogOpen}
+        editing={editingIncome}
+        onClose={() => { setIncomeDialogOpen(false); setEditingIncome(null); }}
+        workItemId={planId}
+      />
 
-        <AddExpenseDialog
-          open={expenseDialogOpen}
-          onOpenChange={setExpenseDialogOpen}
-          editing={editingExpense}
-          onClose={() => { setExpenseDialogOpen(false); setEditingExpense(null); }}
-          workItemId={planId}
-        />
+      <AddExpenseDialog
+        open={expenseDialogOpen}
+        onOpenChange={setExpenseDialogOpen}
+        editing={editingExpense}
+        onClose={() => { setExpenseDialogOpen(false); setEditingExpense(null); }}
+        workItemId={planId}
+      />
     </div>
   );
 }

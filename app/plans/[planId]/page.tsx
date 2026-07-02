@@ -31,8 +31,9 @@ export default function PlanDashboardPage() {
           type: data.type?.toLowerCase() as "project" | "event" | "plan",
           status: data.status?.toLowerCase(),
           isOwner: data.isOwner,
-          role: data.role, // "OWNER" or MemberRole,
+          role: data.role, 
           departmentIds: data.departmentIds,
+          permissions: data.permissions ?? null,
         });
 
         // Load plan data into dashboard store

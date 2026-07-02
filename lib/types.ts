@@ -83,6 +83,7 @@ export interface TeamMember {
   user: any;
   userId: string;
   departmentMembers?: DepartmentMember[];
+  permissions?: [];
   monthlyCost: number;
 }
 
