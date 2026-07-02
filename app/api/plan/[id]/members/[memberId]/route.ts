@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 
-type Params = { params: { planId: string; memberId: string } };
+type Params = { params: Promise<{ id: string; memberId: string }> };
 
 // ─── PATCH /api/plan/[planId]/members/[memberId] ───────────────────────────
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -12,19 +12,30 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { planId, memberId } = await params;
+    const { id: planId, memberId } = await params;
     const body = await req.json();
     const { role, departmentIds, monthlyCost } = body;
 
-    const workItem = await prisma.workItem.findFirst({
-      where: {
-        id: planId,
-        account: { userId: user.sub },
-      },
-    });
+    // Check owner first
+    const account = await prisma.account.findUnique({ where: { userId: user.sub } });
+    const ownedWorkItem = account
+      ? await prisma.workItem.findFirst({ where: { id: planId, accountId: account.id } })
+      : null;
 
-    if (!workItem) {
-      return NextResponse.json({ error: "Work item not found" }, { status: 404 });
+    if (!ownedWorkItem) {
+      const actingMember = await prisma.workItemMember.findFirst({
+        where: { workItemId: planId, userId: user.sub },
+        select: { role: true, permissions: true },
+      });
+
+      const canEdit =
+        actingMember?.role === "ADMIN" ||
+        (actingMember?.role === "CO_ADMIN" &&
+          !!(actingMember.permissions as any)?.members?.edit === true);
+
+      if (!canEdit) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     const existing = await prisma.workItemMember.findFirst({
@@ -86,17 +97,28 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { planId, memberId } = await params;
+    const { id: planId, memberId } = await params;
 
-    const workItem = await prisma.workItem.findFirst({
-      where: {
-        id: planId,
-        account: { userId: user.sub },
-      },
-    });
+    // Check owner first
+    const account = await prisma.account.findUnique({ where: { userId: user.sub } });
+    const ownedWorkItem = account
+      ? await prisma.workItem.findFirst({ where: { id: planId, accountId: account.id } })
+      : null;
 
-    if (!workItem) {
-      return NextResponse.json({ error: "Work item not found" }, { status: 404 });
+    if (!ownedWorkItem) {
+      const actingMember = await prisma.workItemMember.findFirst({
+        where: { workItemId: planId, userId: user.sub },
+        select: { role: true, permissions: true },
+      });
+
+      const canDelete =
+        actingMember?.role === "ADMIN" ||
+        (actingMember?.role === "CO_ADMIN" &&
+          !!(actingMember.permissions as any)?.members?.delete === true);
+
+      if (!canDelete) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     const existing = await prisma.workItemMember.findFirst({

@@ -74,8 +74,8 @@ function formatPlan(plan: any) {
 // ─── ACCESS RESOLVER ───────────────────────────────────────────────────────
 
 type AccessResult =
-  | { plan: any; isOwner: true; role: "OWNER"; departmentIds: null }
-  | { plan: any; isOwner: false; role: MemberRole; departmentIds: string[] }
+  | { plan: any; isOwner: true; role: "OWNER"; departmentIds: null; permissions: null }
+  | { plan: any; isOwner: false; role: MemberRole; departmentIds: string[]; permissions: unknown }
   | null;
 
 async function getPlanWithAccess(planId: string, userId: string): Promise<AccessResult> {
@@ -87,7 +87,7 @@ async function getPlanWithAccess(planId: string, userId: string): Promise<Access
       include: planInclude,
     });
     if (plan) {
-      return { plan: formatPlan(plan), isOwner: true, role: "OWNER", departmentIds: null };
+      return { plan: formatPlan(plan), isOwner: true, role: "OWNER", departmentIds: null, permissions: null };
     }
   }
 
@@ -113,6 +113,7 @@ async function getPlanWithAccess(planId: string, userId: string): Promise<Access
     isOwner: false,
     role: membership.role,
     departmentIds,
+    permissions: (membership.permissions as Record<string, unknown> | null) ?? null,
   };
 }
 
@@ -129,16 +130,16 @@ export async function GET(
     const result = await getPlanWithAccess(params.id, user.sub);
     if (!result) return NextResponse.json({ success: false, error: 'Plan not found or access denied' }, { status: 404 });
 
-    const { plan, isOwner, role, departmentIds } = result;
+    const { plan, isOwner, role, departmentIds, permissions } = result;
 
     return NextResponse.json({
       success: true,
       data: {
         ...plan,
-        // these three fields tell the frontend exactly what to render
         isOwner,
         role,
-        departmentIds, // null for owner, string[] for collaborators
+        departmentIds, 
+        permissions,
       },
     }, { status: 200 });
   } catch (error) {
@@ -181,11 +182,11 @@ export async function PATCH(
       await tx.workItem.update({
         where: { id: planId },
         data: {
-          ...(name        ? { name: name.trim() }                                              : {}),
-          ...(status      ? { status }                                                          : {}),
-          ...(budget !== undefined ? { budget }                                                 : {}),
-          ...(description !== undefined ? { description: description?.trim() || null }          : {}),
-          ...(currency    ? { currency }                                                        : {}),
+          ...(name ? { name: name.trim() } : {}),
+          ...(status ? { status } : {}),
+          ...(budget !== undefined ? { budget } : {}),
+          ...(description !== undefined ? { description: description?.trim() || null } : {}),
+          ...(currency ? { currency } : {}),
         },
       });
 
@@ -193,9 +194,9 @@ export async function PATCH(
         await tx.project.update({
           where: { workItemId: planId },
           data: {
-            ...(startDate   !== undefined ? { startDate: startDate ? new Date(startDate) : null }   : {}),
-            ...(endDate     !== undefined ? { endDate: endDate ? new Date(endDate) : null }         : {}),
-            ...(methodology !== undefined ? { methodology: methodology?.trim() || null }             : {}),
+            ...(startDate !== undefined ? { startDate: startDate ? new Date(startDate) : null } : {}),
+            ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
+            ...(methodology !== undefined ? { methodology: methodology?.trim() || null } : {}),
           },
         });
       } else if (existing.type === WorkItemType.EVENT) {
@@ -203,7 +204,7 @@ export async function PATCH(
           where: { workItemId: planId },
           data: {
             ...(eventDate !== undefined ? { eventDate: eventDate ? new Date(eventDate) : null } : {}),
-            ...(venue     !== undefined ? { venue: venue?.trim() || null }                      : {}),
+            ...(venue !== undefined ? { venue: venue?.trim() || null } : {}),
           },
         });
       }

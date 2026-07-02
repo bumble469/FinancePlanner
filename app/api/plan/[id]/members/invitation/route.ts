@@ -50,6 +50,22 @@ export async function POST(
     }
 
     // prevent duplicate pending invite
+    // prevent inviting someone who's already a member
+    const existingMember = await prisma.workItemMember.findFirst({
+      where: {
+        workItemId: planId,
+        userId: invitedUser.id,
+      },
+    });
+
+    if (existingMember) {
+      return NextResponse.json(
+        { error: "User is already a member of this plan" },
+        { status: 409 }
+      );
+    }
+
+    // prevent duplicate pending invite
     const existingInvite =
       await prisma.workItemMemberInvitation.findFirst({
         where: {

@@ -20,6 +20,9 @@ import { authClient } from "@/lib/auth-client";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { useSnackbar } from '@/lib/useSnackbar';
 import type { PlanPermissions } from "@/lib/permissions";
+import { PermissionsDialog } from "./components/permissions-dialog";
+import { canEditPermissionsOf, type CoAdminPermissions, type ManagerPermissions } from "@/lib/permissions";
+import { Shield } from "lucide-react";
 
 function formatCurrency(value: number | undefined, currency: string): string {
   const symbol = getCurrencySymbol(currency);
@@ -34,12 +37,14 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
     departments,
     currentUser,
     setTeamMembers,
+    currentPlanMeta
   } = useFinancialStore();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [deletingMember, setDeletingMember] = useState<TeamMember | null>(null);
   const { show } = useSnackbar();
+  const [permissionsMember, setPermissionsMember] = useState<TeamMember | null>(null);
 
   const totalMonthlyCost = teamMembers.reduce((sum, m) => sum + m.monthlyCost, 0);
 
@@ -107,7 +112,7 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
       console.error(err);
       show(
         err?.response?.data?.error ||
-          (editingMember ? "Failed to update member" : "Failed to send invitation"),
+        (editingMember ? "Failed to update member" : "Failed to send invitation"),
         "error"
       );
     }
@@ -134,7 +139,16 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
   };
 
   // Only show the Actions column if the viewer can do at least one action
-  const showActionsColumn = permissions.canEditMember || permissions.canDeleteMember;
+  const canManageAnyPermissions =
+    currentPlanMeta?.isOwner ||
+    (currentPlanMeta?.role === "ADMIN") ||
+    (currentPlanMeta?.role === "CO_ADMIN" &&
+      !!(currentPlanMeta?.permissions as CoAdminPermissions | null)?.canManagePermissions) ||
+    (currentPlanMeta?.role === "MANAGER" &&
+      !!(currentPlanMeta?.permissions as ManagerPermissions | null)?.canManageCoManagerPermissions);
+
+  const showActionsColumn =
+    permissions.canEditMember || permissions.canDeleteMember || canManageAnyPermissions;
 
   return (
     <div className="space-y-6">
@@ -188,16 +202,16 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
               initialData={
                 editingMember
                   ? {
-                      id: editingMember.userId,
-                      email: editingMember.user?.email ?? "",
-                      name: editingMember.user?.name ?? "",
-                      role: editingMember.role as any,
-                      departmentIds:
-                        editingMember.departmentMembers?.map(
-                          (dm: any) => dm.departmentId
-                        ) ?? [],
-                      monthlyCost: editingMember.monthlyCost,
-                    }
+                    id: editingMember.userId,
+                    email: editingMember.user?.email ?? "",
+                    name: editingMember.user?.name ?? "",
+                    role: editingMember.role as any,
+                    departmentIds:
+                      editingMember.departmentMembers?.map(
+                        (dm: any) => dm.departmentId
+                      ) ?? [],
+                    monthlyCost: editingMember.monthlyCost,
+                  }
                   : null
               }
             />
@@ -215,6 +229,20 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
             />
           )}
         </div>
+        {permissionsMember && (
+            <PermissionsDialog
+              open={!!permissionsMember}
+              onOpenChange={(open) => { if (!open) setPermissionsMember(null); }}
+              member={permissionsMember}
+              planId={planId}
+              onSaved={(updated) => {
+                setTeamMembers(
+                  teamMembers.map((m) => (m.id === updated.id ? { ...m, ...updated } : m))
+                );
+                setPermissionsMember(null);
+              }}
+            />
+          )}
       </div>
 
       {/* Summary Cards */}
@@ -321,19 +349,35 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
                       {showActionsColumn && (
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            {/* Edit — ADMIN only, not self */}
                             {permissions.canEditMember && !isSelf && (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => handleEdit(member)}
-                                className="cursor-pointer"
-                              >
+                              <Button size="icon" variant="ghost" onClick={() => handleEdit(member)} className="cursor-pointer">
                                 <Pencil className="h-4 w-4" />
                               </Button>
                             )}
 
-                            {/* Delete — ADMIN only, not self */}
+                            {/* Permissions button — only shown if current viewer can edit this member's permissions */}
+                            {!isSelf &&
+                              ["CO_ADMIN", "MANAGER", "CO_MANAGER"].includes(member.role) &&
+                              (currentPlanMeta?.isOwner ||
+                                (currentPlanMeta?.role &&
+                                  canEditPermissionsOf(
+                                    {
+                                      role: currentPlanMeta.role as any,
+                                      permissions: currentPlanMeta.permissions as CoAdminPermissions | ManagerPermissions | null,
+                                    },
+                                    member.role as "CO_ADMIN" | "MANAGER" | "CO_MANAGER"
+                                  ))) && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => setPermissionsMember(member)}
+                                  className="cursor-pointer"
+                                  title="Manage permissions"
+                                >
+                                  <Shield className="h-4 w-4" />
+                                </Button>
+                              )}
+
                             {permissions.canDeleteMember && !isSelf && (
                               <Button
                                 size="icon"
