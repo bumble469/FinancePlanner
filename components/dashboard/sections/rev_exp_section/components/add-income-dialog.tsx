@@ -43,8 +43,8 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
 
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof typeof EMPTY, string>>>({});
+  const [loading, setLoading] = useState(false);
 
-  // populate form when editing
   useEffect(() => {
     if (editing) {
       setForm({
@@ -63,20 +63,20 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
 
   function validate() {
     const e: typeof errors = {};
-    if (!form.type)              e.type = "Select a type";
+    if (!form.type) e.type = "Select a type";
     if (!form.amount || isNaN(Number(form.amount)) || Number(form.amount) <= 0)
       e.amount = "Enter a valid amount";
-    if (!form.source.trim())     e.source = "Source is required";
-    if (!form.receivedAt)        e.receivedAt = "Date is required";
+    if (!form.source.trim()) e.source = "Source is required";
+    if (!form.receivedAt) e.receivedAt = "Date is required";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!validate()) return;
+    setLoading(true);
 
     const payload = {
-      workItemId,
       type: form.type as IncomeType,
       amount: Number(form.amount),
       source: form.source.trim(),
@@ -85,13 +85,33 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
       receivedAt: new Date(form.receivedAt).toISOString(),
     };
 
-    if (editing) {
-      updateIncome(editing.id, payload);
-    } else {
-      addIncome({ id: crypto.randomUUID(), ...payload });
-    }
+    try {
+      const { authClient } = await import("@/lib/auth-client");
 
-    onClose();
+      if (editing) {
+        // PATCH /api/plan/[id]/income/[incomeId]
+        const res = await authClient.request(
+          `/api/plan/${workItemId}/income/${editing.id}`,
+          { method: "PATCH", data: payload }
+        );
+        updateIncome(editing.id, res.data.data);
+      } else {
+        // POST /api/plan/[id]/income
+        const res = await authClient.request(
+          `/api/plan/${workItemId}/income`,
+          { method: "POST", data: payload }
+        );
+        addIncome(res.data.data);
+      }
+
+      onClose();
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || "Something went wrong";
+      setErrors((prev) => ({ ...prev, source: msg }));
+      console.error("Income submit error:", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function set<K extends keyof typeof EMPTY>(key: K, val: (typeof EMPTY)[K]) {
@@ -203,11 +223,11 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={loading}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>
-              {editing ? "Update" : "Add"} income
+            <Button onClick={handleSubmit} disabled={loading}>
+              {loading ? "Saving..." : editing ? "Update" : "Add"} income
             </Button>
           </div>
         </div>
