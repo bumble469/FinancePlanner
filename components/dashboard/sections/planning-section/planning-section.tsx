@@ -34,10 +34,14 @@ function MilestoneCard({
   milestone,
   onEdit,
   onDelete,
+  canEdit,
+  canDelete,
 }: {
   milestone: Milestone;
   onEdit: (m: Milestone) => void;
   onDelete: (id: string) => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }) {
   const cfg = STATUS_CONFIG[milestone.status];
   const StatusIcon = cfg.icon;
@@ -57,14 +61,20 @@ function MilestoneCard({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" onClick={() => onEdit(milestone)}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive cursor-pointer" onClick={() => onDelete(milestone.id)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        {(canEdit || canDelete) && (
+          <div className="flex items-center gap-1 shrink-0">
+            {canEdit && (
+              <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" onClick={() => onEdit(milestone)}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {canDelete && (
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive cursor-pointer" onClick={() => onDelete(milestone.id)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Meta row */}
@@ -544,6 +554,8 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
                   milestone={milestone}
                   onEdit={(m) => { setEditingMilestone(m); setMilestoneDialogOpen(true); }}
                   onDelete={(id) => { setDeleteMilestoneId(id); setConfirmMilestoneOpen(true); }}
+                  canEdit={permissions.canEditMilestone}
+                  canDelete={permissions.canDeleteMilestone}
                 />
               ))}
             </div>

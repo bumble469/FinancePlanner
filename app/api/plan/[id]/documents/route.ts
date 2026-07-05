@@ -114,11 +114,22 @@ export async function POST(req: NextRequest, { params }: Params) {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.ms-excel",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+
         "image/jpeg",
         "image/png",
         "image/webp",
+
         "text/plain",
         "text/csv",
+
+        // Videos
+        "video/mp4",
+        "video/webm",
+        "video/quicktime",
+
+        // Archives
+        "application/zip",
+        "application/x-zip-compressed",
       ];
 
       if (!allowed.includes(file.type)) {
@@ -143,7 +154,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       const doc = await prisma.workItemDocument.create({
         data: {
           workItemId: planId,
-          type: "DOCUMENT",
+          type: "FILE",
           title,
           fileName: file.name,
           fileUrl,

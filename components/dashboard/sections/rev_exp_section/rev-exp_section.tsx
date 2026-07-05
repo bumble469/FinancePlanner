@@ -13,8 +13,6 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
-  AlertTriangle,
-  CheckCircle2,
   Users,
   Wrench,
   Megaphone,
