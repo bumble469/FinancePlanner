@@ -31,6 +31,9 @@ export interface PlanPermissions {
   canAddTask: (deptId?: string) => boolean;
   canDeleteTask: boolean;
   canCompleteTask: boolean;
+
+  canAddReport: boolean;
+  canDeleteReport: boolean;
 }
 
 export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
@@ -147,6 +150,18 @@ export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
       (isManager && (!deptId || inScope(deptId))),
     canDeleteTask: isOwnerOrAdmin || isCoAdmin,
     canCompleteTask: true,
+
+    canAddReport:
+      isOwnerOrAdmin ||
+      ca("reports", "create") ||
+      (isManager && managerCan("reports", "MANAGE")) ||
+      (isCoManager && coManagerCan("reports", "MANAGE")),
+
+    canDeleteReport:
+      isOwnerOrAdmin ||
+      ca("reports", "delete") ||
+      (isManager && managerCan("reports", "MANAGE")) ||
+      (isCoManager && coManagerCan("reports", "MANAGE")),
   };
 }
 

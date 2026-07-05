@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useFinancialStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { authClient } from "@/lib/auth-client";
 import { Badge } from "@/components/ui/badge";
 import {
   Plus,
@@ -12,13 +13,12 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
-  AlertTriangle,
-  CheckCircle2,
   Users,
   Wrench,
   Megaphone,
   Building2,
   PartyPopper,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCurrencySymbol } from "@/lib/currency";
@@ -26,8 +26,7 @@ import type { Expense, Income, ExpenseCategory, FinancialStatus } from "@/lib/ty
 import { AddIncomeDialog } from "./components/add-income-dialog";
 import { AddExpenseDialog } from "./components/add-expense-dialog";
 import type { PlanPermissions } from "@/lib/permissions";
-// import { EditExpenseDialog } from "./components/edit-expense-dialog";
-// import { EditIncomeDialog } from "./components/edit-income-dialog";
+import { useSnackbar } from '@/lib/useSnackbar';
 
 // ─── config ────────────────────────────────────────────────────────────────
 
@@ -95,7 +94,7 @@ function SectionHeader({
   return (
     <div className="flex items-center justify-between mb-4">
       <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-      <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={onAdd}>
+      <Button size="sm" variant="outline" className="gap-1.5 h-8 hover:text-gray-600 cursor-pointer" onClick={onAdd}>
         <Plus className="h-3.5 w-3.5" />
         {addLabel}
       </Button>
@@ -111,12 +110,18 @@ function IncomeTab({
   onAdd,
   onEdit,
   onDelete,
+  canAdd,
+  canEdit,
+  canDelete,
 }: {
   income: Income[];
   currency: string;
   onAdd: () => void;
   onEdit: (i: Income) => void;
   onDelete: (id: string) => void;
+  canAdd?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }) {
   const [filter, setFilter] = useState<"ALL" | "INVESTMENT" | "REVENUE">("ALL");
 
@@ -124,7 +129,11 @@ function IncomeTab({
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="Income entries" onAdd={onAdd} addLabel="Add income" />
+      {canAdd ? (
+        <SectionHeader title="Income entries" onAdd={onAdd} addLabel="Add income" />
+      ) : (
+        <h3 className="text-sm font-medium text-muted-foreground mb-4">Income entries</h3>
+      )}
 
       {/* filter chips */}
       <div className="flex gap-2">
@@ -193,12 +202,16 @@ function IncomeTab({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(entry)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(entry.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      {canEdit && (
+                        <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" onClick={() => onEdit(entry)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive cursor-pointer" onClick={() => onDelete(entry.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -219,12 +232,18 @@ function ExpensesTab({
   onAdd,
   onEdit,
   onDelete,
+  canAdd,
+  canEdit,
+  canDelete,
 }: {
   expenses: Expense[];
   currency: string;
   onAdd: () => void;
   onEdit: (e: Expense) => void;
   onDelete: (id: string) => void;
+  canAdd?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }) {
   const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | "ALL">("ALL");
 
@@ -234,7 +253,11 @@ function ExpensesTab({
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="Expense entries" onAdd={onAdd} addLabel="Add expense" />
+      {canAdd ? (
+        <SectionHeader title="Expense entries" onAdd={onAdd} addLabel="Add expense" />
+      ) : (
+        <h3 className="text-sm font-medium text-muted-foreground mb-4">Expense entries</h3>
+      )}
 
       {/* category filter chips */}
       <div className="flex flex-wrap gap-2">
@@ -314,12 +337,16 @@ function ExpensesTab({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(expense)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(expense.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {canEdit && (
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(expense)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(expense.id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -542,7 +569,34 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
     budget,
     removeIncome,
     removeExpense,
+    setIncome,
+    setExpenses,
   } = useFinancialStore();
+
+  const { show } = useSnackbar();
+
+  async function fetchIncome() {
+    try {
+      const res = await authClient.request(`/api/plan/${planId}/income`);
+      setIncome(res.data.data);
+    } catch (err) {
+      console.error("Failed to fetch income:", err);
+    }
+  }
+
+  async function fetchExpense() {
+    try {
+      const res = await authClient.request(`/api/plan/${planId}/expenses`);
+      setExpenses(res.data.data);
+    } catch (err) {
+      console.error("Failed to fetch expense:", err);
+    }
+  }
+
+  useEffect(() => {
+    fetchExpense();
+    fetchIncome();
+  }, [planId]);
 
   const [activeTab, setActiveTab] = useState<Tab>("income");
   const [incomeDialogOpen, setIncomeDialogOpen] = useState(false);
@@ -575,9 +629,7 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
 
   const handleDeleteIncome = async (id: string) => {
     try {
-      await import("@/lib/auth-client").then(({ authClient }) =>
-        authClient.request(`/api/plan/${planId}/income/${id}`, { method: "DELETE" })
-      );
+      await authClient.request(`/api/plan/${planId}/income/${id}`, { method: "DELETE" })
       removeIncome(id);
     } catch (err) {
       console.error("Failed to delete income:", err);
@@ -586,9 +638,7 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
 
   const handleDeleteExpense = async (id: string) => {
     try {
-      await import("@/lib/auth-client").then(({ authClient }) =>
-        authClient.request(`/api/plan/${planId}/expenses/${id}`, { method: "DELETE" })
-      );
+      await authClient.request(`/api/plan/${planId}/expenses/${id}`, { method: "DELETE" })
       removeExpense(id);
     } catch (err) {
       console.error("Failed to delete expense:", err);
@@ -598,11 +648,29 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Revenue & Expenses</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Track income, spending, and profitability across phases and departments
-        </p>
+      {/* Page header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">
+            Revenue & Expenses
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Track income, spending, and profitability across phases and departments
+          </p>
+        </div>
+
+        <Button
+          variant="outline"
+          className="cursor-pointer shrink-0 hover:text-gray-600"
+          onClick={() => {
+            fetchIncome();
+            fetchExpense();
+            show("Revenue & Expenses reloaded", "success");
+          }}
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Reload
+        </Button>
       </div>
 
       {/* Summary metric cards */}
@@ -666,6 +734,9 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
             onAdd={() => { setEditingIncome(null); setIncomeDialogOpen(true); }}
             onEdit={handleEditIncome}
             onDelete={handleDeleteIncome}
+            canAdd={permissions.canAddIncome}
+            canEdit={permissions.canEditIncome}
+            canDelete={permissions.canDeleteIncome}
           />
         )}
         {activeTab === "expenses" && (
@@ -675,6 +746,9 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
             onAdd={() => { setEditingExpense(null); setExpenseDialogOpen(true); }}
             onEdit={handleEditExpense}
             onDelete={handleDeleteExpense}
+            canAdd={permissions.canAddExpense}
+            canEdit={permissions.canEditExpense}
+            canDelete={permissions.canDeleteExpense}
           />
         )}
         {activeTab === "breakdown" && (

@@ -34,10 +34,14 @@ function MilestoneCard({
   milestone,
   onEdit,
   onDelete,
+  canEdit,
+  canDelete,
 }: {
   milestone: Milestone;
   onEdit: (m: Milestone) => void;
   onDelete: (id: string) => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }) {
   const cfg = STATUS_CONFIG[milestone.status];
   const StatusIcon = cfg.icon;
@@ -57,14 +61,20 @@ function MilestoneCard({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" onClick={() => onEdit(milestone)}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive cursor-pointer" onClick={() => onDelete(milestone.id)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        {(canEdit || canDelete) && (
+          <div className="flex items-center gap-1 shrink-0">
+            {canEdit && (
+              <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" onClick={() => onEdit(milestone)}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {canDelete && (
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive cursor-pointer" onClick={() => onDelete(milestone.id)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Meta row */}
@@ -392,15 +402,16 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
 
           {!activeDept && (
             <div className="flex items-center gap-2">
-              <AddDeptDialog
-                onCreate={createDepartment}
-                onUpdate={(id, name, budget) => updateDepartmentHandler(id, { name, budget })}
-                onDeptCreated={fetchDepartments}
-                maxBudget={remainingBudget}
-                editingDept={editingDept}
-                open={deptDialogOpen}
-                setOpen={(v) => { setDeptDialogOpen(v); if (!v) setEditingDept(null); }}
-              />
+              {permissions.canAddDepartment &&
+                <AddDeptDialog
+                  onCreate={createDepartment}
+                  onUpdate={(id, name, budget) => updateDepartmentHandler(id, { name, budget })}
+                  onDeptCreated={fetchDepartments}
+                  maxBudget={remainingBudget}
+                  editingDept={editingDept}
+                  open={deptDialogOpen}
+                  setOpen={(v) => { setDeptDialogOpen(v); if (!v) setEditingDept(null); }}
+                />}
               <ConfirmDeleteDialog
                 open={confirmDeptOpen}
                 type="department"
@@ -434,6 +445,9 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
               onAddModule={(name) => createPhase(activeDept.id, name)}
               onEditModule={(module, name) => updatePhaseHandler(activeDept.id, module.id, { name })}
               onDeleteModule={(id) => { setDeleteModuleId(id); setConfirmModuleOpen(true); }}
+              canAddModule={permissions.canAddPhase(activeDept.id)}
+              canEditModule={permissions.canEditPhase(activeDept.id)}
+              canDeleteModule={permissions.canDeletePhase}
             />
           ) : (
             <DepartmentListView
@@ -443,6 +457,8 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
               onEdit={(d) => { setEditingDept(d); setDeptDialogOpen(true); }}
               onDelete={(id) => { setDeleteDeptId(id); setConfirmDeptOpen(true); }}
               onDrillDown={(d) => setActiveDept(d)}
+              canEdit={permissions.canEditDepartment}
+              canDelete={permissions.canDeleteDepartment}
             />
           )}
         </div>
@@ -461,15 +477,17 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
               {milestones.length}
             </span>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5 h-8 text-xs font-medium hover:text-gray-400 cursor-pointer"
-            onClick={() => { setEditingMilestone(null); setMilestoneDialogOpen(true); }}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add milestone
-          </Button>
+          {permissions.canAddMilestone && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 h-8 text-xs font-medium hover:text-gray-400 cursor-pointer"
+              onClick={() => { setEditingMilestone(null); setMilestoneDialogOpen(true); }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add milestone
+            </Button>
+          )}
         </div>
 
         <div className="p-6 space-y-5">
@@ -516,7 +534,7 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
                     : `No ${STATUS_CONFIG[milestoneFilter as keyof typeof STATUS_CONFIG]?.label.toLowerCase()} milestones`}
                 </p>
               </div>
-              {milestoneFilter === "ALL" && (
+              {milestoneFilter === "ALL" && permissions.canAddMilestone && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -536,6 +554,8 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
                   milestone={milestone}
                   onEdit={(m) => { setEditingMilestone(m); setMilestoneDialogOpen(true); }}
                   onDelete={(id) => { setDeleteMilestoneId(id); setConfirmMilestoneOpen(true); }}
+                  canEdit={permissions.canEditMilestone}
+                  canDelete={permissions.canDeleteMilestone}
                 />
               ))}
             </div>

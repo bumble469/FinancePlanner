@@ -9,7 +9,7 @@ import { authClient } from "@/lib/auth-client";
 export default function PlanDashboardPage() {
   const params = useParams();
   const planId = params.planId as string;
-  const { setCurrentPlanId, setCurrentPlanMeta, setPlanMeta } = useFinancialStore();
+  const { setCurrentPlanId, setCurrentPlanMeta, setPlanMeta, setIncome, setExpenses } = useFinancialStore();
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -46,6 +46,10 @@ export default function PlanDashboardPage() {
           teamMembers: data.members || [],
           milestones: data.milestones || [],
         });
+
+        setIncome((data.income || []).map((i: any) => ({ ...i, amount: Number(i.amount) })));
+        setExpenses((data.expenses || []).map((e: any) => ({ ...e, amount: Number(e.amount) })));
+
       } catch (err: any) {
         console.error("Failed to fetch plan:", err);
         if (err?.response?.status === 404 || err?.response?.status === 403) {

@@ -60,7 +60,7 @@ enum IncomeType {
 
 enum DocType {
   NOTE
-  DOCUMENT
+  FILE
 }
 
 enum MilestoneStatus {
@@ -279,6 +279,7 @@ model Department {
 
   phases Phase[]
   tasks  Task[]
+  documents   WorkItemDocument[]
 
   @@unique([workItemId, name])
   @@map("departments")
@@ -498,18 +499,21 @@ model MilestoneTask {
 //////////////////////
 
 model WorkItemDocument {
-  id           String   @id @default(uuid())
+  id           String       @id @default(uuid())
   workItemId   String
+  departmentId String?      // optional — for dept-scoped visibility
   type         DocType
   title        String
-  content      String?  // for notes
-  fileName     String?  // for documents (future)
-  fileUrl      String?  // for documents (future)
-  fileSize     String?  // for documents (future)
-  uploadedById String
+  content      String?      // notes only
+  fileUrl      String?      // Vercel Blob URL — files only
+  fileName     String?
+  fileSize     String?
+  mimeType     String?
+  uploadedById String?
 
-  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  uploadedBy User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  workItem     WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  uploadedBy   User?       @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

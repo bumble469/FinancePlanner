@@ -7,11 +7,15 @@ export function ModuleListView({
   onEdit,
   onDelete,
   onDrillDown,
+  canEdit,
+  canDelete,
 }: {
   modules: Module[];
   onEdit: (module: Module) => void;
   onDelete: (id: string) => void;
   onDrillDown: (module: Module) => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }) {
   if (modules.length === 0) {
     return (
@@ -40,14 +44,30 @@ export function ModuleListView({
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-              <Button size="icon" variant="ghost" onClick={() => onEdit(m)} className="cursor-pointer">
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-              <Button size="icon" variant="ghost" onClick={() => onDelete(m.id)} className="cursor-pointer">
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+            {(canEdit || canDelete) && (
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                {canEdit && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => onEdit(m)}
+                    className="cursor-pointer"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {canDelete && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => onDelete(m.id)}
+                    className="cursor-pointer"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            )}
 
             <Button
               size="sm"

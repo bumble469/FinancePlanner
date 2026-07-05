@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Expense, ExpenseCategory } from "@/lib/types";
+import { authClient } from "@/lib/auth-client";
 
 interface Props {
   open: boolean;
@@ -54,6 +55,7 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
 
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof typeof EMPTY, string>>>({});
+  const [loading, setLoading] = useState(false);
 
   // populate form when editing
   useEffect(() => {
@@ -84,9 +86,9 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
     return Object.keys(e).length === 0;
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!validate()) return;
-
+    setLoading(true);
     const payload = {
       workItemId,
       category: form.category as ExpenseCategory,
@@ -97,13 +99,28 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
       occurredAt: new Date(form.occurredAt).toISOString(),
     };
 
-    if (editing) {
-      updateExpense(editing.id, payload);
-    } else {
-      addExpense({ id: crypto.randomUUID(), ...payload });
+    try {
+      if (editing) {
+        const res = await authClient.request(
+          `/api/plan/${workItemId}/expenses/${editing.id}`,
+          {method: "PATCH", data: payload}
+        );
+        updateExpense(editing.id, res.data.data);
+      } else {
+        const res = await authClient.request(
+          `/api/plan/${workItemId}/expenses`,
+          {method: "POST", data: payload}
+        )
+        addExpense(res.data.data);
+      }
+      onClose();
+    } catch (err: any){
+       const msg = err?.response?.data?.error || "Something went wrong";
+        setErrors((prev) => ({ ...prev, source: msg }));
+        console.error("Expense submit error:", err);
+    } finally {
+      setLoading(false);
     }
-
-    onClose();
   }
 
   function set<K extends keyof typeof EMPTY>(key: K, val: (typeof EMPTY)[K]) {
@@ -237,11 +254,11 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={loading}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>
-              {editing ? "Update" : "Add"} expense
+            <Button onClick={handleSubmit} disabled={loading}>
+              {loading ? "Saving..." : editing ? "Update" : "Add"} expense
             </Button>
           </div>
         </div>
