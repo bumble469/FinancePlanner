@@ -32,6 +32,7 @@ interface Props {
 const EMPTY = {
   type: "" as IncomeType | "",
   amount: "",
+  receivedAmount: "",
   source: "",
   description: "",
   phaseId: "",
@@ -50,6 +51,7 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
       setForm({
         type: editing.type,
         amount: editing.amount.toString(),
+        receivedAmount: editing.receivedAmount?.toString() ?? "0",
         source: editing.source ?? "",
         description: editing.description ?? "",
         phaseId: editing.phaseId ?? "",
@@ -68,6 +70,10 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
     if (!form.type) e.type = "Select a type";
     if (!form.amount || isNaN(Number(form.amount)) || Number(form.amount) <= 0)
       e.amount = "Enter a valid amount";
+    if (form.receivedAmount && (isNaN(Number(form.receivedAmount)) || Number(form.receivedAmount) < 0))
+      e.receivedAmount = "Enter a valid received amount";
+    if (form.receivedAmount && Number(form.receivedAmount) > Number(form.amount))
+      e.receivedAmount = "Cannot exceed the total amount";
     if (!form.source.trim()) e.source = "Source is required";
     if (!form.receivedAt) e.receivedAt = "Date is required";
     setErrors(e);
@@ -81,6 +87,7 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
     const payload = {
       type: form.type as IncomeType,
       amount: Number(form.amount),
+      receivedAmount: form.receivedAmount ? Number(form.receivedAmount) : 0,
       source: form.source.trim(),
       description: form.description.trim() || undefined,
       phaseId: form.phaseId || undefined,
@@ -142,6 +149,7 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
                 <SelectItem value="SPONSORSHIP">Sponsorship</SelectItem>
                 <SelectItem value="DONATION">Donation</SelectItem>
                 <SelectItem value="GRANT">Grant</SelectItem>
+                <SelectItem value="CLIENT_PAYMENT">Client Payment</SelectItem>
                 <SelectItem value="MERCHANDISE">Merchandise</SelectItem>
                 <SelectItem value="REFUND">Refund</SelectItem>
                 <SelectItem value="OTHER">Other</SelectItem>
@@ -175,6 +183,23 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
               className={errors.amount ? "border-destructive" : ""}
             />
             {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
+          </div>
+
+          {/* Received amount (optional) — drives Expected/Partial/Received status */}
+          <div className="space-y-1.5">
+            <Label>
+              Received amount{" "}
+              <span className="text-xs text-muted-foreground font-normal">(optional — leave 0 if still expected)</span>
+            </Label>
+            <Input
+              type="number"
+              placeholder="0"
+              min={0}
+              value={form.receivedAmount}
+              onChange={(e) => set("receivedAmount", e.target.value)}
+              className={errors.receivedAmount ? "border-destructive" : ""}
+            />
+            {errors.receivedAmount && <p className="text-xs text-destructive">{errors.receivedAmount}</p>}
           </div>
 
           {/* Module (optional) */}

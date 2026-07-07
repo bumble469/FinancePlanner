@@ -7,6 +7,9 @@ let socket: Socket | null = null;
 export function getSocket(): Socket {
   if (!socket) {
     socket = io({ path: "/socket.io", withCredentials: true });
+    socket.on("disconnect", (reason) => {
+      console.log("[socket] disconnected:", reason);
+    });
   }
   return socket;
 }

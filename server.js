@@ -1,3 +1,6 @@
+const { loadEnvConfig } = require("@next/env");
+loadEnvConfig(process.cwd());
+
 const { createServer } = require("http");
 const { Server } = require("socket.io");
 const next = require("next");
@@ -33,12 +36,14 @@ app.prepare().then(() => {
       if (typeof payload.sub !== "string") return next(new Error("Unauthorized"));
       socket.data.userId = payload.sub;
       next();
-    } catch {
+    } catch (err) {
+      console.error("[socket auth] verify failed:", err.message);
       next(new Error("Unauthorized"));
     }
   });
 
   io.on("connection", (socket) => {
+    console.log("[socket] user connected:", socket.data.userId);
     socket.join(`user:${socket.data.userId}`);
   });
 

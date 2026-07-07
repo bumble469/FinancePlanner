@@ -122,6 +122,7 @@ export type IncomeType =
   | "GRANT"
   | "MERCHANDISE"
   | "REFUND"
+  | "CLIENT_PAYMENT"
   | "OTHER";
 
 export interface Expense {
