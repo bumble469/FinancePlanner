@@ -34,7 +34,6 @@ export interface Plan {
   budget: number;
   spent: number;
   createdAt: Date;
-  // Plan-specific data
   teamMembers: TeamMember[];
   project: any;
   event: any;
@@ -52,15 +51,12 @@ export interface Plan {
 
 export type Mode = "project" | "event";
 
-// ================= DEPARTMENTS =================
-
 export type Department = {
   id: string;
   name: string;
   budget: number;
 };
 
-// ================= MODULES (PHASES) =================
 export interface Module {
   id: string;
   name: string;
@@ -87,18 +83,26 @@ export interface TeamMember {
   monthlyCost: number;
 }
 
-export interface Expense {
-  id: string;
-  workItemId?: string;
-  phaseId?: string;
-  phaseName?: string;
-  departmentId?: string;
-  departmentName?: string;
-  category: ExpenseCategory;
-  amount: number;
-  description?: string;
-  occurredAt: string;
-}
+export type ExpenseStatus =
+  | "DRAFT"
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "REJECTED"
+  | "PARTIALLY_PAID"
+  | "PAID"
+  | "CANCELLED";
+
+export type PaymentStatus =
+  | "PENDING"
+  | "PARTIAL"
+  | "COMPLETED"
+  | "OVERDUE";
+
+export type IncomeStatus =
+  | "EXPECTED"
+  | "PARTIAL"
+  | "RECEIVED"
+  | "CANCELLED";
 
 export type ExpenseCategory =
   | "SALARY"
@@ -110,18 +114,80 @@ export type ExpenseCategory =
 
 export type FinancialStatus = "healthy" | "warning" | "risk";
 
-export type IncomeType = "INVESTMENT" | "REVENUE";
+export type IncomeType =
+  | "REVENUE"
+  | "INVESTMENT"
+  | "SPONSORSHIP"
+  | "DONATION"
+  | "GRANT"
+  | "MERCHANDISE"
+  | "REFUND"
+  | "OTHER";
+
+export interface Expense {
+  id: string;
+
+  workItemId: string;
+
+  phaseId?: string;
+  phaseName?: string;
+
+  departmentId?: string;
+  departmentName?: string;
+
+  category: ExpenseCategory;
+
+  amount: number;
+  paidAmount: number;
+
+  status: ExpenseStatus;
+  paymentStatus: PaymentStatus;
+
+  requestedById?: string;
+  requestedByName?: string;
+  approvedById?: string;
+  approvedByName?: string;
+  rejectedById?: string;
+  rejectedByName?: string;
+
+  approvedAt?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+
+  description?: string;
+
+  occurredAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface Income {
   id: string;
+
   workItemId: string;
+
   phaseId?: string;
-  phaseName?: string;      
+  phaseName?: string;
+
+  departmentId?: string;
+  departmentName?: string;
+
   type: IncomeType;
+
   amount: number;
+  receivedAmount: number;
+
+  status: IncomeStatus;
+  paymentStatus: PaymentStatus;
+
   source?: string;
   description?: string;
-  receivedAt: string;       
+
+  createdById?: string;
+  createdByName?: string;
+
+  receivedAt?: string;
+  createdAt: string;
 }
 
 export interface EventData {
@@ -174,6 +240,7 @@ export interface MilestoneFormData {
   phaseId?: string;
   taskIds: string[];
 }
+
 // ================= TASKS =================
 
 export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";

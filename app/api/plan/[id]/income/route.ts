@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { deriveIncomeStatus } from "@/lib/financial-status";
 
 type Params = { params: Promise<{ id: string }> };
+
+const VALID_INCOME_TYPES = [
+  "REVENUE",
+  "INVESTMENT",
+  "SPONSORSHIP",
+  "DONATION",
+  "GRANT",
+  "MERCHANDISE",
+  "REFUND",
+  "OTHER",
+];
 
 async function resolveAccess(planId: string, userId: string) {
   const account = await prisma.account.findUnique({ where: { userId } });
@@ -10,7 +22,7 @@ async function resolveAccess(planId: string, userId: string) {
     ? !!(await prisma.workItem.findFirst({ where: { id: planId, accountId: account.id } }))
     : false;
 
-  if (isOwner) return { isOwner: true, role: "OWNER" as const, permissions: null, deptIds: [] as string[] };
+  if (isOwner) return { isOwner: true, role: "OWNER" as const, permissions: null, deptIds: [] as string[], memberId: null as string | null };
 
   const member = await prisma.workItemMember.findFirst({
     where: { workItemId: planId, userId },
@@ -24,6 +36,7 @@ async function resolveAccess(planId: string, userId: string) {
     role: member.role,
     permissions: member.permissions as any,
     deptIds: member.departmentMembers.map((d) => d.departmentId),
+    memberId: member.id as string | null,
   };
 }
 
@@ -34,6 +47,18 @@ function canMutateIncome(access: NonNullable<Awaited<ReturnType<typeof resolveAc
   if (access.role === "MANAGER") return access.permissions?.revenue === "MANAGE";
   if (access.role === "CO_MANAGER") return access.permissions?.revenue === "MANAGE";
   return false;
+}
+
+function formatIncome(i: any) {
+  return {
+    ...i,
+    amount: Number(i.amount),
+    receivedAmount: Number(i.receivedAmount),
+    phaseName: i.phase?.name ?? null,
+    departmentName: i.department?.name ?? null,
+    createdByName: i.createdBy?.user?.name ?? null,
+    receivedAt: i.receivedAt ? i.receivedAt.toISOString() : null,
+  };
 }
 
 // GET /api/plan/[id]/income — all members can view income
@@ -49,18 +74,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
     const income = await prisma.income.findMany({
       where: { workItemId: planId },
-      include: { phase: { select: { id: true, name: true } } },
-      orderBy: { receivedAt: "desc" },
+      include: {
+        phase: { select: { id: true, name: true } },
+        department: { select: { id: true, name: true } },
+        createdBy: { include: { user: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: "desc" },
     });
 
-    const formatted = income.map((i) => ({
-      ...i,
-      amount: Number(i.amount),
-      phaseName: i.phase?.name ?? null,
-      receivedAt: i.receivedAt.toISOString(),
-    }));
-
-    return NextResponse.json({ success: true, data: formatted });
+    return NextResponse.json({ success: true, data: income.map(formatIncome) });
   } catch (err) {
     console.error("[GET /income]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -83,9 +105,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     const body = await req.json();
-    const { type, amount, source, description, phaseId, receivedAt } = body;
+    const { type, amount, source, description, phaseId, departmentId, receivedAt, receivedAmount, cancelled } = body;
 
-    if (!type || !["INVESTMENT", "REVENUE"].includes(type)) {
+    if (!type || !VALID_INCOME_TYPES.includes(type)) {
       return NextResponse.json({ error: "Invalid income type" }, { status: 400 });
     }
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
@@ -95,34 +117,52 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Source is required" }, { status: 400 });
     }
 
-    // validate phaseId belongs to this plan
+    const numAmount = Number(amount);
+    const numReceived = receivedAmount !== undefined ? Math.max(0, Number(receivedAmount)) : 0;
+    if (isNaN(numReceived)) {
+      return NextResponse.json({ error: "Invalid received amount" }, { status: 400 });
+    }
+    if (numReceived > numAmount) {
+      return NextResponse.json({ error: "Received amount cannot exceed the expected amount" }, { status: 400 });
+    }
+
+    // validate phaseId / departmentId belong to this plan
     if (phaseId) {
       const phase = await prisma.phase.findFirst({ where: { id: phaseId, workItemId: planId } });
       if (!phase) return NextResponse.json({ error: "Invalid phase" }, { status: 400 });
     }
+    if (departmentId) {
+      const dept = await prisma.department.findFirst({ where: { id: departmentId, workItemId: planId } });
+      if (!dept) return NextResponse.json({ error: "Invalid department" }, { status: 400 });
+    }
+
+    const derived = cancelled
+      ? { status: "CANCELLED" as const, paymentStatus: "PENDING" as const }
+      : deriveIncomeStatus(numAmount, numReceived);
 
     const income = await prisma.income.create({
       data: {
         workItemId: planId,
         type,
-        amount: Number(amount),
+        amount: numAmount,
+        receivedAmount: numReceived,
+        status: derived.status,
+        paymentStatus: derived.paymentStatus,
         source: source.trim(),
         description: description?.trim() || null,
         phaseId: phaseId || null,
+        departmentId: departmentId || null,
+        createdById: access.memberId,
         receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
       },
-      include: { phase: { select: { id: true, name: true } } },
+      include: {
+        phase: { select: { id: true, name: true } },
+        department: { select: { id: true, name: true } },
+        createdBy: { include: { user: { select: { name: true } } } },
+      },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...income,
-        amount: Number(income.amount),
-        phaseName: income.phase?.name ?? null,
-        receivedAt: income.receivedAt.toISOString(),
-      },
-    }, { status: 201 });
+    return NextResponse.json({ success: true, data: formatIncome(income) }, { status: 201 });
   } catch (err) {
     console.error("[POST /income]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

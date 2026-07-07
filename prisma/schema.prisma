@@ -54,8 +54,43 @@ enum MembershipStatus {
 }
 
 enum IncomeType {
-  INVESTMENT
   REVENUE
+  INVESTMENT
+  SPONSORSHIP
+  DONATION
+  GRANT
+  MERCHANDISE
+  REFUND
+  OTHER
+}
+
+enum IncomeStatus {
+    EXPECTED
+    RECEIVED
+    PARTIAL
+    CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  COMPLETED
+  OVERDUE
+}
+
+enum ExpenseStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum ApprovalAction {
+  APPROVED
+  REJECTED
 }
 
 enum DocType {
@@ -207,7 +242,7 @@ model WorkItemMember {
   userId      String
   role        MemberRole @default(MEMBER)
   monthlyCost Decimal?   @db.Decimal(12, 2)
-  permissions Json?   
+  permissions Json?
 
   workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -218,6 +253,12 @@ model WorkItemMember {
 
   permissionChangesMade     PermissionAuditLog[] @relation("ChangedBy")
   permissionChangesReceived PermissionAuditLog[] @relation("TargetMember")
+
+  createdIncome Income[] @relation("IncomeCreator")
+
+  requestedExpenses Expense[] @relation("ExpenseRequester")
+  approvedExpenses  Expense[] @relation("ExpenseApprover")
+  rejectedExpenses  Expense[] @relation("ExpenseRejector")
 
   joinedAt DateTime @default(now())
 
@@ -382,44 +423,79 @@ model PhaseMember {
 
 // merged Investment + Revenue into a single Income model
 model Income {
-  id          String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  workItemId  String
-  phaseId     String?
+  workItemId   String
+  phaseId      String?
   departmentId String?
 
-  type        IncomeType
-  amount      Decimal  @db.Decimal(12,2)
-  description String?
+  type IncomeType
+
+  amount Decimal? @db.Decimal(12,2)
+  receivedAmount Decimal @default(0) @db.Decimal(12,2)
+
+  status        IncomeStatus  @default(EXPECTED)
+  paymentStatus PaymentStatus @default(PENDING)
+
   source      String?
-  receivedAt  DateTime @default(now())
+  description String?
+
+  receivedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  createdById String?
 
   workItem   WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   phase      Phase?      @relation(fields: [phaseId], references: [id], onDelete: SetNull)
   department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
+  createdBy WorkItemMember? @relation("IncomeCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([workItemId])
   @@map("income")
 }
 
 model Expense {
-  id            String          @id @default(uuid())
+  id           String @id @default(uuid())
 
-  workItemId    String
-  phaseId       String?
-  departmentId  String?
+  workItemId   String
+  phaseId      String?
+  departmentId String?
 
-  category      ExpenseCategory
-  description   String?
-  amount        Decimal         @db.Decimal(12,2)
+  category    ExpenseCategory
+  description String?
 
-  loggedById    String?
-  occurredAt    DateTime        @default(now())
-  createdAt     DateTime        @default(now())
+  amount     Decimal @db.Decimal(12,2)
+  paidAmount Decimal @default(0) @db.Decimal(12,2)
+
+  status        ExpenseStatus @default(PENDING_APPROVAL)
+  paymentStatus PaymentStatus @default(PENDING)
+
+  requestedById String?
+  approvedById  String?
+  rejectedById  String?
+
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+
+  occurredAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime? @updatedAt
 
   workItem   WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   phase      Phase?      @relation(fields: [phaseId], references: [id], onDelete: SetNull)
   department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
+  requestedBy WorkItemMember? @relation("ExpenseRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  approvedBy  WorkItemMember? @relation("ExpenseApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  rejectedBy  WorkItemMember? @relation("ExpenseRejector", fields: [rejectedById], references: [id], onDelete: SetNull)
+
+  @@index([workItemId])
+  @@index([phaseId])
+  @@index([departmentId])
+  @@index([status])
+  @@index([paymentStatus])
   @@map("expenses")
 }
 

@@ -24,7 +24,6 @@ export default function PlanDashboardPage() {
         });
         const data = res.data.data;
 
-        // Set identity meta — works for both owners and collaborators
         setCurrentPlanMeta({
           id: data.id,
           name: data.name,
@@ -32,11 +31,11 @@ export default function PlanDashboardPage() {
           status: data.status?.toLowerCase(),
           isOwner: data.isOwner,
           role: data.role, 
+          memberId: data.memberId ?? null,
           departmentIds: data.departmentIds,
           permissions: data.permissions ?? null,
         });
 
-        // Load plan data into dashboard store
         setPlanMeta({
           eventBudget: data.budget,
           departments: data.departments || [],

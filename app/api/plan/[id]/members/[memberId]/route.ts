@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import {
+  DEFAULT_CO_ADMIN_PERMISSIONS,
+  DEFAULT_MANAGER_PERMISSIONS,
+  DEFAULT_CO_MANAGER_PERMISSIONS,
+} from "@/lib/permissions";
+import { emitToUser } from "@/lib/socket-server";
 
 type Params = { params: Promise<{ id: string; memberId: string }> };
 
@@ -47,10 +53,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
 
     const updated = await prisma.$transaction(async (tx) => {
+      let newPermissions = existing.permissions;
+      if (role && role !== existing.role) {
+        if (role === "CO_ADMIN") newPermissions = DEFAULT_CO_ADMIN_PERMISSIONS as any;
+        else if (role === "MANAGER") newPermissions = DEFAULT_MANAGER_PERMISSIONS as any;
+        else if (role === "CO_MANAGER") newPermissions = DEFAULT_CO_MANAGER_PERMISSIONS as any;
+        else newPermissions = null;
+      }
+
       await tx.workItemMember.update({
         where: { id: memberId },
-        data: { role, monthlyCost },
+        data: { role, monthlyCost, permissions: newPermissions as any },
       });
+
 
       if (Array.isArray(departmentIds)) {
         await tx.departmentMember.deleteMany({
@@ -81,6 +96,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         },
       });
     });
+    if (updated?.userId) {
+      emitToUser(updated.userId, "plan:member-updated", {
+        planId,
+        memberId: updated.id,
+        role: updated.role,
+        permissions: updated.permissions,
+        departmentIds: updated.departmentMembers.map((d) => d.departmentId),
+      });
+    }
 
     return NextResponse.json(updated);
   } catch (err) {

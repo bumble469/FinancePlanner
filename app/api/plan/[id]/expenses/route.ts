@@ -4,13 +4,15 @@ import { getAuthUser } from "@/lib/auth";
 
 type Params = { params: Promise<{ id: string }> };
 
+const VALID_CATEGORIES = ["SALARY", "MARKETING", "TOOLS", "OPERATIONS", "EVENT", "OTHER"];
+
 async function resolveAccess(planId: string, userId: string) {
   const account = await prisma.account.findUnique({ where: { userId } });
   const isOwner = account
     ? !!(await prisma.workItem.findFirst({ where: { id: planId, accountId: account.id } }))
     : false;
 
-  if (isOwner) return { isOwner: true, role: "OWNER" as const, permissions: null, deptIds: [] as string[] };
+  if (isOwner) return { isOwner: true, role: "OWNER" as const, permissions: null, deptIds: [] as string[], memberId: null as string | null };
 
   const member = await prisma.workItemMember.findFirst({
     where: { workItemId: planId, userId },
@@ -24,24 +26,38 @@ async function resolveAccess(planId: string, userId: string) {
     role: member.role,
     permissions: member.permissions as any,
     deptIds: member.departmentMembers.map((d) => d.departmentId),
+    memberId: member.id as string | null,
   };
 }
 
-function canCreateExpense(access: NonNullable<Awaited<ReturnType<typeof resolveAccess>>>, deptId?: string): boolean {
-  if (access.isOwner || access.role === "ADMIN") return true;
-  if (access.role === "MEMBER") return false;
-  if (access.role === "CO_ADMIN") return !!access.permissions?.expenses?.create;
-  if (access.role === "MANAGER" || access.role === "CO_MANAGER") {
-    if (access.permissions?.expenses !== "MANAGE") return false;
-    if (deptId && !access.deptIds.includes(deptId)) return false;
-    return true;
-  }
-  return false;
+function formatExpense(e: any) {
+  return {
+    ...e,
+    amount: Number(e.amount),
+    paidAmount: Number(e.paidAmount),
+    phaseName: e.phase?.name ?? null,
+    departmentName: e.department?.name ?? null,
+    requestedByName: e.requestedBy?.user?.name ?? null,
+    approvedByName: e.approvedBy?.user?.name ?? null,
+    rejectedByName: e.rejectedBy?.user?.name ?? null,
+    approvedAt: e.approvedAt ? e.approvedAt.toISOString() : null,
+    rejectedAt: e.rejectedAt ? e.rejectedAt.toISOString() : null,
+    occurredAt: e.occurredAt ? e.occurredAt.toISOString() : null,
+    updatedAt: e.updatedAt ? e.updatedAt.toISOString() : null,
+  };
 }
+
+const EXPENSE_INCLUDE = {
+  phase: { select: { id: true, name: true } },
+  department: { select: { id: true, name: true } },
+  requestedBy: { include: { user: { select: { name: true } } } },
+  approvedBy: { include: { user: { select: { name: true } } } },
+  rejectedBy: { include: { user: { select: { name: true } } } },
+};
 
 // GET /api/plan/[id]/expenses
 // OWNER/ADMIN/CO_ADMIN → all expenses
-// MANAGER/CO_MANAGER/MEMBER → only their dept's expenses
+// MANAGER/CO_MANAGER/MEMBER → their dept's expenses, plus anything they personally requested
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const user = await getAuthUser();
@@ -56,53 +72,21 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
     const expenses = await prisma.expense.findMany({
       where: {
-        phase: { workItemId: planId },
-        ...(isRestricted && access.deptIds.length > 0
-          ? { departmentId: { in: access.deptIds } }
+        workItemId: planId,
+        ...(isRestricted
+          ? {
+              OR: [
+                ...(access.deptIds.length > 0 ? [{ departmentId: { in: access.deptIds } }] : []),
+                { requestedById: access.memberId ?? "__none__" },
+              ],
+            }
           : {}),
       },
-      include: {
-        phase: { select: { id: true, name: true } },
-        department: { select: { id: true, name: true } },
-      },
-      orderBy: { occurredAt: "desc" },
+      include: EXPENSE_INCLUDE,
+      orderBy: { createdAt: "desc" },
     });
 
-    // Also fetch expenses not linked to a phase (direct workItem expenses via departmentId)
-    // The Expense model links via phaseId OR departmentId, not workItemId directly
-    // So we need a second query for dept-only expenses with no phase
-    const deptOnlyExpenses = await prisma.expense.findMany({
-      where: {
-        phaseId: null,
-        departmentId: isRestricted && access.deptIds.length > 0
-          ? { in: access.deptIds }
-          : { not: undefined },
-        department: { workItemId: planId },
-      },
-      include: {
-        phase: { select: { id: true, name: true } },
-        department: { select: { id: true, name: true } },
-      },
-      orderBy: { occurredAt: "desc" },
-    });
-
-    // merge and dedupe
-    const seen = new Set<string>();
-    const all = [...expenses, ...deptOnlyExpenses].filter((e) => {
-      if (seen.has(e.id)) return false;
-      seen.add(e.id);
-      return true;
-    });
-
-    const formatted = all.map((e) => ({
-      ...e,
-      amount: Number(e.amount),
-      phaseName: e.phase?.name ?? null,
-      departmentName: e.department?.name ?? null,
-      occurredAt: e.occurredAt.toISOString(),
-    }));
-
-    return NextResponse.json({ success: true, data: formatted });
+    return NextResponse.json({ success: true, data: expenses.map(formatExpense) });
   } catch (err) {
     console.error("[GET /expenses]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -110,6 +94,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 // POST /api/plan/[id]/expenses
+// Any member of the plan can submit an expense request — it always starts
+// life as PENDING_APPROVAL regardless of who creates it.
 export async function POST(req: NextRequest, { params }: Params) {
   try {
     const user = await getAuthUser();
@@ -123,11 +109,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const body = await req.json();
     const { category, amount, description, phaseId, departmentId, occurredAt } = body;
 
-    if (!canCreateExpense(access, departmentId)) {
-      return NextResponse.json({ error: "You don't have permission to add expenses" }, { status: 403 });
-    }
-
-    const validCategories = ["SALARY", "MARKETING", "TOOLS", "OPERATIONS", "EVENT", "OTHER"];
+    const validCategories = VALID_CATEGORIES;
     if (!category || !validCategories.includes(category)) {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 });
     }
@@ -152,25 +134,15 @@ export async function POST(req: NextRequest, { params }: Params) {
         description: description?.trim() || null,
         phaseId: phaseId || null,
         departmentId: departmentId || null,
-        loggedById: user.sub,
+        requestedById: access.memberId,
+        status: "PENDING_APPROVAL",
+        paymentStatus: "PENDING",
         occurredAt: occurredAt ? new Date(occurredAt) : new Date(),
       },
-      include: {
-        phase: { select: { id: true, name: true } },
-        department: { select: { id: true, name: true } },
-      },
+      include: EXPENSE_INCLUDE,
     });
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...expense,
-        amount: Number(expense.amount),
-        phaseName: expense.phase?.name ?? null,
-        departmentName: expense.department?.name ?? null,
-        occurredAt: expense.occurredAt.toISOString(),
-      },
-    }, { status: 201 });
+    return NextResponse.json({ success: true, data: formatExpense(expense) }, { status: 201 });
   } catch (err) {
     console.error("[POST /expenses]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

@@ -400,8 +400,13 @@ function ReportPreview({ period, type }: { period: ReportPeriod; type: ReportTyp
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   }
 
-  const filteredIncome = income.filter((i) => inPeriod(i.receivedAt));
-  const filteredExpenses = expenses.filter((e) => inPeriod(e.occurredAt));
+  const filteredIncome = income.filter(
+    (i) => i.receivedAt && inPeriod(i.receivedAt)
+  );
+
+  const filteredExpenses = expenses.filter(
+    (e) => e.occurredAt && inPeriod(e.occurredAt)
+  );
   const totalIncome = filteredIncome.reduce((s, i) => s + i.amount, 0);
   const totalExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
   const netPL = totalIncome - totalExpenses;

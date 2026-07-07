@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { OverviewSection } from "./sections/overview-section";
 import { TeamSection } from "./sections/team_role_section/team-section";
-import { ExpenseSection } from "./sections/rev_exp_section/rev-exp_section";
+import { RevenueExpenseSection } from "./sections/rev_exp_section/rev-exp_section";
 import { PlanningSection } from "./sections/planning-section/planning-section";
 import { ReportsSection } from "./sections/reports-section/page";
 import { Menu, X, ArrowLeft } from "lucide-react";
@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useFinancialStore } from "@/lib/store";
 import type { Plan } from "@/lib/types";
 import { getPermissions } from "@/lib/permissions";
+import { useRealtimePermissions } from "@/hooks/use-realtime-permissions";
 
 interface DashboardLayoutProps {
   planId: string;
@@ -25,6 +26,7 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
   const [activeSection, setActiveSection] = useState("overview");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const permissions = getPermissions(currentPlanMeta);
+  useRealtimePermissions(planId);
 
   if (!currentPlanMeta || currentPlanMeta.id !== planId) {
     return (
@@ -41,7 +43,7 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
       case "overview": return <OverviewSection />;
       case "reports": return <ReportsSection planId={planId} />;
       case "team": return <TeamSection planId={planId} permissions={permissions} />;
-      case "expenses": return <ExpenseSection planId={planId} permissions={permissions} />;
+      case "expenses": return <RevenueExpenseSection planId={planId} permissions={permissions} />;
       case "event": return <PlanningSection permissions={permissions} />;
       default: return <OverviewSection />;
     }

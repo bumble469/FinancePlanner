@@ -30,6 +30,7 @@ import {
   type AccessLevel,
 } from "@/lib/permissions";
 import type { TeamMember } from "@/lib/types";
+import { ShieldAlert, Users, LayoutTemplate, Wallet, FileText, KeyRound } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -53,7 +54,7 @@ function SwitchRow({
   description?: string;
 }) {
   return (
-    <div className="flex items-center justify-between py-2">
+    <div className="flex items-center justify-between py-3">
       <div>
         <Label className="text-sm font-medium">{label}</Label>
         {description && (
@@ -77,7 +78,7 @@ function AccessSelect({
   description?: string;
 }) {
   return (
-    <div className="flex items-center justify-between py-2">
+    <div className="flex items-center justify-between py-3">
       <div>
         <Label className="text-sm font-medium">{label}</Label>
         {description && (
@@ -105,7 +106,6 @@ export function PermissionsDialog({ open, onOpenChange, member, planId, onSaved 
   const [saving, setSaving] = useState(false);
   const role = member.role as string;
 
-  // initialise from existing permissions or defaults
   const [coAdminPerms, setCoAdminPerms] = useState<CoAdminPermissions>(
     () => ({ ...DEFAULT_CO_ADMIN_PERMISSIONS, ...(member.permissions as any) })
   );
@@ -116,7 +116,6 @@ export function PermissionsDialog({ open, onOpenChange, member, planId, onSaved 
     () => ({ ...DEFAULT_CO_MANAGER_PERMISSIONS, ...(member.permissions as any) })
   );
 
-  // re-sync when the member changes (e.g. dialog opened for a different member)
   useEffect(() => {
     if (!open) return;
     setCoAdminPerms({ ...DEFAULT_CO_ADMIN_PERMISSIONS, ...(member.permissions as any) });
@@ -129,8 +128,8 @@ export function PermissionsDialog({ open, onOpenChange, member, planId, onSaved 
       role === "CO_ADMIN"
         ? coAdminPerms
         : role === "MANAGER"
-        ? managerPerms
-        : coManagerPerms;
+          ? managerPerms
+          : coManagerPerms;
 
     try {
       setSaving(true);
@@ -150,232 +149,236 @@ export function PermissionsDialog({ open, onOpenChange, member, planId, onSaved 
 
   const memberName = member.user?.name || member.user?.email || "Member";
 
+  const isConfigurable = ["CO_ADMIN", "MANAGER", "CO_MANAGER"].includes(role);
+  const defaultTab = role === "CO_ADMIN" ? "members" : "financials";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Manage Permissions — {memberName}</DialogTitle>
-          <p className="text-xs text-muted-foreground mt-1">
-            Role: <span className="font-medium">{role}</span>
-          </p>
-        </DialogHeader>
-
-        <div className="mt-2">
-
-          {/* ── CO_ADMIN ─────────────────────────────────────────────────── */}
-          {role === "CO_ADMIN" && (
-            <Tabs defaultValue="members">
-              <TabsList className="w-full">
-                <TabsTrigger value="members" className="flex-1">Members</TabsTrigger>
-                <TabsTrigger value="structure" className="flex-1">Structure</TabsTrigger>
-                <TabsTrigger value="financials" className="flex-1">Financials</TabsTrigger>
-                <TabsTrigger value="access" className="flex-1">Access</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="members" className="divide-y divide-border">
-                <SwitchRow
-                  label="Edit members"
-                  description="Can change member roles and departments"
-                  checked={coAdminPerms.members.edit}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, members: { ...p.members, edit: v } }))
-                  }
-                />
-                <SwitchRow
-                  label="Delete members"
-                  description="Can remove members from the plan"
-                  checked={coAdminPerms.members.delete}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, members: { ...p.members, delete: v } }))
-                  }
-                />
-              </TabsContent>
-
-              <TabsContent value="structure" className="divide-y divide-border">
-                <SwitchRow
-                  label="Edit departments"
-                  description="Can create and rename departments"
-                  checked={coAdminPerms.departments.edit}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, departments: { ...p.departments, edit: v } }))
-                  }
-                />
-                <SwitchRow
-                  label="Delete departments"
-                  checked={coAdminPerms.departments.delete}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, departments: { ...p.departments, delete: v } }))
-                  }
-                />
-                <SwitchRow
-                  label="Edit phases"
-                  description="Can create and edit modules/phases"
-                  checked={coAdminPerms.phases.edit}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, phases: { ...p.phases, edit: v } }))
-                  }
-                />
-                <SwitchRow
-                  label="Delete phases"
-                  checked={coAdminPerms.phases.delete}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, phases: { ...p.phases, delete: v } }))
-                  }
-                />
-              </TabsContent>
-
-              <TabsContent value="financials" className="divide-y divide-border">
-                <SwitchRow
-                  label="Create revenue"
-                  checked={coAdminPerms.revenue.create}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, revenue: { ...p.revenue, create: v } }))
-                  }
-                />
-                <SwitchRow
-                  label="Edit revenue"
-                  checked={coAdminPerms.revenue.edit}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, revenue: { ...p.revenue, edit: v } }))
-                  }
-                />
-                <SwitchRow
-                  label="Delete revenue"
-                  checked={coAdminPerms.revenue.delete}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, revenue: { ...p.revenue, delete: v } }))
-                  }
-                />
-                <SwitchRow
-                  label="Create expenses"
-                  checked={coAdminPerms.expenses.create}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, expenses: { ...p.expenses, create: v } }))
-                  }
-                />
-                <SwitchRow
-                  label="Edit expenses"
-                  checked={coAdminPerms.expenses.edit}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, expenses: { ...p.expenses, edit: v } }))
-                  }
-                />
-                <SwitchRow
-                  label="Delete expenses"
-                  checked={coAdminPerms.expenses.delete}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, expenses: { ...p.expenses, delete: v } }))
-                  }
-                />
-                <SwitchRow
-                  label="Create reports/docs"
-                  checked={coAdminPerms.reports.create}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, reports: { ...p.reports, create: v } }))
-                  }
-                />
-                <SwitchRow
-                  label="Edit reports/docs"
-                  checked={coAdminPerms.reports.edit}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, reports: { ...p.reports, edit: v } }))
-                  }
-                />
-                <SwitchRow
-                  label="Delete reports/docs"
-                  checked={coAdminPerms.reports.delete}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, reports: { ...p.reports, delete: v } }))
-                  }
-                />
-              </TabsContent>
-
-              <TabsContent value="access" className="divide-y divide-border">
-                <SwitchRow
-                  label="Can manage manager permissions"
-                  description="Allows this co-admin to configure permissions for managers"
-                  checked={coAdminPerms.canManagePermissions}
-                  onCheckedChange={(v) =>
-                    setCoAdminPerms((p) => ({ ...p, canManagePermissions: v }))
-                  }
-                />
-              </TabsContent>
-            </Tabs>
-          )}
-
-          {/* ── MANAGER ──────────────────────────────────────────────────── */}
-          {role === "MANAGER" && (
-            <div className="divide-y divide-border">
-              <p className="text-xs text-muted-foreground pb-3">
-                Applies to their assigned departments only.
-                NONE = no access, VIEW = read-only, MANAGE = full CRUD.
-              </p>
-              <AccessSelect
-                label="Revenue access"
-                value={managerPerms.revenue}
-                onChange={(v) => setManagerPerms((p) => ({ ...p, revenue: v }))}
-              />
-              <AccessSelect
-                label="Expenses access"
-                value={managerPerms.expenses}
-                onChange={(v) => setManagerPerms((p) => ({ ...p, expenses: v }))}
-              />
-              <AccessSelect
-                label="Reports & docs access"
-                value={managerPerms.reports}
-                onChange={(v) => setManagerPerms((p) => ({ ...p, reports: v }))}
-              />
-              <SwitchRow
-                label="Can manage co-manager permissions"
-                description="Allows this manager to configure permissions for co-managers in their dept"
-                checked={managerPerms.canManageCoManagerPermissions}
-                onCheckedChange={(v) =>
-                  setManagerPerms((p) => ({ ...p, canManageCoManagerPermissions: v }))
-                }
-              />
-            </div>
-          )}
-
-          {/* ── CO_MANAGER ───────────────────────────────────────────────── */}
-          {role === "CO_MANAGER" && (
-            <div className="divide-y divide-border">
-              <p className="text-xs text-muted-foreground pb-3">
-                Applies to their assigned departments only.
-                Task and progress oversight is always on.
-                NONE = no access, VIEW = read-only, MANAGE = full CRUD.
-              </p>
-              <AccessSelect
-                label="Revenue access"
-                value={coManagerPerms.revenue}
-                onChange={(v) => setCoManagerPerms((p) => ({ ...p, revenue: v }))}
-              />
-              <AccessSelect
-                label="Expenses access"
-                value={coManagerPerms.expenses}
-                onChange={(v) => setCoManagerPerms((p) => ({ ...p, expenses: v }))}
-              />
-              <AccessSelect
-                label="Reports & docs access"
-                value={coManagerPerms.reports}
-                onChange={(v) => setCoManagerPerms((p) => ({ ...p, reports: v }))}
-              />
-            </div>
-          )}
-
-          {/* ── unsupported role ─────────────────────────────────────────── */}
-          {role !== "CO_ADMIN" && role !== "MANAGER" && role !== "CO_MANAGER" && (
-            <p className="text-sm text-muted-foreground py-4 text-center">
-              Permissions for this role are not configurable.
+      <DialogContent className="sm:max-w-3xl w-[95vw] md:w-full max-h-[85vh] overflow-y-auto p-0 gap-0">
+        <div className="p-6 border-b border-border bg-muted/20">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-primary" />
+              Manage Permissions
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Configuring access for <span className="font-semibold text-foreground">{memberName}</span> ({role})
             </p>
-          )}
+          </DialogHeader>
         </div>
 
-        <div className="flex justify-end gap-3 pt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        {!isConfigurable ? (
+          <div className="p-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              Permissions for the <strong>{role}</strong> role are predefined and cannot be customized.
+            </p>
+          </div>
+        ) : (
+          <Tabs defaultValue={defaultTab} className="flex flex-col md:flex-row min-h-[400px]">
+            {/* Sidebar Tabs */}
+            <div className="w-full md:w-48 shrink-0 border-r border-border bg-muted/10 p-4">
+              <TabsList className="flex flex-col h-auto w-full bg-transparent p-0 gap-1 items-stretch">
+                {role === "CO_ADMIN" && (
+                  <>
+                    <TabsTrigger value="members" className="justify-start px-3 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                      <Users className="h-4 w-4 mr-2" /> Members
+                    </TabsTrigger>
+                    <TabsTrigger value="structure" className="justify-start px-3 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                      <LayoutTemplate className="h-4 w-4 mr-2" /> Structure
+                    </TabsTrigger>
+                  </>
+                )}
+
+                <TabsTrigger value="financials" className="justify-start px-3 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <Wallet className="h-4 w-4 mr-2" /> Financials
+                </TabsTrigger>
+
+                <TabsTrigger value="reports" className="justify-start px-3 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <FileText className="h-4 w-4 mr-2" /> Reports
+                </TabsTrigger>
+
+                {(role === "CO_ADMIN" || role === "MANAGER") && (
+                  <TabsTrigger value="access" className="justify-start px-3 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                    <KeyRound className="h-4 w-4 mr-2" /> Access
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </div>
+
+            {/* Content Area */}
+            <div className="flex-1 p-6 overflow-y-auto">
+
+              {/* MEMBERS TAB */}
+              {role === "CO_ADMIN" && (
+                <TabsContent value="members" className="mt-0 divide-y divide-border">
+                  <div className="mb-4">
+                    <h3 className="text-sm font-semibold text-foreground">Member Management</h3>
+                    <p className="text-xs text-muted-foreground">Control who can join and manage the team.</p>
+                  </div>
+                  <SwitchRow
+                    label="Edit members"
+                    description="Can change member roles and assign departments"
+                    checked={coAdminPerms.members.edit}
+                    onCheckedChange={(v) =>
+                      setCoAdminPerms((p) => ({ ...p, members: { ...p.members, edit: v } }))
+                    }
+                  />
+                  <SwitchRow
+                    label="Delete members"
+                    description="Can remove members from the plan entirely"
+                    checked={coAdminPerms.members.delete}
+                    onCheckedChange={(v) =>
+                      setCoAdminPerms((p) => ({ ...p, members: { ...p.members, delete: v } }))
+                    }
+                  />
+                </TabsContent>
+              )}
+
+              {/* STRUCTURE TAB */}
+              {role === "CO_ADMIN" && (
+                <TabsContent value="structure" className="mt-0 divide-y divide-border">
+                  <div className="mb-4">
+                    <h3 className="text-sm font-semibold text-foreground">Project Structure</h3>
+                    <p className="text-xs text-muted-foreground">Manage departments and phases/modules.</p>
+                  </div>
+                  <SwitchRow
+                    label="Edit departments"
+                    description="Can create and rename departments"
+                    checked={coAdminPerms.departments.edit}
+                    onCheckedChange={(v) =>
+                      setCoAdminPerms((p) => ({ ...p, departments: { ...p.departments, edit: v } }))
+                    }
+                  />
+                  <SwitchRow
+                    label="Delete departments"
+                    checked={coAdminPerms.departments.delete}
+                    onCheckedChange={(v) =>
+                      setCoAdminPerms((p) => ({ ...p, departments: { ...p.departments, delete: v } }))
+                    }
+                  />
+                  <SwitchRow
+                    label="Edit phases"
+                    description="Can create and edit modules/phases"
+                    checked={coAdminPerms.phases.edit}
+                    onCheckedChange={(v) =>
+                      setCoAdminPerms((p) => ({ ...p, phases: { ...p.phases, edit: v } }))
+                    }
+                  />
+                  <SwitchRow
+                    label="Delete phases"
+                    checked={coAdminPerms.phases.delete}
+                    onCheckedChange={(v) =>
+                      setCoAdminPerms((p) => ({ ...p, phases: { ...p.phases, delete: v } }))
+                    }
+                  />
+                </TabsContent>
+              )}
+
+              {/* FINANCIALS TAB */}
+              <TabsContent value="financials" className="mt-0 divide-y divide-border">
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-foreground">Financial Access</h3>
+                  <p className="text-xs text-muted-foreground">Manage revenue, income, and expenses.</p>
+                </div>
+
+                {role === "CO_ADMIN" ? (
+                  <>
+                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider py-2 mt-2">Revenue</h4>
+                    <SwitchRow label="Create revenue" checked={coAdminPerms.revenue.create} onCheckedChange={(v) => setCoAdminPerms((p) => ({ ...p, revenue: { ...p.revenue, create: v } }))} />
+                    <SwitchRow label="Edit revenue" checked={coAdminPerms.revenue.edit} onCheckedChange={(v) => setCoAdminPerms((p) => ({ ...p, revenue: { ...p.revenue, edit: v } }))} />
+                    <SwitchRow label="Delete revenue" checked={coAdminPerms.revenue.delete} onCheckedChange={(v) => setCoAdminPerms((p) => ({ ...p, revenue: { ...p.revenue, delete: v } }))} />
+
+                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider py-2 mt-4 border-t">Expenses</h4>
+                    <SwitchRow label="Create expenses" checked={coAdminPerms.expenses.create} onCheckedChange={(v) => setCoAdminPerms((p) => ({ ...p, expenses: { ...p.expenses, create: v } }))} />
+                    <SwitchRow label="Edit expenses" checked={coAdminPerms.expenses.edit} onCheckedChange={(v) => setCoAdminPerms((p) => ({ ...p, expenses: { ...p.expenses, edit: v } }))} />
+                    <SwitchRow label="Delete expenses" checked={coAdminPerms.expenses.delete} onCheckedChange={(v) => setCoAdminPerms((p) => ({ ...p, expenses: { ...p.expenses, delete: v } }))} />
+                    <SwitchRow label="Approve/Reject expenses" description="Can review and approve/reject expense requests" checked={coAdminPerms.expenses.approve} onCheckedChange={(v) => setCoAdminPerms((p) => ({ ...p, expenses: { ...p.expenses, approve: v } }))} />
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground mb-4 bg-muted/40 p-3 rounded-md border border-border">
+                      Access applies to this member's assigned departments only.
+                    </p>
+                    <AccessSelect
+                      label="Revenue access"
+                      value={role === "MANAGER" ? managerPerms.revenue : coManagerPerms.revenue}
+                      onChange={(v) => role === "MANAGER" ? setManagerPerms((p) => ({ ...p, revenue: v })) : setCoManagerPerms((p) => ({ ...p, revenue: v }))}
+                    />
+                    <AccessSelect
+                      label="Expenses access"
+                      value={role === "MANAGER" ? managerPerms.expenses : coManagerPerms.expenses}
+                      onChange={(v) => role === "MANAGER" ? setManagerPerms((p) => ({ ...p, expenses: v })) : setCoManagerPerms((p) => ({ ...p, expenses: v }))}
+                    />
+                  </>
+                )}
+              </TabsContent>
+
+              {/* REPORTS TAB */}
+              <TabsContent value="reports" className="mt-0 divide-y divide-border">
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-foreground">Reports & Documents</h3>
+                  <p className="text-xs text-muted-foreground">Access to project files and generated reports.</p>
+                </div>
+
+                {role === "CO_ADMIN" ? (
+                  <>
+                    <SwitchRow label="Create reports/docs" checked={coAdminPerms.reports.create} onCheckedChange={(v) => setCoAdminPerms((p) => ({ ...p, reports: { ...p.reports, create: v } }))} />
+                    <SwitchRow label="Edit reports/docs" checked={coAdminPerms.reports.edit} onCheckedChange={(v) => setCoAdminPerms((p) => ({ ...p, reports: { ...p.reports, edit: v } }))} />
+                    <SwitchRow label="Delete reports/docs" checked={coAdminPerms.reports.delete} onCheckedChange={(v) => setCoAdminPerms((p) => ({ ...p, reports: { ...p.reports, delete: v } }))} />
+                  </>
+                ) : (
+                  <>
+                    <AccessSelect
+                      label="Reports & docs access"
+                      value={role === "MANAGER" ? managerPerms.reports : coManagerPerms.reports}
+                      onChange={(v) => role === "MANAGER" ? setManagerPerms((p) => ({ ...p, reports: v })) : setCoManagerPerms((p) => ({ ...p, reports: v }))}
+                    />
+                  </>
+                )}
+              </TabsContent>
+
+              {/* ACCESS TAB */}
+              {(role === "CO_ADMIN" || role === "MANAGER") && (
+                <TabsContent value="access" className="mt-0 divide-y divide-border">
+                  <div className="mb-4">
+                    <h3 className="text-sm font-semibold text-foreground">Delegation Settings</h3>
+                    <p className="text-xs text-muted-foreground">Allow this user to configure permissions for subordinates.</p>
+                  </div>
+
+                  {role === "CO_ADMIN" && (
+                    <SwitchRow
+                      label="Manage Manager Permissions"
+                      description="Allows this co-admin to configure permissions for managers"
+                      checked={coAdminPerms.canManagePermissions}
+                      onCheckedChange={(v) =>
+                        setCoAdminPerms((p) => ({ ...p, canManagePermissions: v }))
+                      }
+                    />
+                  )}
+
+                  {role === "MANAGER" && (
+                    <SwitchRow
+                      label="Manage Co-Manager Permissions"
+                      description="Allows this manager to configure permissions for co-managers in their department"
+                      checked={managerPerms.canManageCoManagerPermissions}
+                      onCheckedChange={(v) =>
+                        setManagerPerms((p) => ({ ...p, canManageCoManagerPermissions: v }))
+                      }
+                    />
+                  )}
+                </TabsContent>
+              )}
+
+            </div>
+          </Tabs>
+        )}
+
+        <div className="flex justify-end gap-3 p-4 border-t border-border bg-card">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="cursor-pointer hover:text-gray-600">
             Cancel
           </Button>
-          {["CO_ADMIN", "MANAGER", "CO_MANAGER"].includes(role) && (
-            <Button onClick={handleSave} disabled={saving}>
+          {isConfigurable && (
+            <Button onClick={handleSave} disabled={saving} className="cursor-pointer hover:bg-green-600">
               {saving ? "Saving..." : "Save Permissions"}
             </Button>
           )}

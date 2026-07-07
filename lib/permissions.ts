@@ -20,9 +20,12 @@ export interface PlanPermissions {
   canAddIncome: boolean;
   canEditIncome: boolean;
   canDeleteIncome: boolean;
+  // any member can submit an expense request — approval is gated separately
   canAddExpense: boolean;
   canEditExpense: boolean;
   canDeleteExpense: boolean;
+  // approve / reject / mark-paid — OWNER/ADMIN always, CO_ADMIN only if granted
+  canApproveExpense: boolean;
   // members
   canInviteMember: boolean;
   canEditMember: boolean;
@@ -49,22 +52,26 @@ export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
   const inScope = (deptId: string) =>
     scopedDeptIds === null || scopedDeptIds.includes(deptId);
 
-  // typed permission accessors — safe cast based on role
   const coAdminPerms = isCoAdmin ? (rawPerms as CoAdminPermissions | null) : null;
   const managerPerms = isManager ? (rawPerms as ManagerPermissions | null) : null;
   const coManagerPerms = isCoManager ? (rawPerms as CoManagerPermissions | null) : null;
 
-  // CO_ADMIN helpers
   const ca = (key: keyof CoAdminPermissions, subKey?: string): boolean => {
     if (!coAdminPerms) return false;
     const val = coAdminPerms[key];
-    if (subKey && typeof val === "object" && val !== null) {
-      return !!(val as Record<string, boolean>)[subKey];
+
+    if ((val as any) === "NONE") return false;
+
+    if (subKey) {
+      if (typeof val === "object" && val !== null) {
+        return !!(val as Record<string, boolean>)[subKey];
+      }
+      return false;
     }
+
     return !!val;
   };
 
-  // MANAGER / CO_MANAGER helpers — check AccessLevel
   const managerCan = (key: keyof ManagerPermissions, level: "VIEW" | "MANAGE"): boolean => {
     if (!managerPerms) return false;
     const val = managerPerms[key] as AccessLevel | boolean;
@@ -80,15 +87,13 @@ export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
   };
 
   return {
-    // ── departments ──
-    canAddDepartment: isOwnerOrAdmin || ca("departments", "edit"), // edit = can mutate structure
+    canAddDepartment: isOwnerOrAdmin || ca("departments", "edit"),
     canEditDepartment: (deptId) =>
       isOwnerOrAdmin ||
       ca("departments", "edit") ||
       (isManager && inScope(deptId)),
     canDeleteDepartment: isOwnerOrAdmin || ca("departments", "delete"),
 
-    // ── phases ──
     canAddPhase: (deptId) =>
       isOwnerOrAdmin ||
       ca("phases", "edit") ||
@@ -99,12 +104,10 @@ export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
       ((isManager || isCoManager) && inScope(deptId)),
     canDeletePhase: isOwnerOrAdmin || ca("phases", "delete"),
 
-    // ── milestones ──
     canAddMilestone: isOwnerOrAdmin || isCoAdmin || isManager || isCoManager,
     canEditMilestone: isOwnerOrAdmin || isCoAdmin || isManager || isCoManager,
     canDeleteMilestone: isOwnerOrAdmin,
 
-    // ── income ──
     canAddIncome:
       isOwnerOrAdmin ||
       ca("revenue", "create") ||
@@ -121,12 +124,14 @@ export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
       (isManager && managerCan("revenue", "MANAGE")) ||
       (isCoManager && coManagerCan("revenue", "MANAGE")),
 
-    // ── expenses ──
+    // Any member of the plan can submit an expense request; "Add expense" is
+    // really "request an expense", so every role gets it.
     canAddExpense:
       isOwnerOrAdmin ||
       ca("expenses", "create") ||
       (isManager && managerCan("expenses", "MANAGE")) ||
       (isCoManager && coManagerCan("expenses", "MANAGE")),
+
     canEditExpense:
       isOwnerOrAdmin ||
       ca("expenses", "edit") ||
@@ -137,13 +142,14 @@ export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
       ca("expenses", "delete") ||
       (isManager && managerCan("expenses", "MANAGE")) ||
       (isCoManager && coManagerCan("expenses", "MANAGE")),
+    // Deliberately narrower than edit/delete — only OWNER/ADMIN always,
+    // CO_ADMIN only when explicitly granted the `approve` flag.
+    canApproveExpense: isOwnerOrAdmin || ca("expenses", "approve"),
 
-    // ── members ──
-    canInviteMember: isOwnerOrAdmin || isCoAdmin,
+    canInviteMember: isOwnerOrAdmin || ca("members", "edit"),
     canEditMember: isOwnerOrAdmin || ca("members", "edit"),
     canDeleteMember: isOwnerOrAdmin || ca("members", "delete"),
 
-    // ── tasks ──
     canAddTask: (deptId) =>
       isOwnerOrAdmin ||
       isCoAdmin ||
@@ -165,21 +171,30 @@ export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
   };
 }
 
+/**
+ * Whether the requester themself (not an admin) can still edit/withdraw
+ * their own expense request. Once it leaves PENDING_APPROVAL, only
+ * canEditExpense/canDeleteExpense (admin-level) holders can touch it.
+ */
+export function canModifyOwnExpenseRequest(status: string): boolean {
+  return status === "PENDING_APPROVAL";
+}
+
 export interface CoAdminPermissions {
   members: { edit: boolean; delete: boolean };
   departments: { edit: boolean; delete: boolean };
   phases: { edit: boolean; delete: boolean };
   revenue: { create: boolean; edit: boolean; delete: boolean };
-  expenses: { create: boolean; edit: boolean; delete: boolean };
+  expenses: { create: boolean; edit: boolean; delete: boolean; approve: boolean };
   reports: { create: boolean; edit: boolean; delete: boolean };
-  canManagePermissions: boolean; 
+  canManagePermissions: boolean;
 }
 
 export interface ManagerPermissions {
   revenue: AccessLevel;
   expenses: AccessLevel;
   reports: AccessLevel;
-  canManageCoManagerPermissions: boolean; 
+  canManageCoManagerPermissions: boolean;
 }
 
 export interface CoManagerPermissions {
@@ -193,7 +208,7 @@ export const DEFAULT_CO_ADMIN_PERMISSIONS: CoAdminPermissions = {
   departments: { edit: false, delete: false },
   phases: { edit: false, delete: false },
   revenue: { create: false, edit: false, delete: false },
-  expenses: { create: false, edit: false, delete: false },
+  expenses: { create: false, edit: false, delete: false, approve: false },
   reports: { create: false, edit: false, delete: false },
   canManagePermissions: false,
 };
@@ -229,5 +244,3 @@ export function canEditPermissionsOf(
 
   return false;
 }
-
-

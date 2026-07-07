@@ -74,8 +74,8 @@ function formatPlan(plan: any) {
 // ─── ACCESS RESOLVER ───────────────────────────────────────────────────────
 
 type AccessResult =
-  | { plan: any; isOwner: true; role: "OWNER"; departmentIds: null; permissions: null }
-  | { plan: any; isOwner: false; role: MemberRole; departmentIds: string[]; permissions: unknown }
+  | { plan: any; isOwner: true; role: "OWNER"; departmentIds: null; permissions: null; memberId: null }
+  | { plan: any; isOwner: false; role: MemberRole; departmentIds: string[]; permissions: unknown; memberId: string }
   | null;
 
 async function getPlanWithAccess(planId: string, userId: string): Promise<AccessResult> {
@@ -87,7 +87,7 @@ async function getPlanWithAccess(planId: string, userId: string): Promise<Access
       include: planInclude,
     });
     if (plan) {
-      return { plan: formatPlan(plan), isOwner: true, role: "OWNER", departmentIds: null, permissions: null };
+      return { plan: formatPlan(plan), isOwner: true, role: "OWNER", departmentIds: null, permissions: null, memberId: null };
     }
   }
 
@@ -114,6 +114,7 @@ async function getPlanWithAccess(planId: string, userId: string): Promise<Access
     role: membership.role,
     departmentIds,
     permissions: (membership.permissions as Record<string, unknown> | null) ?? null,
+    memberId: membership.id,
   };
 }
 
@@ -130,7 +131,7 @@ export async function GET(
     const result = await getPlanWithAccess(params.id, user.sub);
     if (!result) return NextResponse.json({ success: false, error: 'Plan not found or access denied' }, { status: 404 });
 
-    const { plan, isOwner, role, departmentIds, permissions } = result;
+    const { plan, isOwner, role, departmentIds, permissions, memberId } = result;
 
     return NextResponse.json({
       success: true,
@@ -140,6 +141,7 @@ export async function GET(
         role,
         departmentIds, 
         permissions,
+        memberId,
       },
     }, { status: 200 });
   } catch (error) {
