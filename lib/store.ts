@@ -26,6 +26,7 @@ export interface CurrentPlanMeta {
   status: string;
   isOwner: boolean;
   role: string; // "OWNER" | MemberRole
+  memberId: string | null; // the current user's WorkItemMember id (null for the plan OWNER)
   departmentIds: string[] | null;
   permissions: CoAdminPermissions | ManagerPermissions | CoManagerPermissions | null;
 }

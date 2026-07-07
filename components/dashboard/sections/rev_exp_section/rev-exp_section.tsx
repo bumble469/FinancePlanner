@@ -43,6 +43,19 @@ const CATEGORY_CONFIG: Record<
 };
 
 const EXPENSE_CATEGORIES = Object.keys(CATEGORY_CONFIG) as ExpenseCategory[];
+const INCOME_TYPES = [
+  "REVENUE",
+  "INVESTMENT",
+  "SPONSORSHIP",
+  "DONATION",
+  "GRANT",
+  "MERCHANDISE",
+  "REFUND",
+  "OTHER"
+] as const;
+
+type IncomeFilter = "ALL" | typeof INCOME_TYPES[number];
+
 
 type Tab = "income" | "expenses" | "breakdown" | "phases";
 
@@ -123,8 +136,7 @@ function IncomeTab({
   canEdit?: boolean;
   canDelete?: boolean;
 }) {
-  const [filter, setFilter] = useState<"ALL" | "INVESTMENT" | "REVENUE">("ALL");
-
+  const [filter, setFilter] = useState<IncomeFilter>("ALL");
   const filtered = income.filter((i) => filter === "ALL" || i.type === filter);
 
   return (
@@ -136,19 +148,20 @@ function IncomeTab({
       )}
 
       {/* filter chips */}
-      <div className="flex gap-2">
-        {(["ALL", "INVESTMENT", "REVENUE"] as const).map((f) => (
+      {/* filter chips */}
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        {(["ALL", ...INCOME_TYPES] as IncomeFilter[]).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
             className={cn(
-              "rounded-full px-3 py-1 text-xs border transition-colors",
+              "rounded-full px-3 py-1 text-xs border transition-colors whitespace-nowrap",
               filter === f
                 ? "bg-foreground text-background border-foreground"
                 : "border-border text-muted-foreground hover:border-foreground/40"
             )}
           >
-            {f === "ALL" ? "All" : f === "INVESTMENT" ? "Investment" : "Revenue"}
+            {f === "ALL" ? "All" : f.charAt(0) + f.slice(1).toLowerCase()}
           </button>
         ))}
       </div>
@@ -166,7 +179,8 @@ function IncomeTab({
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Type</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Phase</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Date</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Amount</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Expected Amount</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Received Amount</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -182,23 +196,33 @@ function IncomeTab({
                   <td className="px-4 py-3">
                     <span className={cn(
                       "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                      entry.type === "INVESTMENT"
-                        ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                        : "bg-green-500/10 text-green-600 dark:text-green-400"
+                      entry.type === "INVESTMENT" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" :
+                        entry.type === "REVENUE" ? "bg-green-500/10 text-green-600 dark:text-green-400" :
+                          entry.type === "SPONSORSHIP" ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" :
+                            entry.type === "DONATION" ? "bg-pink-500/10 text-pink-600 dark:text-pink-400" :
+                              entry.type === "GRANT" ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" :
+                                "bg-gray-500/10 text-gray-600 dark:text-gray-400"
                     )}>
-                      {entry.type === "INVESTMENT" ? "Investment" : "Revenue"}
+                      {entry.type ? entry.type.charAt(0) + entry.type.slice(1).toLowerCase() : "Unknown"}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
                     {entry.phaseName ?? "Overall"}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {new Date(entry.receivedAt).toLocaleDateString("en-IN", {
-                      day: "numeric", month: "short", year: "numeric",
-                    })}
+                    {entry.receivedAt
+                      ? new Date(entry.receivedAt).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })
+                      : "-"}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono font-medium">
+                    +{fmt(entry.amount, currency)}
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-medium text-green-600 dark:text-green-400">
-                    +{fmt(entry.amount, currency)}
+                    +{fmt(entry.receivedAmount, currency)}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
@@ -232,18 +256,24 @@ function ExpensesTab({
   onAdd,
   onEdit,
   onDelete,
+  onApprove,
+  onReject,
   canAdd,
   canEdit,
   canDelete,
+  canApprove
 }: {
   expenses: Expense[];
   currency: string;
   onAdd: () => void;
   onEdit: (e: Expense) => void;
   onDelete: (id: string) => void;
+  onApprove?: (id: string) => void;
+  onReject?: (id: string) => void;
   canAdd?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
+  canApprove?: boolean;
 }) {
   const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | "ALL">("ALL");
 
@@ -302,7 +332,9 @@ function ExpensesTab({
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Department</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Phase</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Date</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Amount</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Expected Amount</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Received Amount</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Status</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -328,15 +360,43 @@ function ExpensesTab({
                       {expense.phaseName ?? "—"}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {new Date(expense.occurredAt).toLocaleDateString("en-IN", {
-                        day: "numeric", month: "short", year: "numeric",
-                      })}
+                      {expense.occurredAt
+                        ? new Date(expense.occurredAt).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                        : "-"}
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-medium text-destructive">
                       -{fmt(expense.amount, currency)}
                     </td>
+                    <td className="px-4 py-3 text-right font-mono font-medium text-destructive">
+                      -{fmt(expense.paidAmount, currency)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={cn(
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                        expense.status === "APPROVED" || expense.status === "PAID" ? "bg-green-500/10 text-green-600" :
+                          expense.status === "REJECTED" || expense.status === "CANCELLED" ? "bg-red-500/10 text-red-600" :
+                            "bg-yellow-500/10 text-yellow-600"
+                      )}>
+                        {expense.status ? expense.status.replace("_", " ") : "PENDING APPROVAL"}
+                      </span>
+                    </td>
+
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        {canApprove && expense.status === "PENDING_APPROVAL" && (
+                          <>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950" onClick={() => onApprove?.(expense.id)}>
+                              Approve
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => onReject?.(expense.id)}>
+                              Reject
+                            </Button>
+                          </>
+                        )}
                         {canEdit && (
                           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(expense)}>
                             <Pencil className="h-3.5 w-3.5" />
@@ -561,7 +621,7 @@ function PLRow({
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
-export function ExpenseSection({ planId, permissions }: { planId: string; permissions: PlanPermissions }) {
+export function RevenueExpenseSection({ planId, permissions }: { planId: string; permissions: PlanPermissions }) {
   const {
     income,
     expenses,
@@ -571,6 +631,7 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
     removeExpense,
     setIncome,
     setExpenses,
+    updateExpense,
   } = useFinancialStore();
 
   const { show } = useSnackbar();
@@ -642,6 +703,34 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
       removeExpense(id);
     } catch (err) {
       console.error("Failed to delete expense:", err);
+    }
+  };
+
+  const handleApproveExpense = async (id: string) => {
+    try {
+      const res = await authClient.request(`/api/plan/${planId}/expenses/${id}/action`, {
+        method: "PATCH",
+        data: { action: "approve" }, // <-- Changed from status: "APPROVED"
+      });
+      updateExpense(id, res.data.data);
+      show("Expense approved", "success");
+    } catch (err) {
+      console.error("Failed to approve expense:", err);
+      show("Failed to approve expense", "error");
+    }
+  };
+
+  const handleRejectExpense = async (id: string) => {
+    try {
+      const res = await authClient.request(`/api/plan/${planId}/expenses/${id}/action`, {
+        method: "PATCH",
+        data: { action: "reject" }, // <-- Changed from status: "REJECTED"
+      });
+      updateExpense(id, res.data.data);
+      show("Expense rejected", "success");
+    } catch (err) {
+      console.error("Failed to reject expense:", err);
+      show("Failed to reject expense", "error");
     }
   };
 
@@ -746,9 +835,12 @@ export function ExpenseSection({ planId, permissions }: { planId: string; permis
             onAdd={() => { setEditingExpense(null); setExpenseDialogOpen(true); }}
             onEdit={handleEditExpense}
             onDelete={handleDeleteExpense}
+            onApprove={handleApproveExpense}
+            onReject={handleRejectExpense}
             canAdd={permissions.canAddExpense}
             canEdit={permissions.canEditExpense}
             canDelete={permissions.canDeleteExpense}
+            canApprove={permissions.canApproveExpense}
           />
         )}
         {activeTab === "breakdown" && (

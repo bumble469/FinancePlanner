@@ -66,7 +66,9 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
         description: editing.description ?? "",
         phaseId: editing.phaseId ?? "",
         departmentId: editing.departmentId ?? "",
-        occurredAt: new Date(editing.occurredAt).toISOString().split("T")[0],
+        occurredAt: new Date(editing.occurredAt ?? Date.now())
+        .toISOString()
+        .split("T")[0],
       });
     } else {
       setForm(EMPTY);

@@ -12,6 +12,7 @@ import {
   type CoManagerPermissions,
 } from "@/lib/permissions";
 import type { MemberRole } from "@prisma/client";
+import { emitToUser } from "@/lib/socket-server";
 
 type Params = { params: Promise<{ id: string; memberId: string }> };
 
@@ -146,6 +147,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
       return updatedMember;
     });
+    if (updated.userId) {
+      emitToUser(updated.userId, "plan:member-updated", {
+        planId,
+        memberId: updated.id,
+        role: updated.role,
+        permissions: updated.permissions,
+        departmentIds: updated.departmentMembers.map((d) => d.departmentId),
+      });
+    }
 
     return NextResponse.json({ success: true, data: updated });
   } catch (err) {

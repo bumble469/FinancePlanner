@@ -53,7 +53,9 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
         source: editing.source ?? "",
         description: editing.description ?? "",
         phaseId: editing.phaseId ?? "",
-        receivedAt: new Date(editing.receivedAt).toISOString().split("T")[0],
+        receivedAt: new Date(editing.receivedAt ?? Date.now())
+          .toISOString()
+          .split("T")[0],
       });
     } else {
       setForm(EMPTY);
@@ -137,7 +139,14 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
               <SelectContent>
                 <SelectItem value="INVESTMENT">Investment</SelectItem>
                 <SelectItem value="REVENUE">Revenue</SelectItem>
+                <SelectItem value="SPONSORSHIP">Sponsorship</SelectItem>
+                <SelectItem value="DONATION">Donation</SelectItem>
+                <SelectItem value="GRANT">Grant</SelectItem>
+                <SelectItem value="MERCHANDISE">Merchandise</SelectItem>
+                <SelectItem value="REFUND">Refund</SelectItem>
+                <SelectItem value="OTHER">Other</SelectItem>
               </SelectContent>
+
             </Select>
             {errors.type && <p className="text-xs text-destructive">{errors.type}</p>}
           </div>
