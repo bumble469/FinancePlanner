@@ -13,6 +13,7 @@ const VALID_INCOME_TYPES = [
   "GRANT",
   "MERCHANDISE",
   "REFUND",
+  "CLIENT_PAYMENT",
   "OTHER",
 ];
 

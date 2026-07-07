@@ -61,6 +61,7 @@ enum IncomeType {
   GRANT
   MERCHANDISE
   REFUND
+  CLIENT_PAYMENT
   OTHER
 }
 
