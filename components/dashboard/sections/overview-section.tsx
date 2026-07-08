@@ -27,7 +27,7 @@ function getStatus(value: number, threshold: number): FinancialStatus {
 }
 
 export function OverviewSection() {
-  const { expenses, simulation, eventData, departments, currency } = useFinancialStore();
+  const { expenses, income, simulation, eventData, departments, currency } = useFinancialStore();
   const totalBudget = eventData.eventBudget;
 
   const totalAllocated = departments.reduce(
@@ -37,13 +37,17 @@ export function OverviewSection() {
 
   const remainingBalance = totalBudget - totalAllocated;
 
-  const totalSpent = expenses.reduce(
-    (sum, e) => sum + (e.spentAmount || 0),
+  const totalIncomeReceived = income.reduce(
+    (sum, i) => sum + (i.receivedAmount || 0),
     0
   );
 
-  const estimatedProfitLoss =
-    eventData.expectedRevenue - eventData.eventBudget;
+  const totalExpensesPaid = expenses.reduce(
+    (sum, e) => sum + (e.paidAmount || 0),
+    0
+  );
+
+  const estimatedProfitLoss = totalIncomeReceived - totalExpensesPaid;
 
   const balanceStatus = getStatus(remainingBalance, totalBudget);
 
