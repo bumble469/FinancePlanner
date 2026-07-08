@@ -15,6 +15,7 @@ import { useFinancialStore } from "@/lib/store";
 import type { Plan } from "@/lib/types";
 import { getPermissions } from "@/lib/permissions";
 import { useRealtimePermissions } from "@/hooks/use-realtime-permissions";
+import { Workspace } from "./sections/workspace_section/workspace";
 
 interface DashboardLayoutProps {
   planId: string;
@@ -45,6 +46,7 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
       case "team": return <TeamSection planId={planId} permissions={permissions} />;
       case "expenses": return <RevenueExpenseSection planId={planId} permissions={permissions} />;
       case "event": return <PlanningSection permissions={permissions} />;
+      case "workspace": return <Workspace planId={planId} />;
       default: return <OverviewSection />;
     }
   };

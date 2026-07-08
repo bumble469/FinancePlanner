@@ -7,6 +7,7 @@ import {
   Receipt,
   CalendarDays,
   FileBarChart,
+  KanbanSquare ,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -21,11 +22,11 @@ interface SidebarProps {
 const navItems = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "event", label: "Planning", icon: CalendarDays },
+  { id: "workspace", label: "Workspace", icon: KanbanSquare  },
   { id: "team", label: "Team & Roles", icon: Users },
   { id: "expenses", label: "Revenue and Expenses", icon: Receipt },
   { id: "reports", label: "Reports & Docs", icon: FileBarChart }
 ];
-
 
 export function Sidebar({
   activeSection,
@@ -55,8 +56,6 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* ❌ REMOVED: Mode / Company / Event section */}
-
       {/* Navigation */}
       <nav className="flex-1 space-y-1 p-4">
         <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -73,7 +72,7 @@ export function Sidebar({
               type="button"
               onClick={() => onSectionChange(item.id)}
               className={cn(
-                "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                "cursor-pointer flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-primary text-primary-foreground"
                   : "text-sidebar-foreground hover:bg-sidebar-accent"

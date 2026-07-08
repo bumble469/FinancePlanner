@@ -76,17 +76,15 @@ export function DepartmentListView({
                 </div>
               )}
 
-              {isProject && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="ml-2 gap-1.5 text-xs hover:bg-muted/40 hover:text-gray-400 cursor-pointer hover:border-muted"
-                  onClick={() => onDrillDown(d)}
-                >
-                  View
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="ml-2 gap-1.5 text-xs hover:bg-muted/40 hover:text-gray-400 cursor-pointer hover:border-muted"
+                onClick={() => onDrillDown(d)}
+              >
+                View
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
             </div>
           </div>
         </div>
