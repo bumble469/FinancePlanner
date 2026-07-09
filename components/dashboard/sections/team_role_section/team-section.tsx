@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useFinancialStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -11,7 +12,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Users, DollarSign, Box, RefreshCw } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Users,
+  DollarSign,
+  RefreshCw,
+  Search,
+  Building2,
+  ShieldCheck,
+  Shield,
+  UserCog,
+  User,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import type { TeamMember } from "@/lib/types";
 import { ROLES } from "@/lib/types";
 import { getCurrencySymbol } from "@/lib/currency";
@@ -22,19 +45,66 @@ import { useSnackbar } from '@/lib/useSnackbar';
 import type { PlanPermissions } from "@/lib/permissions";
 import { PermissionsDialog } from "./components/permissions-dialog";
 import { canEditPermissionsOf, type CoAdminPermissions, type ManagerPermissions } from "@/lib/permissions";
-import { Shield } from "lucide-react";
 
 function formatCurrency(value: number | undefined, currency: string): string {
   const symbol = getCurrencySymbol(currency);
   return `${symbol} ${(value ?? 0).toLocaleString("en-IN")}`;
 }
 
+function isMissingSetup(member: TeamMember): boolean {
+  const missingCost = !member.monthlyCost || member.monthlyCost <= 0;
+  const missingDept =
+    member.role !== "CO_ADMIN" &&
+    (!member.departmentMembers || member.departmentMembers.length === 0);
+  return missingCost || missingDept;
+}
+
+function isMissingPermissions(member: TeamMember): boolean {
+  if (!["CO_ADMIN", "MANAGER", "CO_MANAGER"].includes(member.role)) return false;
+  const perms = member.permissions;
+  if (!perms) return true;
+
+  if (member.role === "CO_ADMIN") {
+    const p = perms as any;
+    return (
+      !p.members?.edit && !p.members?.delete &&
+      !p.departments?.edit && !p.departments?.delete &&
+      !p.phases?.edit && !p.phases?.delete &&
+      !p.revenue?.create && !p.revenue?.edit && !p.revenue?.delete &&
+      !p.expenses?.create && !p.expenses?.edit && !p.expenses?.delete && !p.expenses?.approve &&
+      !p.reports?.create && !p.reports?.edit && !p.reports?.delete &&
+      !p.canManagePermissions
+    );
+  }
+
+  const p = perms as any;
+  const noAccess = (v: string | undefined) => !v || v === "NONE";
+  const managerExtra = member.role === "MANAGER" ? !p.canManageCoManagerPermissions : true;
+  return noAccess(p.revenue) && noAccess(p.expenses) && noAccess(p.reports) && managerExtra;
+}
+
+const ROLE_ICON: Record<string, typeof User> = {
+  ADMIN: ShieldCheck,
+  CO_ADMIN: Shield,
+  MANAGER: UserCog,
+  CO_MANAGER: UserCog,
+  MEMBER: User,
+};
+
+const PAGE_SIZE = 10;
+
+type Stats = {
+  totalMembers: number;
+  totalMonthlyCost: number;
+  byDepartment: { id: string; name: string; count: number; cost: number }[];
+  byRole: { role: string; count: number; cost: number }[];
+};
+
 export function TeamSection({ planId, permissions }: { planId: string; permissions: PlanPermissions }) {
   const {
     teamMembers,
     removeTeamMember,
     currency,
-    departments,
     currentUser,
     setTeamMembers,
     currentPlanMeta
@@ -46,39 +116,57 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
   const { show } = useSnackbar();
   const [permissionsMember, setPermissionsMember] = useState<TeamMember | null>(null);
 
-  const totalMonthlyCost = teamMembers.reduce((sum, m) => sum + m.monthlyCost, 0);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const deptSummary = departments.map((d) => {
-    const members = teamMembers.filter((m) =>
-      (m as any).departmentMembers?.some((dm: any) => dm.departmentId === d.id)
-    );
-    const cost = members.reduce((sum, m) => sum + (m.monthlyCost || 0), 0);
-    return { id: d.id, name: d.name, count: members.length, cost };
+  const [stats, setStats] = useState<Stats>({
+    totalMembers: 0,
+    totalMonthlyCost: 0,
+    byDepartment: [],
+    byRole: [],
   });
 
-  const roleSummary = ROLES.reduce(
-    (acc, role) => {
-      const members = teamMembers.filter((m) => m.role === role);
-      if (members.length > 0) {
-        acc.push({
-          role,
-          count: members.length,
-          cost: members.reduce((sum, m) => sum + m.monthlyCost, 0),
-        });
-      }
-      return acc;
-    },
-    [] as { role: string; count: number; cost: number }[]
-  );
+  const [selectedRole, setSelectedRole] = useState<string>("");
 
-  const fetchTeamData = async () => {
+  // debounce the search box into `search`
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const fetchTeamData = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await authClient.request(`/api/plan/${planId}/members`, { method: "GET" });
-      setTeamMembers(res.data);
+      const res = await authClient.request(`/api/plan/${planId}/members`, {
+        method: "GET",
+        params: { search, page, pageSize: PAGE_SIZE },
+      });
+      setTeamMembers(res.data.data);
+      setTotalPages(res.data.pagination.totalPages);
+      setTotalCount(res.data.pagination.total);
+      setStats(res.data.stats);
+      if (!selectedRole && res.data.stats.byRole.length > 0) {
+        setSelectedRole(res.data.stats.byRole[0].role);
+      }
     } catch (err) {
       console.error(err);
+      show("Failed to fetch team members", "error");
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [planId, search, page]);
+
+  useEffect(() => {
+    fetchTeamData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planId, search, page]);
 
   const handleSubmit = async (data: {
     id: string;
@@ -91,7 +179,7 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
       if (!editingMember) {
         await authClient.request(`/api/plan/${planId}/members/invitation`, {
           method: "POST",
-          data: { invitedUserId: data.id },
+          data: { invitedUserId: data.id, role: data.role },
         });
         show("User Invited", "success");
       } else {
@@ -134,7 +222,7 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
       fetchTeamData();
     } catch (err: any) {
       console.error(err);
-      alert(err?.response?.data?.error || "Failed to delete member");
+      show(err?.response?.data?.error || "Failed to delete member", "error");
     }
   };
 
@@ -147,8 +235,11 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
     (currentPlanMeta?.role === "MANAGER" &&
       !!(currentPlanMeta?.permissions as ManagerPermissions | null)?.canManageCoManagerPermissions);
 
-  const showActionsColumn =
-    permissions.canEditMember || permissions.canDeleteMember || canManageAnyPermissions;
+  const showActionsColumn = permissions.canEditMember || permissions.canDeleteMember || canManageAnyPermissions;
+  const canSeeSetupBadges = permissions.canEditMember || canManageAnyPermissions;
+
+  const selectedRoleStat = stats.byRole.find((r) => r.role === selectedRole);
+  const SelectedRoleIcon = selectedRole ? ROLE_ICON[selectedRole] ?? User : User;
 
   return (
     <div className="space-y-6">
@@ -162,7 +253,6 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Invite — ADMIN / CO_ADMIN only */}
           {permissions.canInviteMember && (
             <Button
               className="cursor-pointer"
@@ -176,7 +266,6 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
             </Button>
           )}
 
-          {/* Reload — everyone */}
           <Button
             className="cursor-pointer"
             variant="outline"
@@ -189,7 +278,6 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
             Reload
           </Button>
 
-          {/* Dialog — only mounted when canInviteMember */}
           {permissions.canInviteMember && (
             <AddEditMemberDialog
               open={isAddOpen}
@@ -217,7 +305,6 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
             />
           )}
 
-          {/* Delete confirm — ADMIN only */}
           {permissions.canDeleteMember && (
             <ConfirmDeleteDialog
               open={!!deletingMember}
@@ -229,24 +316,25 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
             />
           )}
         </div>
+
         {permissionsMember && (
-            <PermissionsDialog
-              open={!!permissionsMember}
-              onOpenChange={(open) => { if (!open) setPermissionsMember(null); }}
-              member={permissionsMember}
-              planId={planId}
-              onSaved={(updated) => {
-                setTeamMembers(
-                  teamMembers.map((m) => (m.id === updated.id ? { ...m, ...updated } : m))
-                );
-                setPermissionsMember(null);
-              }}
-            />
-          )}
+          <PermissionsDialog
+            open={!!permissionsMember}
+            onOpenChange={(open) => { if (!open) setPermissionsMember(null); }}
+            member={permissionsMember}
+            planId={planId}
+            onSaved={(updated) => {
+              setTeamMembers(
+                teamMembers.map((m) => (m.id === updated.id ? { ...m, ...updated } : m))
+              );
+              setPermissionsMember(null);
+            }}
+          />
+        )}
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      {/* Statistical cards — everything (totals, cost by dept, cost by role) lives up here now */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -254,7 +342,7 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Members</p>
-              <p className="text-2xl font-bold text-foreground">{teamMembers.length}</p>
+              <p className="text-2xl font-bold text-foreground">{stats.totalMembers}</p>
             </div>
           </div>
         </div>
@@ -267,46 +355,105 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
             <div>
               <p className="text-sm text-muted-foreground">Total Monthly Cost</p>
               <p className="text-2xl font-bold text-success">
-                {formatCurrency(totalMonthlyCost, currency)}
+                {formatCurrency(stats.totalMonthlyCost, currency)}
               </p>
             </div>
           </div>
         </div>
 
+        {/* Cost by department */}
         <div className="rounded-xl border border-border bg-card p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">Cost by Department</h3>
+          </div>
+          <div className="space-y-2 max-h-28 overflow-y-auto">
+            {stats.byDepartment.filter((d) => d.count > 0).length === 0 ? (
+              <p className="text-xs text-muted-foreground">No department data</p>
+            ) : (
+              stats.byDepartment
+                .filter((d) => d.count > 0)
+                .map((d) => (
+                  <div key={d.id} className="flex items-center justify-between text-xs">
+                    <span className="text-foreground">{d.name} <span className="text-muted-foreground">({d.count})</span></span>
+                    <span className="font-mono text-success">{formatCurrency(d.cost, currency)}</span>
+                  </div>
+                ))
+            )}
+          </div>
+        </div>
+
+        {/* Members by role — dropdown selector */}
+        <div className="rounded-xl border border-border bg-card p-5">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-muted-foreground">Members by Role</p>
+            <Select value={selectedRole} onValueChange={setSelectedRole}>
+              <SelectTrigger className="h-7 w-[110px] text-xs">
+                <SelectValue placeholder="Role" />
+              </SelectTrigger>
+              <SelectContent>
+                {stats.byRole.map((r) => (
+                  <SelectItem key={r.role} value={r.role}>{r.role}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/10">
-              <Box className="h-5 w-5 text-warning" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+              <SelectedRoleIcon className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">3D Nodes Ready</p>
-              <p className="text-2xl font-bold text-warning">{teamMembers.length}</p>
+              <p className="text-2xl font-bold text-foreground">{selectedRoleStat?.count ?? 0}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatCurrency(selectedRoleStat?.cost, currency)}/mo
+              </p>
             </div>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Each member maps to a 3D avatar in the visualization
-          </p>
         </div>
       </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <div className="w-full overflow-x-auto">
-            <Table className="min-w-[700px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Departments</TableHead>
-                  <TableHead className="text-right">Monthly Cost</TableHead>
-                  {/* Only render Actions column header if the viewer can act */}
-                  {showActionsColumn && <TableHead>Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
+      {/* Member table — full width */}
+      <div className="rounded-xl border border-border bg-card">
+        <div className="flex items-center justify-between gap-3 p-4 border-b border-border">
+          <h3 className="font-semibold text-foreground">All Members</h3>
+          <div className="relative w-full max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or email..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="pl-8 h-9"
+            />
+          </div>
+        </div>
 
-              <TableBody>
-                {teamMembers.map((member) => {
+        <div className="w-full overflow-x-auto">
+          <Table className="min-w-[700px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Departments</TableHead>
+                <TableHead className="text-right">Monthly Cost</TableHead>
+                {showActionsColumn && <TableHead>Actions</TableHead>}
+              </TableRow>
+            </TableHeader>
+
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={showActionsColumn ? 5 : 4} className="text-center text-sm text-muted-foreground py-8">
+                    Loading members...
+                  </TableCell>
+                </TableRow>
+              ) : teamMembers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={showActionsColumn ? 5 : 4} className="text-center text-sm text-muted-foreground py-8">
+                    {search ? "No members match your search." : "No members yet."}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                teamMembers.map((member) => {
                   const isSelf = member.userId === currentUser?.id;
 
                   return (
@@ -345,17 +492,26 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
                         {formatCurrency(member.monthlyCost || 0, currency)}
                       </TableCell>
 
-                      {/* Actions cell — only rendered when the column exists */}
                       {showActionsColumn && (
                         <TableCell>
                           <div className="flex items-center gap-1">
                             {permissions.canEditMember && !isSelf && (
-                              <Button size="icon" variant="ghost" onClick={() => handleEdit(member)} className="cursor-pointer">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleEdit(member)}
+                                className="relative cursor-pointer"
+                                title={canSeeSetupBadges && isMissingSetup(member) ? "Missing monthly cost or department" : undefined}
+                              >
                                 <Pencil className="h-4 w-4" />
+                                {canSeeSetupBadges && isMissingSetup(member) && (
+                                  <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-yellow-500 text-[9px] font-bold text-white">
+                                    !
+                                  </span>
+                                )}
                               </Button>
                             )}
 
-                            {/* Permissions button — only shown if current viewer can edit this member's permissions */}
                             {!isSelf &&
                               ["CO_ADMIN", "MANAGER", "CO_MANAGER"].includes(member.role) &&
                               (currentPlanMeta?.isOwner ||
@@ -371,10 +527,15 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
                                   size="icon"
                                   variant="ghost"
                                   onClick={() => setPermissionsMember(member)}
-                                  className="cursor-pointer"
-                                  title="Manage permissions"
+                                  className="relative cursor-pointer"
+                                  title={isMissingPermissions(member) ? "No permissions granted yet" : "Manage permissions"}
                                 >
                                   <Shield className="h-4 w-4" />
+                                  {isMissingPermissions(member) && (
+                                    <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-yellow-500 text-[9px] font-bold text-white">
+                                      !
+                                    </span>
+                                  )}
                                 </Button>
                               )}
 
@@ -393,48 +554,37 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
                       )}
                     </TableRow>
                   );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                })
+              )}
+            </TableBody>
+          </Table>
         </div>
 
-        {/* Summaries */}
-        <div className="space-y-4">
-          <div className="rounded-xl border border-border bg-card p-5">
-            <h3 className="font-semibold text-foreground">Cost by Team</h3>
-            <div className="mt-4 space-y-3">
-              {deptSummary
-                .filter((t) => t.count > 0)
-                .map((item) => (
-                  <div key={item.id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-foreground">{item.name}</span>
-                      <span className="text-xs text-muted-foreground">({item.count})</span>
-                    </div>
-                    <span className="font-mono text-sm text-success">
-                      {formatCurrency(item.cost, currency)}
-                    </span>
-                  </div>
-                ))}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-border bg-card p-5">
-            <h3 className="font-semibold text-foreground">Cost by Role</h3>
-            <div className="mt-4 space-y-3">
-              {roleSummary.slice(0, 5).map((item) => (
-                <div key={item.role} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-foreground">{item.role}</span>
-                    <span className="text-xs text-muted-foreground">({item.count})</span>
-                  </div>
-                  <span className="font-mono text-sm text-success">
-                    {formatCurrency(item.cost, currency)}
-                  </span>
-                </div>
-              ))}
-            </div>
+        {/* Pagination */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-border text-sm text-muted-foreground">
+          <span>
+            {totalCount === 0 ? "0 members" : `Showing ${(page - 1) * PAGE_SIZE + 1}-${Math.min(page * PAGE_SIZE, totalCount)} of ${totalCount}`}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-7 w-7"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <span className="text-xs">Page {page} of {totalPages}</span>
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-7 w-7"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
           </div>
         </div>
       </div>

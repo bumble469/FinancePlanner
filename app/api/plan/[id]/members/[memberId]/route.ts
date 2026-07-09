@@ -7,6 +7,7 @@ import {
   DEFAULT_CO_MANAGER_PERMISSIONS,
 } from "@/lib/permissions";
 import { emitToUser } from "@/lib/socket-server";
+import { validateMemberBudget } from "@/lib/budget-validation";
 
 type Params = { params: Promise<{ id: string; memberId: string }> };
 
@@ -50,6 +51,28 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     if (!existing) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    }
+
+    const effectiveRole = role ?? existing.role;
+    const effectiveMonthlyCost = monthlyCost !== undefined ? Number(monthlyCost) : Number(existing.monthlyCost ?? 0);
+    const effectiveDeptIds: string[] = Array.isArray(departmentIds)
+      ? departmentIds
+      : (await prisma.departmentMember.findMany({
+          where: { workItemMemberId: memberId },
+          select: { departmentId: true },
+        })).map((d) => d.departmentId);
+
+    if (effectiveMonthlyCost > 0) {
+      const check = await validateMemberBudget({
+        planId,
+        role: effectiveRole,
+        departmentIds: effectiveDeptIds,
+        monthlyCost: effectiveMonthlyCost,
+        excludeMemberId: memberId,
+      });
+      if (!check.ok) {
+        return NextResponse.json({ error: check.error }, { status: 400 });
+      }
     }
 
     const updated = await prisma.$transaction(async (tx) => {
