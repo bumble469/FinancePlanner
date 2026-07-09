@@ -54,6 +54,14 @@ interface Props {
   } | null;
 }
 
+type BudgetSnapshot = {
+  durationMonths: number;
+  durationKnown: boolean;
+  totalBudget: number;
+  totalCommitted: number;
+  departments: { id: string; name: string; budget: number; committed: number }[];
+};
+
 export function AddEditMemberDialog({
   open,
   planId,
@@ -77,6 +85,7 @@ export function AddEditMemberDialog({
   const [users, setUsers] = useState<any[]>([]);
   const [loadingUser, setLoadingUser] = useState(false);
   const [userSelected, setUserSelected] = useState(false);
+  const [budgetSnapshot, setBudgetSnapshot] = useState<BudgetSnapshot | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -97,6 +106,21 @@ export function AddEditMemberDialog({
       resetForm();
     }
   }, [open, initialData]);
+
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try {
+        const res = await authClient.request(`/api/plan/${planId}/members/budget-snapshot`, {
+          method: "GET",
+          params: isEditMode && initialData ? { excludeMemberId: initialData.id } : undefined,
+        });
+        setBudgetSnapshot(res.data.data);
+      } catch {
+        setBudgetSnapshot(null);
+      }
+    })();
+  }, [open, planId, isEditMode, initialData]);
 
   useEffect(() => {
     if (isEditMode) return;
@@ -169,6 +193,48 @@ export function AddEditMemberDialog({
     setUserSelected(false);
   };
 
+  function getBudgetError(): string | null {
+    if (!budgetSnapshot) return null;
+    const cost = Number(formData.monthlyCost);
+    if (!cost || cost <= 0) return null;
+
+    const committedByThis = cost * budgetSnapshot.durationMonths;
+    const durationNote = budgetSnapshot.durationKnown
+      ? `over ${budgetSnapshot.durationMonths} month(s)`
+      : "(monthly only — plan has no defined duration)";
+
+    if (formData.role === "CO_ADMIN") {
+      if (budgetSnapshot.totalBudget <= 0) return null;
+      const projected = budgetSnapshot.totalCommitted + committedByThis;
+      if (projected > budgetSnapshot.totalBudget) {
+        return `Exceeds total plan budget: ₹${projected.toLocaleString("en-IN")} committed vs ₹${budgetSnapshot.totalBudget.toLocaleString("en-IN")} ${durationNote}.`;
+      }
+      return null;
+    }
+
+    if (formData.departmentIds.length === 0) {
+      if (budgetSnapshot.totalBudget <= 0) return null;
+      const projected = budgetSnapshot.totalCommitted + committedByThis;
+      if (projected > budgetSnapshot.totalBudget) {
+        return `No department selected — exceeds total plan budget: ₹${projected.toLocaleString("en-IN")} vs ₹${budgetSnapshot.totalBudget.toLocaleString("en-IN")} ${durationNote}.`;
+      }
+      return null;
+    }
+
+    for (const deptId of formData.departmentIds) {
+      const dept = budgetSnapshot.departments.find((d) => d.id === deptId);
+      if (!dept || dept.budget <= 0) continue;
+      const projected = dept.committed + committedByThis;
+      if (projected > dept.budget) {
+        return `"${dept.name}" budget exceeded: ₹${projected.toLocaleString("en-IN")} vs ₹${dept.budget.toLocaleString("en-IN")} ${durationNote}.`;
+      }
+    }
+
+    return null;
+  }
+
+  const budgetError = getBudgetError();
+
   const handleSubmit = () => {
     if (!formData.id || !formData.role) return;
 
@@ -177,11 +243,10 @@ export function AddEditMemberDialog({
       name: formData.name,
       role: formData.role as AllowedRole,
       departmentIds: isEditMode ? formData.departmentIds : [],
-      monthlyCost: isEditMode
-        ? formData.role === "CO_ADMIN" || !formData.monthlyCost
-          ? undefined
-          : Number(formData.monthlyCost)
-        : undefined,
+      monthlyCost:
+        isEditMode && formData.monthlyCost
+          ? Number(formData.monthlyCost)
+          : undefined,
     });
 
     resetForm();
@@ -203,8 +268,7 @@ export function AddEditMemberDialog({
   const showDepartments =
     isEditMode && formData.role && formData.role !== "CO_ADMIN";
 
-  const showCost =
-    isEditMode && formData.role && formData.role !== "CO_ADMIN";
+  const showCost = isEditMode && !!formData.role;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -330,11 +394,10 @@ export function AddEditMemberDialog({
                           key={d.id}
                           type="button"
                           onClick={() => toggleDepartment(d.id)}
-                          className={`rounded border p-2 text-sm transition ${
-                            selected
-                              ? "bg-primary text-white"
-                              : "bg-background hover:bg-muted"
-                          }`}
+                          className={`rounded border p-2 text-sm transition ${selected
+                            ? "bg-primary text-white"
+                            : "bg-background hover:bg-muted"
+                            }`}
                         >
                           {d.name}
                         </button>
@@ -357,7 +420,11 @@ export function AddEditMemberDialog({
                         monthlyCost: e.target.value,
                       }))
                     }
+                    className={budgetError ? "border-destructive" : ""}
                   />
+                  {budgetError && (
+                    <p className="text-xs text-destructive">{budgetError}</p>
+                  )}
                 </div>
               )}
             </>
@@ -374,7 +441,7 @@ export function AddEditMemberDialog({
 
             <Button
               onClick={handleSubmit}
-              disabled={!userSelected || !formData.role}
+              disabled={!userSelected || !formData.role || !!budgetError}
               className="cursor-pointer"
             >
               {isEditMode ? "Save Changes" : "Send Invitation"}

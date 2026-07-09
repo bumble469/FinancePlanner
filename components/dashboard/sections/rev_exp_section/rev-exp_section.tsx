@@ -688,6 +688,22 @@ function PLRow({
 
 // ─── Analytics Tab ──────────────────────────────────────────────────────────
 
+function CustomTooltip({ active, payload, label, currency }: any) {
+  if (!active || !payload || !payload.length) return null;
+  return (
+    <div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg text-xs">
+      {label && <p className="font-medium text-foreground mb-1">{label}</p>}
+      {payload.map((p: any, i: number) => (
+        <div key={i} className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || p.payload.fill }} />
+          <span className="text-muted-foreground">{p.name}:</span>
+          <span className="font-mono font-medium text-foreground">{fmt(p.value, currency)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AnalyticsTab({
   income,
   expenses,
@@ -701,32 +717,46 @@ function AnalyticsTab({
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
 
   const incomeVsExpenseData = [
-    { name: "Income", value: totalIncome, fill: "#22c55e" },
-    { name: "Expenses", value: totalExpenses, fill: "#ef4444" },
+    { name: "Income", value: totalIncome, key: "income" },
+    { name: "Expenses", value: totalExpenses, key: "expense" },
   ];
 
-  const byCategory = EXPENSE_CATEGORIES.map((cat) => ({
+  const byCategory = EXPENSE_CATEGORIES.map((cat, idx) => ({
     name: CATEGORY_CONFIG[cat].label,
     value: expenses.filter((e) => e.category === cat).reduce((s, e) => s + e.amount, 0),
-    fill: CATEGORY_CONFIG[cat].hex,
+    hex: CATEGORY_CONFIG[cat].hex,
+    idx,
   })).filter((x) => x.value > 0);
+
+  const categoryTotal = byCategory.reduce((s, x) => s + x.value, 0);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="rounded-xl border border-border bg-card p-4">
-        <h3 className="text-sm font-medium text-muted-foreground mb-4">Income vs Expenses</h3>
+      <div className="rounded-xl border border-border bg-card p-5">
+        <h3 className="text-sm font-medium text-muted-foreground mb-1">Income vs Expenses</h3>
+        <p className="text-xs text-muted-foreground/70 mb-4">Total inflow compared to total outflow</p>
         {totalIncome === 0 && totalExpenses === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-12">No data yet</p>
+          <p className="text-sm text-muted-foreground text-center py-16">No data yet</p>
         ) : (
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={incomeVsExpenseData}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => fmt(v, currency)} width={80} />
-              <Tooltip formatter={(v: number) => fmt(v, currency)} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                {incomeVsExpenseData.map((entry, idx) => (
-                  <Cell key={idx} fill={entry.fill} />
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={incomeVsExpenseData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#22c55e" stopOpacity={0.95} />
+                  <stop offset="100%" stopColor="#22c55e" stopOpacity={0.35} />
+                </linearGradient>
+                <linearGradient id="expenseGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ef4444" stopOpacity={0.95} />
+                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0.35} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" opacity={0.5} />
+              <XAxis dataKey="name" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => fmt(v, currency)} width={80} axisLine={false} tickLine={false} />
+              <Tooltip content={<CustomTooltip currency={currency} />} cursor={{ fill: "rgba(128,128,128,0.06)" }} />
+              <Bar dataKey="value" radius={[10, 10, 0, 0]} maxBarSize={90} animationDuration={600}>
+                {incomeVsExpenseData.map((entry) => (
+                  <Cell key={entry.key} fill={entry.key === "income" ? "url(#incomeGradient)" : "url(#expenseGradient)"} />
                 ))}
               </Bar>
             </BarChart>
@@ -734,29 +764,60 @@ function AnalyticsTab({
         )}
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-4">
-        <h3 className="text-sm font-medium text-muted-foreground mb-4">Expenses by category</h3>
+      <div className="rounded-xl border border-border bg-card p-5">
+        <h3 className="text-sm font-medium text-muted-foreground mb-1">Expenses by category</h3>
+        <p className="text-xs text-muted-foreground/70 mb-4">Where your spending is concentrated</p>
         {byCategory.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-12">No data yet</p>
+          <p className="text-sm text-muted-foreground text-center py-16">No data yet</p>
         ) : (
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
-              <Pie
-                data={byCategory}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={55}
-                outerRadius={90}
-                paddingAngle={2}
-              >
-                {byCategory.map((entry, idx) => (
-                  <Cell key={idx} fill={entry.fill} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(v: number) => fmt(v, currency)} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-            </PieChart>
-          </ResponsiveContainer>
+          <div className="relative">
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <defs>
+                  {byCategory.map((entry) => (
+                    <radialGradient key={entry.idx} id={`sliceGradient-${entry.idx}`} cx="35%" cy="35%" r="70%">
+                      <stop offset="0%" stopColor={entry.hex} stopOpacity={1} />
+                      <stop offset="100%" stopColor={entry.hex} stopOpacity={0.65} />
+                    </radialGradient>
+                  ))}
+                </defs>
+                <Pie
+                  data={byCategory}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={65}
+                  outerRadius={105}
+                  paddingAngle={3}
+                  cornerRadius={6}
+                  stroke="none"
+                  animationDuration={600}
+                >
+                  {byCategory.map((entry) => (
+                    <Cell key={entry.idx} fill={`url(#sliceGradient-${entry.idx})`} />
+                  ))}
+                </Pie>
+                <Tooltip content={<CustomTooltip currency={currency} />} />
+                <Legend
+                  layout="vertical"
+                  verticalAlign="middle"
+                  align="right"
+                  wrapperStyle={{ fontSize: 12 }}
+                  formatter={(value: string, entry: any) => (
+                    <span className="text-foreground">
+                      {value} <span className="text-muted-foreground">({((entry.payload.value / categoryTotal) * 100).toFixed(0)}%)</span>
+                    </span>
+                  )}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            {/* center label */}
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center" style={{ marginRight: "17%" }}>
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground">Total</p>
+                <p className="text-lg font-bold text-foreground">{fmt(categoryTotal, currency)}</p>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

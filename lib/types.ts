@@ -79,7 +79,7 @@ export interface TeamMember {
   user: any;
   userId: string;
   departmentMembers?: DepartmentMember[];
-  permissions?: [];
+  permissions?: Record<string, any> | null;
   monthlyCost: number;
 }
 

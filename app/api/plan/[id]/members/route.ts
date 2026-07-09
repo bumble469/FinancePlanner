@@ -14,22 +14,90 @@ export async function GET(
     }
 
     const { id: planId } = await params;
+    const { searchParams } = req.nextUrl;
 
-    const members = await prisma.workItemMember.findMany({
-      where: {
-        workItemId: planId,
-      },
-      include: {
-        user: true,
-        departmentMembers: {
-          include: {
-            department: true,
-          },
-        },
-      },
+    const search = searchParams.get("search")?.trim() || "";
+    const page = Math.max(1, Number(searchParams.get("page")) || 1);
+    const pageSize = Math.min(50, Math.max(1, Number(searchParams.get("pageSize")) || 10));
+
+    const where = {
+      workItemId: planId,
+      ...(search
+        ? {
+            user: {
+              OR: [
+                { name: { contains: search, mode: "insensitive" as const } },
+                { email: { contains: search, mode: "insensitive" as const } },
+              ],
+            },
+          }
+        : {}),
+    };
+
+    const [total, members, allMembersForStats] = await Promise.all([
+      prisma.workItemMember.count({ where }),
+      prisma.workItemMember.findMany({
+        where,
+        include: { user: true, departmentMembers: { include: { department: true } } },
+        orderBy: { user: { name: "asc" } },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      // Stats always reflect the WHOLE team, not just the current search/page
+      prisma.workItemMember.findMany({
+        where: { workItemId: planId },
+        include: { user: true, departmentMembers: { include: { department: true } } },
+      }),
+    ]);
+
+    const departments = await prisma.department.findMany({ where: { workItemId: planId } });
+
+    const toNum = (m: any) => Number(m.monthlyCost ?? 0);
+
+    const totalMonthlyCost = allMembersForStats.reduce((sum, m) => sum + toNum(m), 0);
+
+    const byDepartment = departments.map((d) => {
+      const inDept = allMembersForStats.filter((m) =>
+        m.departmentMembers.some((dm) => dm.departmentId === d.id)
+      );
+      return {
+        id: d.id,
+        name: d.name,
+        count: inDept.length,
+        cost: inDept.reduce((sum, m) => sum + toNum(m), 0),
+      };
     });
 
-    return NextResponse.json(members);
+    const ROLE_ORDER = ["ADMIN", "CO_ADMIN", "MANAGER", "CO_MANAGER", "MEMBER"];
+    const byRole = ROLE_ORDER.map((role) => {
+      const inRole = allMembersForStats.filter((m) => m.role === role);
+      return {
+        role,
+        count: inRole.length,
+        cost: inRole.reduce((sum, m) => sum + toNum(m), 0),
+      };
+    }).filter((r) => r.count > 0);
+
+    const formattedMembers = members.map((m) => ({
+      ...m,
+      monthlyCost: toNum(m),
+    }));
+
+    return NextResponse.json({
+      data: formattedMembers,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      },
+      stats: {
+        totalMembers: allMembersForStats.length,
+        totalMonthlyCost,
+        byDepartment,
+        byRole,
+      },
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

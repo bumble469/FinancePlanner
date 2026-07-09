@@ -35,7 +35,7 @@ export function OverviewSection() {
     0
   );
 
-  const remainingBalance = totalBudget - totalAllocated;
+  const remainingBudget = totalBudget - totalAllocated;
 
   const totalIncomeReceived = income.reduce(
     (sum, i) => sum + (i.receivedAmount || 0),
@@ -49,7 +49,7 @@ export function OverviewSection() {
 
   const estimatedProfitLoss = totalIncomeReceived - totalExpensesPaid;
 
-  const balanceStatus = getStatus(remainingBalance, totalBudget);
+  const balanceStatus = getStatus(remainingBudget, totalBudget);
 
   const profitStatus =
     estimatedProfitLoss >= 0
@@ -105,8 +105,8 @@ export function OverviewSection() {
         />
 
         <MetricCard
-          title="Remaining Balance"
-          value={formatCurrency(remainingBalance, currency)}
+          title="Remaining Budget"
+          value={formatCurrency(remainingBudget, currency)}
           status={balanceStatus}
           trend={balanceStatus === "healthy" ? "up" : "down"}
           icon={<PiggyBank className="h-5 w-5" />}
@@ -163,7 +163,7 @@ export function OverviewSection() {
                   Over Budget
                 </span>
                 <span className="font-medium text-danger">
-                  {remainingBalance < 0 ? 1 : 0}
+                  {remainingBudget < 0 ? 1 : 0}
                 </span>
               </div>
 
