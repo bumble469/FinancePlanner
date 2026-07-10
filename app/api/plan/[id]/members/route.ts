@@ -24,13 +24,13 @@ export async function GET(
       workItemId: planId,
       ...(search
         ? {
-            user: {
-              OR: [
-                { name: { contains: search, mode: "insensitive" as const } },
-                { email: { contains: search, mode: "insensitive" as const } },
-              ],
-            },
-          }
+          user: {
+            OR: [
+              { name: { contains: search, mode: "insensitive" as const } },
+              { email: { contains: search, mode: "insensitive" as const } },
+            ],
+          },
+        }
         : {}),
     };
 
@@ -64,7 +64,14 @@ export async function GET(
         id: d.id,
         name: d.name,
         count: inDept.length,
-        cost: inDept.reduce((sum, m) => sum + toNum(m), 0),
+        cost: inDept.reduce((sum, m) => {
+          const dm = m.departmentMembers.find((x) => x.departmentId === d.id);
+          const share = dm?.costShare != null
+            ? Number(dm.costShare)
+            : (m.departmentMembers.length === 1 ? Number(m.monthlyCost ?? 0) : 0);
+          return sum + share;
+        }, 0),
+
       };
     });
 

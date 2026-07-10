@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 import { useFinancialStore } from "@/lib/store";
 import {
   Dialog,
@@ -37,6 +38,7 @@ interface TeamMember {
   role: AllowedRole;
   departmentIds: string[];
   monthlyCost?: number;
+  departmentCostShares?: Record<string, number>;
 }
 
 interface Props {
@@ -51,6 +53,7 @@ interface Props {
     role: AllowedRole;
     departmentIds: string[];
     monthlyCost?: number;
+    departmentCostShares?: Record<string, number>;
   } | null;
 }
 
@@ -86,6 +89,7 @@ export function AddEditMemberDialog({
   const [loadingUser, setLoadingUser] = useState(false);
   const [userSelected, setUserSelected] = useState(false);
   const [budgetSnapshot, setBudgetSnapshot] = useState<BudgetSnapshot | null>(null);
+  const [departmentCostShares, setDepartmentCostShares] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -166,18 +170,19 @@ export function AddEditMemberDialog({
     setUserSelected(true);
   };
 
-  const toggleDepartment = (id: string) => {
+  function toggleDepartment(deptId: string) {
     setFormData((prev) => {
-      const exists = prev.departmentIds.includes(id);
-
-      return {
-        ...prev,
-        departmentIds: exists
-          ? prev.departmentIds.filter((d) => d !== id)
-          : [...prev.departmentIds, id],
-      };
+      const already = prev.departmentIds.includes(deptId);
+      const next = already
+        ? prev.departmentIds.filter((id) => id !== deptId)
+        : [...prev.departmentIds, deptId];
+      return { ...prev, departmentIds: next };
     });
-  };
+    setDepartmentCostShares((prev) => {
+      const { [deptId]: _, ...rest } = prev;
+      return prev[deptId] !== undefined ? rest : { ...prev, [deptId]: "" };
+    });
+  }
 
   const resetForm = () => {
     setFormData({
@@ -243,10 +248,10 @@ export function AddEditMemberDialog({
       name: formData.name,
       role: formData.role as AllowedRole,
       departmentIds: isEditMode ? formData.departmentIds : [],
-      monthlyCost:
-        isEditMode && formData.monthlyCost
-          ? Number(formData.monthlyCost)
-          : undefined,
+      monthlyCost: isEditMode && formData.monthlyCost ? Number(formData.monthlyCost) : undefined,
+      departmentCostShares: isEditMode && formData.departmentIds.length > 1
+        ? Object.fromEntries(formData.departmentIds.map((id) => [id, Number(departmentCostShares[id] || 0)]))
+        : undefined,
     });
 
     resetForm();
@@ -407,19 +412,81 @@ export function AddEditMemberDialog({
                 </div>
               )}
 
+              {showDepartments && formData.departmentIds.length > 1 && (
+                <div className="space-y-2 rounded-lg border border-border p-3">
+                  <Label className="text-xs text-muted-foreground">
+                    Split ₹{formData.monthlyCost || 0} across departments
+                  </Label>
+                  {formData.departmentIds.map((deptId) => {
+                    const dept = departments.find((d) => d.id === deptId);
+                    return (
+                      <div key={deptId} className="flex items-center gap-2">
+                        <span className="text-xs w-32 truncate">{dept?.name}</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          placeholder="0"
+                          value={departmentCostShares[deptId] ?? ""}
+                          onChange={(e) => {
+                            const value = e.target.value;
+
+                            if (value === "" || Number(value) >= 0) {
+                              setDepartmentCostShares((prev) => ({
+                                ...prev,
+                                [deptId]: value,
+                              }));
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "-" || e.key === "e" || e.key === "E") {
+                              e.preventDefault();
+                            }
+                          }}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                    );
+                  })}
+                  {(() => {
+                    const sum = formData.departmentIds.reduce(
+                      (s, id) => s + Number(departmentCostShares[id] || 0), 0
+                    );
+                    const total = Number(formData.monthlyCost || 0);
+                    const mismatch = Math.abs(sum - total) > 0.01;
+                    return (
+                      <p className={cn("text-xs", mismatch ? "text-destructive" : "text-muted-foreground")}>
+                        Allocated ₹{sum.toLocaleString("en-IN")} of ₹{total.toLocaleString("en-IN")}
+                      </p>
+                    );
+                  })()}
+                </div>
+              )}
+
               {showCost && (
                 <div className="space-y-2">
                   <Label>Monthly Cost (optional)</Label>
                   <Input
                     type="number"
+                    min={0}
+                    step="0.01"
                     placeholder="Enter monthly cost"
                     value={formData.monthlyCost}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        monthlyCost: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => {
+                      const value = e.target.value;
+
+                      if (value === "" || Number(value) >= 0) {
+                        setFormData((prev) => ({
+                          ...prev,
+                          monthlyCost: value,
+                        }));
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "-" || e.key === "e" || e.key === "E") {
+                        e.preventDefault();
+                      }
+                    }}
                     className={budgetError ? "border-destructive" : ""}
                   />
                   {budgetError && (

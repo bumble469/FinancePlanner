@@ -8,11 +8,14 @@ import {
   Loader2,
   CheckSquare,
   Users,
+  Flag,
+  Ban,
 } from "lucide-react";
 import { TaskMembersDialog } from "./task-member-dialog";
 import { cn } from "@/lib/utils";
 
 const STATUS_CYCLE: Task["status"][] = ["TODO", "IN_PROGRESS", "DONE"];
+
 
 function nextStatus(s: Task["status"]): Task["status"] {
   return STATUS_CYCLE[(STATUS_CYCLE.indexOf(s) + 1) % STATUS_CYCLE.length];
@@ -24,9 +27,11 @@ function StatusIcon({ status }: { status: Task["status"] }) {
   }
 
   if (status === "IN_PROGRESS") {
-    return (
-      <Loader2 className="h-4 w-4 text-primary shrink-0 animate-spin" />
-    );
+    return <Loader2 className="h-4 w-4 text-primary shrink-0 animate-spin" />;
+  }
+
+  if (status === "BLOCKED") {
+    return <Ban className="h-4 w-4 text-destructive shrink-0" />;
   }
 
   return <Circle className="h-4 w-4 text-muted-foreground shrink-0" />;
@@ -36,12 +41,14 @@ const STATUS_LABEL: Record<Task["status"], string> = {
   TODO: "To do",
   IN_PROGRESS: "In progress",
   DONE: "Done",
+  BLOCKED: "Blocked",
 };
 
 const STATUS_BADGE: Record<Task["status"], string> = {
   TODO: "bg-secondary text-muted-foreground",
   IN_PROGRESS: "bg-primary/10 text-primary",
   DONE: "bg-success/10 text-success",
+  BLOCKED: "bg-destructive/10 text-destructive",
 };
 
 type TaskListViewProps = {
@@ -120,6 +127,21 @@ export function TaskListView({
               >
                 {STATUS_LABEL[t.status]}
               </span>
+
+              {t.milestones && t.milestones.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                  {t.milestones.map((m) => (
+                    <span
+                      key={m.id}
+                      title={`Part of milestone: ${m.title} (${m.status.replace("_", " ").toLowerCase()})`}
+                      className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium"
+                    >
+                      <Flag className="h-3 w-3" />
+                      {m.title}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Actions */}

@@ -110,6 +110,7 @@ enum TaskStatus {
   TODO
   IN_PROGRESS
   DONE
+  BLOCKED
 }
 
 //////////////////////
@@ -336,6 +337,7 @@ model DepartmentMember {
   departmentId     String
   userId           String
   workItemMemberId String
+  costShare        Decimal? @db.Decimal(12, 2)
 
   department     Department     @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -508,14 +510,16 @@ model Milestone {
   workItemId   String
   title        String
   description  String?
-  dueDate      DateTime?       // soft deadline, optional
+  dueDate      DateTime?
+  originalDueDate DateTime?    
+  extensionReason String?
   status       MilestoneStatus @default(UPCOMING)
-  achievedAt   DateTime?       // auto-set when all tasks done
+  achievedAt   DateTime?
 
   workItem   WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
 
-  tasks     MilestoneTask[]   // linked tasks
-  createdBy String            // userId of creator
+  tasks     MilestoneTask[]
+  createdBy String
   creator     User   @relation("MilestoneCreator", fields: [createdBy], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
@@ -535,9 +539,12 @@ model Task {
   departmentId String?
   phaseId      String?
 
-  dueDate     DateTime?   
-  completedAt DateTime?   
-  priority    Int         @default(0)  
+  startDate       DateTime?
+  dueDate         DateTime?
+  originalDueDate DateTime?  
+  extensionReason String?
+  completedAt     DateTime?
+  priority        Int        @default(0)
 
   workItem   WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
@@ -547,10 +554,25 @@ model Task {
   notes     TaskNote[]
   reactions TaskReaction[]
 
+  dependsOn TaskDependency[] @relation("TaskDependent")
+  blocks    TaskDependency[] @relation("TaskBlocker")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("tasks")
+}
+
+model TaskDependency {
+  id          String @id @default(uuid())
+  taskId      String 
+  dependsOnId String 
+
+  task      Task @relation("TaskDependent", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn Task @relation("TaskBlocker", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnId])
+  @@map("task_dependencies")
 }
 
 model TaskMember {

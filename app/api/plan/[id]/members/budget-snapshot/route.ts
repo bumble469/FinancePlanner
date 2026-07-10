@@ -50,10 +50,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       id: d.id,
       name: d.name,
       budget: Number(d.budget ?? 0),
-      committed: d.members.reduce(
-        (sum, dm) => sum + Number(dm.workItemMember.monthlyCost ?? 0) * durationMonths,
-        0
-      ),
+      committed: d.members.reduce((sum, dm) => sum + Number(dm.costShare ?? 0) * durationMonths, 0),
     }));
 
     return NextResponse.json({
