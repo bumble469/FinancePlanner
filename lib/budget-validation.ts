@@ -31,12 +31,14 @@ export async function validateMemberBudget({
   role,
   departmentIds,
   monthlyCost,
+  departmentShares,
   excludeMemberId,
 }: {
   planId: string;
   role: string;
   departmentIds: string[];
   monthlyCost: number;
+  departmentShares?: Record<string, number>;
   excludeMemberId?: string;
 }): Promise<BudgetCheckResult> {
   const workItem = await prisma.workItem.findUnique({
@@ -85,17 +87,20 @@ export async function validateMemberBudget({
         departmentId,
         ...(excludeMemberId ? { workItemMemberId: { not: excludeMemberId } } : {}),
       },
-      include: { workItemMember: { select: { monthlyCost: true } } },
+      select: { costShare: true },
     });
     const othersTotal = deptMembers.reduce(
-      (sum, dm) => sum + Number(dm.workItemMember.monthlyCost ?? 0) * durationMonths,
+      (sum, dm) => sum + Number(dm.costShare ?? 0) * durationMonths,
       0
     );
 
-    if (othersTotal + newTotalCost > deptBudget) {
+    const thisMemberShare =
+      (departmentShares?.[departmentId] ?? monthlyCost) * durationMonths;
+
+    if (othersTotal + thisMemberShare > deptBudget) {
       return {
         ok: false,
-        error: `"${department.name}" would be committed to ₹${(othersTotal + newTotalCost).toLocaleString("en-IN")} against its budget of ₹${deptBudget.toLocaleString("en-IN")}${durationKnown ? ` over ${durationMonths} month(s)` : " (monthly cost only — plan has no defined duration)"}.`,
+        error: `"${department.name}" would be committed to ₹${(othersTotal + thisMemberShare).toLocaleString("en-IN")} against its budget of ₹${deptBudget.toLocaleString("en-IN")}${durationKnown ? ` over ${durationMonths} month(s)` : " (monthly cost only — plan has no defined duration)"}.`,
       };
     }
   }

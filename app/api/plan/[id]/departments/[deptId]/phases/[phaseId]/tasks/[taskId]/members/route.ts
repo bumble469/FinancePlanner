@@ -84,9 +84,8 @@ export async function GET(
       where: {
         workItemId: id,
         id: { notIn: assignedWorkItemMemberIds },
-        role: {
-          not: "ADMIN",
-        }
+        role: { in: ["MANAGER", "CO_MANAGER", "MEMBER"] },
+        departmentMembers: { some: { departmentId: deptId } },
       },
       select: {
         id: true,

@@ -21,7 +21,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const { id: planId, memberId } = await params;
     const body = await req.json();
-    const { role, departmentIds, monthlyCost } = body;
+    const { role, departmentIds, monthlyCost, departmentCostShares  } = body;
 
     // Check owner first
     const account = await prisma.account.findUnique({ where: { userId: user.sub } });
@@ -68,10 +68,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         role: effectiveRole,
         departmentIds: effectiveDeptIds,
         monthlyCost: effectiveMonthlyCost,
+        departmentShares: departmentCostShares,
         excludeMemberId: memberId,
       });
       if (!check.ok) {
         return NextResponse.json({ error: check.error }, { status: 400 });
+      }
+    }
+
+    if (Array.isArray(departmentIds) && departmentIds.length > 1) {
+      if (!departmentCostShares) {
+        return NextResponse.json({ error: "Please specify how much of the monthly cost goes to each department" }, { status: 400 });
+      }
+      const sharesSum = departmentIds.reduce((sum: number, id: string) => sum + Number(departmentCostShares[id] ?? 0), 0);
+      const expectedTotal = Number(effectiveMonthlyCost);
+      if (Math.abs(sharesSum - expectedTotal) > 0.01) {
+        return NextResponse.json({
+          error: `Department cost shares must add up to the total monthly cost. Got ₹${sharesSum.toLocaleString("en-IN")}, expected ₹${expectedTotal.toLocaleString("en-IN")}.`,
+        }, { status: 400 });
       }
     }
 
@@ -95,13 +109,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           where: { workItemMemberId: memberId },
         });
 
-        // Re-create with the new set
         if (departmentIds.length > 0) {
           await tx.departmentMember.createMany({
             data: departmentIds.map((departmentId: string) => ({
               departmentId,
               userId: existing.userId,
               workItemMemberId: memberId,
+              costShare:
+                departmentIds.length === 1
+                  ? effectiveMonthlyCost
+                  : Number(departmentCostShares?.[departmentId] ?? 0),
             })),
           });
         }

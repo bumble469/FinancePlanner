@@ -81,6 +81,7 @@ export interface TeamMember {
   departmentMembers?: DepartmentMember[];
   permissions?: Record<string, any> | null;
   monthlyCost: number;
+  departmentCostShares?: Record<string, number>;
 }
 
 export type ExpenseStatus =
@@ -219,7 +220,12 @@ export type MilestoneStatus = "UPCOMING" | "IN_PROGRESS" | "ACHIEVED" | "MISSED"
 export interface MilestoneTask {
   id: string;
   title: string;
-  status: "TODO" | "IN_PROGRESS" | "DONE";
+  status: TaskStatus;
+  priority?: number;
+  startDate?: string;
+  dueDate?: string;
+  originalDueDate?: string;
+  extensionReason?: string;
 }
 
 export interface Milestone {
@@ -227,6 +233,8 @@ export interface Milestone {
   title: string;
   description?: string;
   dueDate?: string;
+  originalDueDate?: string;
+  extensionReason?: string;
   status: MilestoneStatus;
   achievedAt?: string;
   tasks: MilestoneTask[];
@@ -242,24 +250,37 @@ export interface MilestoneFormData {
   taskIds: string[];
 }
 
-// ================= TASKS =================
+export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE" | "BLOCKED";
 
-export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
+export interface TaskAssignee {
+  id: string; // WorkItemMember id
+  name: string | null;
+  image: string | null;
+}
+
+export interface TaskMilestoneRef {
+  id: string;
+  title: string;
+  status: MilestoneStatus;
+}
 
 export type Task = {
   id: string;
   title: string;
   description?: string;
   status: TaskStatus;
+  priority: number;
   workItemId?: string;
   departmentId?: string;
   phaseId?: string;
-  assignedToId?: string;
-  assignedTo?: {
-    id: string;
-    name: string;
-    image?: string;
-  };
+  startDate?: string;
+  dueDate?: string;
+  originalDueDate?: string;
+  extensionReason?: string;
+  completedAt?: string;
+  assignees?: TaskAssignee[];
+  dependsOnIds?: string[];
+  milestones?: TaskMilestoneRef[];
   createdAt?: string;
   updatedAt?: string;
 };

@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useFinancialStore } from "@/lib/store";
 import { authClient } from "@/lib/auth-client";
 import { Department, Milestone, MilestoneStatus, MilestoneTask, MilestoneFormData } from "@/lib/types";
-import { Flag, Plus, CheckCircle2, Circle, Clock, AlertTriangle, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { Flag, Plus, CheckCircle2, Circle, Clock, AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddDeptDialog } from "./components/add-dept-dialog";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
@@ -14,6 +14,9 @@ import { Button } from "@/components/ui/button";
 import { Building2 } from "lucide-react";
 import { useSnackbar } from "@/lib/useSnackbar";
 import type { PlanPermissions } from "@/lib/permissions";
+import { PlanningInsights } from "./components/planning-insights";
+import { GanttChart } from "./components/gantt-chart";
+import { ExtendDeadlineDialog } from "./components/extend-deadline-dialog";
 
 const STATUS_CONFIG: Record<
   MilestoneStatus,
@@ -34,12 +37,14 @@ function MilestoneCard({
   milestone,
   onEdit,
   onDelete,
+  onExtend,
   canEdit,
   canDelete,
 }: {
   milestone: Milestone;
   onEdit: (m: Milestone) => void;
   onDelete: (id: string) => void;
+  onExtend: (m: Milestone) => void;
   canEdit?: boolean;
   canDelete?: boolean;
 }) {
@@ -64,6 +69,11 @@ function MilestoneCard({
         {(canEdit || canDelete) && (
           <div className="flex items-center gap-1 shrink-0">
             {canEdit && (
+              <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" title="Extend deadline" onClick={() => onExtend(milestone)}>
+                <Clock className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {canEdit && (
               <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" onClick={() => onEdit(milestone)}>
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
@@ -85,6 +95,11 @@ function MilestoneCard({
         {milestone.dueDate && (
           <span className="text-xs text-muted-foreground">
             Due {new Date(milestone.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+          </span>
+        )}
+        {milestone.originalDueDate && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 px-2 py-0.5 text-xs font-medium" title={milestone.extensionReason}>
+            Extended from {new Date(milestone.originalDueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
           </span>
         )}
       </div>
@@ -157,6 +172,8 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
   const [deleteMilestoneId, setDeleteMilestoneId] = useState<string | null>(null);
   const [confirmMilestoneOpen, setConfirmMilestoneOpen] = useState(false);
+
+  const [extendingMilestone, setExtendingMilestone] = useState<Milestone | null>(null);
 
   const remainingBudget = (eventData.eventBudget || 0) - departments
     .filter((d) => d.id !== editingDept?.id)
@@ -239,6 +256,7 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
       const res = await authClient.request(`/api/plan/${currentPlanId}/departments/${deptId}/phases`, { method: "POST", data: { name } });
       useFinancialStore.getState().updateModule(tempId, res.data.id);
       show("Phase created", "success");
+      await fetchPhases(deptId);
     } catch (err) {
       console.error("Create phase failed:", err);
       removeModule(tempId);
@@ -346,6 +364,21 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
       console.error("Update milestone failed:", err);
       fetchMilestones();
       show("Failed to update milestone", "error");
+    }
+  };
+
+  const extendMilestoneDeadline = async (newDueDate: string, reason: string) => {
+    if (!currentPlanId || !extendingMilestone) return;
+    try {
+      const res = await authClient.request(`/api/plan/${currentPlanId}/milestones/${extendingMilestone.id}`, {
+        method: "PATCH",
+        data: { extension: { newDueDate, reason } },
+      });
+      updateMilestone(extendingMilestone.id, res.data);
+      show("Deadline extended", "success");
+    } catch (err) {
+      console.error("Extend milestone failed:", err);
+      throw err; // let the dialog surface the error
     }
   };
 
@@ -520,6 +553,9 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
             })}
           </div>
 
+          <PlanningInsights milestones={milestones} />
+          <GanttChart milestones={milestones} />
+
           {/* milestone grid */}
           {filteredMilestones.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-14 text-center gap-3">
@@ -554,6 +590,7 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
                   milestone={milestone}
                   onEdit={(m) => { setEditingMilestone(m); setMilestoneDialogOpen(true); }}
                   onDelete={(id) => { setDeleteMilestoneId(id); setConfirmMilestoneOpen(true); }}
+                  onExtend={(m) => setExtendingMilestone(m)}
                   canEdit={permissions.canEditMilestone}
                   canDelete={permissions.canDeleteMilestone}
                 />
@@ -585,6 +622,14 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
           setMilestoneDialogOpen(false);
           setEditingMilestone(null);
         }}
+      />
+
+      <ExtendDeadlineDialog
+        open={!!extendingMilestone}
+        onOpenChange={(open) => { if (!open) setExtendingMilestone(null); }}
+        itemLabel={extendingMilestone?.title ?? ""}
+        currentDueDate={extendingMilestone?.dueDate}
+        onConfirm={extendMilestoneDeadline}
       />
     </div>
   );

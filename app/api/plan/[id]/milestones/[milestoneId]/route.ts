@@ -106,6 +106,7 @@ export async function PATCH(
       dueDate,
       status,
       taskIds,
+      extension, // optional: { newDueDate: string; reason: string }
     } = body;
 
     // ✅ validate title if provided
@@ -128,6 +129,29 @@ export async function PATCH(
       if (validTasks !== taskIds.length) {
         return NextResponse.json(
           { error: "Invalid taskIds provided" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // ✅ validate extension payload, if this is a deadline-extension request
+    if (extension) {
+      if (!extension.newDueDate) {
+        return NextResponse.json(
+          { error: "A new due date is required to extend this milestone" },
+          { status: 400 }
+        );
+      }
+      if (!extension.reason || !extension.reason.trim()) {
+        return NextResponse.json(
+          { error: "A reason is required to extend this milestone" },
+          { status: 400 }
+        );
+      }
+      const newDue = new Date(extension.newDueDate);
+      if (isNaN(newDue.getTime())) {
+        return NextResponse.json(
+          { error: "Invalid new due date" },
           { status: 400 }
         );
       }
@@ -158,10 +182,18 @@ export async function PATCH(
       data: {
         ...(title !== undefined && { title: title.trim() }),
         ...(description !== undefined && { description }),
-        ...(dueDate !== undefined && {
+        // plain due-date edits (no extension payload) behave exactly as before
+        ...(dueDate !== undefined && !extension && {
           dueDate: dueDate ? new Date(dueDate) : null,
         }),
         ...(status !== undefined && { status }),
+
+        // deadline extension — preserves the original due date on first use only
+        ...(extension && {
+          originalDueDate: existing.originalDueDate ?? existing.dueDate,
+          dueDate: new Date(extension.newDueDate),
+          extensionReason: extension.reason.trim(),
+        }),
 
         ...(taskIds && {
           tasks: taskOps,
@@ -174,7 +206,21 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updated);
+    const formatted = {
+      ...updated,
+      tasks: updated.tasks.map((mt) => ({
+        id: mt.task.id,
+        title: mt.task.title,
+        status: mt.task.status,
+        priority: mt.task.priority,
+        startDate: mt.task.startDate,
+        dueDate: mt.task.dueDate,
+        originalDueDate: mt.task.originalDueDate,
+        extensionReason: mt.task.extensionReason,
+      })),
+    };
+
+    return NextResponse.json(formatted);
   } catch (error) {
     console.error("[PATCH /milestone]", error);
     return NextResponse.json(

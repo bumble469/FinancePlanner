@@ -35,6 +35,11 @@ export async function GET(
         id: mt.task.id,
         title: mt.task.title,
         status: mt.task.status,
+        priority: mt.task.priority,
+        startDate: mt.task.startDate,
+        dueDate: mt.task.dueDate,
+        originalDueDate: mt.task.originalDueDate,
+        extensionReason: mt.task.extensionReason,
       })),
     }));
 
@@ -136,13 +141,18 @@ export async function POST(
         },
       },
     });
-    
+
     const formatted = {
       ...milestone,
       tasks: milestone.tasks.map((mt) => ({
         id: mt.task.id,
         title: mt.task.title,
         status: mt.task.status,
+        priority: mt.task.priority,
+        startDate: mt.task.startDate,
+        dueDate: mt.task.dueDate,
+        originalDueDate: mt.task.originalDueDate,
+        extensionReason: mt.task.extensionReason,
       })),
     };
 

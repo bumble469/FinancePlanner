@@ -5,7 +5,7 @@ import {
   FileText, Download, Plus, StickyNote, BarChart3, File,
   Trash2, Calendar, BookOpen, TrendingUp, CheckSquare,
   Layers, FileDown, Loader2, Upload, Image, Video, Code,
-  FilesIcon, Eye, X, FileArchive,
+  FilesIcon, Eye, X, FileArchive, Maximize2, Minimize2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -149,6 +149,12 @@ function fmt(value: number, currency: string) {
 function PreviewDialog({ doc, open, onClose }: { doc: Doc | null; open: boolean; onClose: () => void }) {
   const [textContent, setTextContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+
+  // Reset fullscreen when dialog closes
+  useEffect(() => {
+    if (!open) setFullscreen(false);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !doc) { setTextContent(null); return; }
@@ -178,53 +184,82 @@ function PreviewDialog({ doc, open, onClose }: { doc: Doc | null; open: boolean;
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent
+        showCloseButton={false}
         className={cn(
-          "max-h-[90vh] overflow-hidden flex flex-col",
-          pt === "image" || pt === "video" || pt === "pdf" || pt === "iframe"
-            ? "max-w-4xl"
-            : "max-w-2xl"
+          "overflow-hidden flex flex-col p-0 transition-all duration-300",
+          fullscreen
+            ? "!fixed !inset-0 !translate-x-0 !translate-y-0 !top-0 !left-0 !w-screen !h-screen !max-w-none !max-h-none !rounded-none"
+            : pt === "image" || pt === "video" || pt === "pdf" || pt === "iframe"
+              ? "w-[95vw] sm:w-[90vw] md:w-[85vw] lg:max-w-6xl h-[85vh] sm:h-[90vh] md:h-[92vh] max-w-[95vw]"
+              : "w-[95vw] sm:w-[85vw] md:w-[80vw] lg:max-w-5xl h-[80vh] sm:h-[85vh] max-w-[95vw]"
         )}
       >
-        <DialogHeader className="shrink-0">
+        <DialogHeader className="shrink-0 px-4 pt-4 sm:px-5 sm:pt-5">
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-2 truncate pr-4">
               <DocIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="truncate">{doc.title}</span>
+              <span className="truncate text-sm sm:text-base">{doc.title}</span>
             </DialogTitle>
-            {doc.fileUrl && (
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <Button
-                size="sm"
+                size="icon"
                 variant="outline"
-                className="gap-1.5 h-7 text-xs shrink-0"
-                onClick={() => {
-                  const a = document.createElement("a");
-                  a.href = doc.fileUrl!;
-                  a.download = doc.fileName || doc.title;
-                  a.click();
-                }}
+                className="h-7 w-7 cursor-pointer"
+                onClick={() => setFullscreen((v) => !v)}
+                title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
               >
-                <Download className="h-3.5 w-3.5" />
-                Download
+                {fullscreen ? (
+                  <Minimize2 className="h-3.5 w-3.5" />
+                ) : (
+                  <Maximize2 className="h-3.5 w-3.5" />
+                )}
               </Button>
-            )}
+
+              {doc.fileUrl && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-7 text-xs cursor-pointer"
+                  onClick={() => {
+                    const a = document.createElement("a");
+                    a.href = doc.fileUrl!;
+                    a.download = doc.fileName || doc.title;
+                    a.click();
+                  }}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Download</span>
+                </Button>
+              )}
+
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 cursor-pointer opacity-70 hover:opacity-100"
+                onClick={onClose}
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           {doc.fileName && (
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground mt-1 truncate">
               {doc.fileName} · {doc.fileSize} · uploaded by {doc.uploadedBy}
             </p>
           )}
         </DialogHeader>
 
         {/* preview body */}
-        <div className="flex-1 overflow-auto min-h-0 mt-2 rounded-lg border border-border bg-muted/30">
+        <div className="flex-1 overflow-auto min-h-0 mt-2 mx-3 mb-3 sm:mx-4 sm:mb-4 rounded-lg border border-border bg-muted/30">
           {pt === "image" && (
-            <div className="flex items-center justify-center p-4 min-h-[300px]">
-              <img src={doc.fileUrl} alt={doc.title} className="max-w-full max-h-[60vh] object-contain rounded" />
+            <div className="flex items-center justify-center p-4 min-h-[200px] sm:min-h-[300px] h-full">
+              <img src={doc.fileUrl} alt={doc.title} className={cn("max-w-full object-contain rounded", fullscreen ? "max-h-[calc(100vh-120px)]" : "max-h-[78vh]")} />
             </div>
           )}
 
           {pt === "video" && (
-            <video controls className="w-full max-h-[60vh] rounded" src={doc.fileUrl}>
+            <video controls className={cn("w-full rounded", fullscreen ? "max-h-[calc(100vh-120px)]" : "max-h-[78vh]")} src={doc.fileUrl}>
               Your browser does not support video.
             </video>
           )}
@@ -232,7 +267,7 @@ function PreviewDialog({ doc, open, onClose }: { doc: Doc | null; open: boolean;
           {pt === "pdf" && (
             <iframe
               src={doc.fileUrl}
-              className="w-full h-[60vh] rounded"
+              className={cn("w-full rounded", fullscreen ? "h-[calc(100vh-120px)]" : "h-[55vh] sm:h-[60vh] md:h-[70vh]")}
               title={doc.title}
             />
           )}
@@ -240,7 +275,7 @@ function PreviewDialog({ doc, open, onClose }: { doc: Doc | null; open: boolean;
           {pt === "iframe" && (
             <iframe
               src={doc.fileUrl}
-              className="w-full h-[60vh] rounded"
+              className={cn("w-full rounded", fullscreen ? "h-[calc(100vh-120px)]" : "h-[55vh] sm:h-[60vh] md:h-[70vh]")}
               sandbox="allow-scripts allow-same-origin"
               title={doc.title}
             />
@@ -253,25 +288,25 @@ function PreviewDialog({ doc, open, onClose }: { doc: Doc | null; open: boolean;
                 <span className="text-sm">Loading...</span>
               </div>
             ) : (
-              <pre className="p-4 text-xs font-mono text-foreground whitespace-pre-wrap break-words leading-relaxed overflow-auto max-h-[60vh]">
+              <pre className={cn("p-4 text-xs font-mono text-foreground whitespace-pre-wrap break-words leading-relaxed overflow-auto", fullscreen ? "max-h-[calc(100vh-120px)]" : "max-h-[78vh]")}>
                 {textContent}
               </pre>
             )
           )}
 
           {pt === "none" && (
-            <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+            <div className="flex flex-col items-center justify-center gap-3 p-8 sm:p-12 text-center">
               <DocIcon className="h-10 w-10 text-muted-foreground/30" />
               <div>
                 <p className="text-sm font-medium text-foreground">Preview not available</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  This file type can't be previewed in the browser. Download it to open locally.
+                  This file type can&apos;t be previewed in the browser. Download it to open locally.
                 </p>
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5"
+                className="gap-1.5 cursor-pointer"
                 onClick={() => {
                   const a = document.createElement("a");
                   a.href = doc.fileUrl!;
@@ -439,7 +474,7 @@ function ReportPreview({ period, type }: { period: ReportPeriod; type: ReportTyp
             <p className="text-xs text-muted-foreground">{PERIOD_LABELS[period]}</p>
           </div>
         </div>
-        <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs">
+        <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs cursor-pointer">
           <FileDown className="h-3.5 w-3.5" />
           Export CSV
         </Button>
@@ -464,8 +499,8 @@ function ReportPreview({ period, type }: { period: ReportPeriod; type: ReportTyp
                   <p className="text-[10px] text-muted-foreground">{item.label}</p>
                   <p className={cn("text-sm font-semibold mt-0.5 font-mono",
                     item.positive === true ? "text-green-600 dark:text-green-400"
-                    : item.positive === false ? "text-destructive"
-                    : "text-foreground")}>
+                      : item.positive === false ? "text-destructive"
+                        : "text-foreground")}>
                     {item.value}
                   </p>
                 </div>
@@ -496,9 +531,9 @@ function ReportPreview({ period, type }: { period: ReportPeriod; type: ReportTyp
                 <div key={m.id} className="flex items-center gap-2 text-xs">
                   <div className={cn("h-1.5 w-1.5 rounded-full shrink-0",
                     m.status === "ACHIEVED" ? "bg-green-500"
-                    : m.status === "IN_PROGRESS" ? "bg-yellow-500"
-                    : m.status === "MISSED" ? "bg-destructive"
-                    : "bg-muted-foreground")} />
+                      : m.status === "IN_PROGRESS" ? "bg-yellow-500"
+                        : m.status === "MISSED" ? "bg-destructive"
+                          : "bg-muted-foreground")} />
                   <span className="text-foreground">{m.title}</span>
                   <span className="ml-auto text-muted-foreground capitalize">{m.status.replace("_", " ")}</span>
                 </div>
@@ -674,7 +709,7 @@ export function ReportsSection({ planId }: { planId: string }) {
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer",
                 activeTab === tab.key
                   ? "bg-background text-foreground shadow-sm border border-border/50"
                   : "text-muted-foreground hover:text-foreground"
@@ -704,7 +739,7 @@ export function ReportsSection({ planId }: { planId: string }) {
                   key={folder.key}
                   onClick={() => setActiveFolder(folder.key)}
                   className={cn(
-                    "w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm transition-all text-left",
+                    "w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm transition-all text-left cursor-pointer",
                     activeFolder === folder.key
                       ? "bg-foreground text-background"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -747,7 +782,7 @@ export function ReportsSection({ planId }: { planId: string }) {
                     ref={fileInputRef}
                     type="file"
                     className="hidden"
-                    accept=".jpg,.jpeg,.png,.gif,.webp,.svg,.mp4,.webm,.mov,.pdf,.docx,.doc,.xlsx,.xls,.csv,.pptx,.ppt,.html,.htm,.js,.ts,.jsx,.tsx,.py,.json,.md,.css,.java,.cpp,.c,.cs,.php,.rb,.go,.yaml,.yml,.sh,.sql"
+                    accept=".jpg,.jpeg,.png,.gif,.webp,.svg,.mp4,.webm,.mov,.txt,.pdf,.docx,.doc,.xlsx,.xls,.csv,.pptx,.ppt,.html,.htm,.js,.ts,.jsx,.tsx,.py,.json,.md,.css,.java,.cpp,.c,.cs,.php,.rb,.go,.yaml,.yml,.sh,.sql"
                     onChange={handleFileSelect}
                   />
                   <Button
@@ -792,7 +827,7 @@ export function ReportsSection({ planId }: { planId: string }) {
             {uploadError && (
               <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
                 <p className="text-xs text-destructive flex-1">{uploadError}</p>
-                <button onClick={() => setUploadError(null)}>
+                <button className="cursor-pointer" onClick={() => setUploadError(null)}>
                   <X className="h-3.5 w-3.5 text-destructive" />
                 </button>
               </div>
@@ -856,7 +891,7 @@ export function ReportsSection({ planId }: { planId: string }) {
                         key={p}
                         onClick={() => setReportPeriod(p)}
                         className={cn(
-                          "flex-1 rounded-lg border py-2 text-xs font-medium transition-all",
+                          "flex-1 rounded-lg border py-2 text-xs font-medium transition-all cursor-pointer",
                           reportPeriod === p
                             ? "bg-foreground text-background border-foreground"
                             : "border-border text-muted-foreground bg-background hover:bg-muted"
@@ -929,10 +964,10 @@ export function ReportsSection({ planId }: { planId: string }) {
               />
             </div>
             <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={() => { setNoteOpen(false); setEditingNote(null); }} disabled={noteSaving}>
+              <Button variant="outline" className="cursor-pointer" onClick={() => { setNoteOpen(false); setEditingNote(null); }} disabled={noteSaving}>
                 Cancel
               </Button>
-              <Button onClick={handleNoteSubmit} disabled={noteSaving}>
+              <Button className="cursor-pointer" onClick={handleNoteSubmit} disabled={noteSaving}>
                 {noteSaving ? "Saving..." : editingNote ? "Update note" : "Add note"}
               </Button>
             </div>

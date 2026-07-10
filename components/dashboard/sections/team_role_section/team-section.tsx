@@ -131,6 +131,7 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
   });
 
   const [selectedRole, setSelectedRole] = useState<string>("");
+  const [selectedDept, setSelectedDept] = useState<string>("");
 
   // debounce the search box into `search`
   useEffect(() => {
@@ -155,6 +156,10 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
       if (!selectedRole && res.data.stats.byRole.length > 0) {
         setSelectedRole(res.data.stats.byRole[0].role);
       }
+      const activeDepts = (res.data.stats.byDepartment as Stats["byDepartment"]).filter((d) => d.count > 0);
+      if (!selectedDept && activeDepts.length > 0) {
+        setSelectedDept(activeDepts[0].id);
+      }
     } catch (err) {
       console.error(err);
       show("Failed to fetch team members", "error");
@@ -174,6 +179,7 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
     role: string;
     departmentIds: string[];
     monthlyCost?: number;
+    departmentCostShares?: Record<string, number>;
   }) => {
     try {
       if (!editingMember) {
@@ -189,6 +195,7 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
             role: data.role,
             departmentIds: data.departmentIds,
             monthlyCost: data.monthlyCost,
+            departmentCostShares: data.departmentCostShares,
           },
         });
       }
@@ -205,7 +212,6 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
       );
     }
   };
-
   const handleEdit = (member: TeamMember) => {
     setEditingMember(member);
     setIsAddOpen(true);
@@ -240,6 +246,9 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
 
   const selectedRoleStat = stats.byRole.find((r) => r.role === selectedRole);
   const SelectedRoleIcon = selectedRole ? ROLE_ICON[selectedRole] ?? User : User;
+
+  const activeDepartments = stats.byDepartment.filter((d) => d.count > 0);
+  const selectedDeptStat = stats.byDepartment.find((d) => d.id === selectedDept);
 
   return (
     <div className="space-y-6">
@@ -354,33 +363,45 @@ export function TeamSection({ planId, permissions }: { planId: string; permissio
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Monthly Cost</p>
-              <p className="text-2xl font-bold text-success">
+              <p className="text-xl font-bold text-success">
                 {formatCurrency(stats.totalMonthlyCost, currency)}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Cost by department */}
+        {/* Cost by department — dropdown selector */}
         <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Building2 className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold text-foreground">Cost by Department</h3>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-muted-foreground">Cost by Department</p>
+            {activeDepartments.length > 0 ? (
+              <Select value={selectedDept} onValueChange={setSelectedDept}>
+                <SelectTrigger className="h-7 w-[130px] text-xs">
+                  <SelectValue placeholder="Department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeDepartments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
           </div>
-          <div className="space-y-2 max-h-28 overflow-y-auto">
-            {stats.byDepartment.filter((d) => d.count > 0).length === 0 ? (
-              <p className="text-xs text-muted-foreground">No department data</p>
-            ) : (
-              stats.byDepartment
-                .filter((d) => d.count > 0)
-                .map((d) => (
-                  <div key={d.id} className="flex items-center justify-between text-xs">
-                    <span className="text-foreground">{d.name} <span className="text-muted-foreground">({d.count})</span></span>
-                    <span className="font-mono text-success">{formatCurrency(d.cost, currency)}</span>
-                  </div>
-                ))
-            )}
-          </div>
+          {activeDepartments.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No department data</p>
+          ) : (
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/10">
+                <Building2 className="h-5 w-5 text-success" />
+              </div>
+              <div>
+                <p className="text-m font-bold text-foreground">{formatCurrency(selectedDeptStat?.cost, currency)}/mo</p>
+                <p className="text-xs text-muted-foreground">
+                  {selectedDeptStat?.count ?? 0}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Members by role — dropdown selector */}

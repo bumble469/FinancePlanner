@@ -2,6 +2,38 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 
+const TASK_SELECT = {
+  id: true,
+  title: true,
+  description: true,
+  status: true,
+  priority: true,
+  phaseId: true,
+  departmentId: true,
+  startDate: true,
+  dueDate: true,
+  originalDueDate: true,
+  extensionReason: true,
+  completedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  members: {
+    select: {
+      workItemMember: {
+        select: { id: true, user: { select: { id: true, name: true, image: true } } },
+      },
+    },
+  },
+  dependsOn: {
+    select: { dependsOnId: true },
+  },
+  milestones: {
+    select: {
+      milestone: { select: { id: true, title: true, status: true } },
+    },
+  },
+} as const;
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string; deptId: string } }
@@ -14,7 +46,6 @@ export async function GET(
 
     const { id: workItemId, deptId } = await params;
 
-    // Verify the user is a member of this work item
     const membership = await prisma.workItemMember.findUnique({
       where: { workItemId_userId: { workItemId, userId: user.sub } },
     });
@@ -22,7 +53,6 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Verify the department belongs to this work item
     const department = await prisma.department.findFirst({
       where: { id: deptId, workItemId },
     });
@@ -33,23 +63,12 @@ export async function GET(
     const tasks = await prisma.task.findMany({
       where: { workItemId, departmentId: deptId },
       orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        status: true,
-        phaseId: true,
-        departmentId: true,
-        assignedToId: true,
-        assignedTo: {
-          select: { id: true, name: true, image: true },
-        },
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: TASK_SELECT,
     });
 
-    return NextResponse.json(tasks);
+    return NextResponse.json(
+      tasks.map((t) => ({ ...t, milestones: t.milestones.map((mt) => mt.milestone) }))
+    );
   } catch (err) {
     console.error("[GET /tasks]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -68,7 +87,6 @@ export async function POST(
 
     const { id: workItemId, deptId } = await params;
 
-    // Verify the user is a member of this work item
     const membership = await prisma.workItemMember.findUnique({
       where: { workItemId_userId: { workItemId, userId: user.sub } },
     });
@@ -84,7 +102,16 @@ export async function POST(
     }
 
     const body = await req.json();
-    const { title, description, phaseId, assignedToId } = body;
+    const {
+      title,
+      description,
+      phaseId,
+      priority,
+      startDate,
+      dueDate,
+      memberIds = [], 
+      dependsOnIds = [], 
+    } = body;
 
     if (!title || typeof title !== "string" || !title.trim()) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
@@ -99,6 +126,24 @@ export async function POST(
       }
     }
 
+    if (Array.isArray(memberIds) && memberIds.length > 0) {
+      const validMembers = await prisma.workItemMember.count({
+        where: { id: { in: memberIds }, workItemId },
+      });
+      if (validMembers !== memberIds.length) {
+        return NextResponse.json({ error: "Invalid member(s) provided" }, { status: 400 });
+      }
+    }
+
+    if (Array.isArray(dependsOnIds) && dependsOnIds.length > 0) {
+      const validDeps = await prisma.task.count({
+        where: { id: { in: dependsOnIds }, workItemId },
+      });
+      if (validDeps !== dependsOnIds.length) {
+        return NextResponse.json({ error: "Invalid dependency task(s) provided" }, { status: 400 });
+      }
+    }
+
     const task = await prisma.task.create({
       data: {
         title: title.trim(),
@@ -106,26 +151,24 @@ export async function POST(
         workItemId,
         departmentId: deptId,
         phaseId: phaseId ?? null,
-        assignedToId: assignedToId ?? null,
+        priority: priority !== undefined ? Number(priority) : 0,
+        startDate: startDate ? new Date(startDate) : null,
+        dueDate: dueDate ? new Date(dueDate) : null,
         status: "TODO",
+        ...(memberIds.length > 0 && {
+          members: { create: memberIds.map((workItemMemberId: string) => ({ workItemMemberId })) },
+        }),
+        ...(dependsOnIds.length > 0 && {
+          dependsOn: { create: dependsOnIds.map((dependsOnId: string) => ({ dependsOnId })) },
+        }),
       },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        status: true,
-        phaseId: true,
-        departmentId: true,
-        assignedToId: true,
-        assignedTo: {
-          select: { id: true, name: true, image: true },
-        },
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: TASK_SELECT,
     });
 
-    return NextResponse.json(task, { status: 201 });
+    return NextResponse.json(
+      { ...task, milestones: task.milestones.map((mt) => mt.milestone) },
+      { status: 201 }
+    );
   } catch (err) {
     console.error("[POST /tasks]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
