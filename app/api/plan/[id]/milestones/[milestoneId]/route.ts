@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 
+async function resolveAccess(workItemId: string, userId: string) {
+  const account = await prisma.account.findUnique({ where: { userId } });
+  const isOwner = account
+    ? !!(await prisma.workItem.findFirst({ where: { id: workItemId, accountId: account.id } }))
+    : false;
+
+  const membership = await prisma.workItemMember.findUnique({
+    where: { workItemId_userId: { workItemId, userId } },
+  });
+
+  if (!isOwner && !membership) return null;
+
+  return { isOwner, membership };
+}
+
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string; milestoneId: string } }
@@ -14,20 +29,12 @@ export async function DELETE(
 
     const { id: workItemId, milestoneId } = await params;
 
-    const membership = await prisma.workItemMember.findUnique({
-      where: {
-        workItemId_userId: {
-          workItemId,
-          userId: user.sub,
-        },
-      },
-    });
-
-    if (!membership) {
+    const access = await resolveAccess(workItemId, user.sub);
+    if (!access) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (membership.role === "MEMBER") {
+    if (!access.isOwner && access.membership!.role === "MEMBER") {
       return NextResponse.json(
         { error: "Only admins and managers can delete milestones" },
         { status: 403 }
@@ -69,20 +76,12 @@ export async function PATCH(
 
     const { id: workItemId, milestoneId } = await params;
 
-    const membership = await prisma.workItemMember.findUnique({
-      where: {
-        workItemId_userId: {
-          workItemId,
-          userId: user.sub,
-        },
-      },
-    });
-
-    if (!membership) {
+    const access = await resolveAccess(workItemId, user.sub);
+    if (!access) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (membership.role === "MEMBER") {
+    if (!access.isOwner && access.membership!.role === "MEMBER") {
       return NextResponse.json(
         { error: "Only admins and managers can update milestones" },
         { status: 403 }
@@ -106,10 +105,9 @@ export async function PATCH(
       dueDate,
       status,
       taskIds,
-      extension, // optional: { newDueDate: string; reason: string }
+      extension,
     } = body;
 
-    // ✅ validate title if provided
     if (title !== undefined && (!title || title.trim() === "")) {
       return NextResponse.json(
         { error: "Title cannot be empty" },
@@ -117,7 +115,6 @@ export async function PATCH(
       );
     }
 
-    // ✅ validate tasks
     if (taskIds) {
       const validTasks = await prisma.task.count({
         where: {
@@ -132,9 +129,31 @@ export async function PATCH(
           { status: 400 }
         );
       }
+
+      if (taskIds.length > 0) {
+        const alreadyLinked = await prisma.milestoneTask.findMany({
+          where: {
+            taskId: { in: taskIds },
+            NOT: { milestoneId },
+          },
+          include: {
+            task: { select: { title: true } },
+            milestone: { select: { title: true } },
+          },
+        });
+
+        if (alreadyLinked.length > 0) {
+          const names = alreadyLinked
+            .map((l) => `"${l.task.title}" (in "${l.milestone.title}")`)
+            .join(", ");
+          return NextResponse.json(
+            { error: `These tasks already belong to another milestone: ${names}` },
+            { status: 400 }
+          );
+        }
+      }
     }
 
-    // ✅ validate extension payload, if this is a deadline-extension request
     if (extension) {
       if (!extension.newDueDate) {
         return NextResponse.json(
@@ -155,6 +174,12 @@ export async function PATCH(
           { status: 400 }
         );
       }
+    }
+
+    // null = extended by the plan owner (owner has no WorkItemMember row)
+    let extendedById: string | null = null;
+    if (extension) {
+      extendedById = access.membership?.id ?? null;
     }
 
     let taskOps = undefined;
@@ -205,6 +230,18 @@ export async function PATCH(
         },
       },
     });
+
+    if (extension) {
+      await prisma.milestoneExtensionLog.create({
+        data: {
+          milestoneId,
+          previousDueDate: existing.dueDate,
+          newDueDate: new Date(extension.newDueDate),
+          reason: extension.reason.trim(),
+          extendedById,
+        },
+      });
+    }
 
     const formatted = {
       ...updated,

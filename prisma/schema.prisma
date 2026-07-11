@@ -264,6 +264,7 @@ model WorkItemMember {
 
   taskNotes     TaskNote[]
   taskReactions TaskReaction[]
+  milestoneExtensions MilestoneExtensionLog[]
 
   joinedAt DateTime @default(now())
 
@@ -519,6 +520,7 @@ model Milestone {
   workItem   WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
 
   tasks     MilestoneTask[]
+  extensionLogs MilestoneExtensionLog[]
   createdBy String
   creator     User   @relation("MilestoneCreator", fields: [createdBy], references: [id], onDelete: Restrict)
 
@@ -526,6 +528,34 @@ model Milestone {
   updatedAt DateTime @updatedAt
 
   @@map("milestones")
+}
+
+model MilestoneTask {
+  milestoneId String
+  taskId      String
+
+  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@id([milestoneId, taskId])
+  @@unique([taskId])
+  @@map("milestone_tasks")
+}
+
+model MilestoneExtensionLog {
+  id              String   @id @default(uuid())
+  milestoneId     String
+  previousDueDate DateTime?
+  newDueDate      DateTime
+  reason          String
+  extendedById    String?  
+  createdAt       DateTime @default(now())
+
+  milestone  Milestone       @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  extendedBy WorkItemMember? @relation(fields: [extendedById], references: [id], onDelete: SetNull)
+
+  @@index([milestoneId])
+  @@map("milestone_extension_logs")
 }
 
 model Task {
@@ -613,17 +643,6 @@ model TaskReaction {
 
   @@unique([taskId, authorId])
   @@map("task_reactions")
-}
-
-model MilestoneTask {
-  milestoneId String
-  taskId      String
-
-  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
-  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
-  @@id([milestoneId, taskId])
-  @@map("milestone_tasks")
 }
 
 //////////////////////

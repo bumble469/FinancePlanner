@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useFinancialStore } from "@/lib/store";
 import { authClient } from "@/lib/auth-client";
 import { Department, Milestone, MilestoneStatus, MilestoneTask, MilestoneFormData } from "@/lib/types";
-import { Flag, Plus, CheckCircle2, Circle, Clock, AlertTriangle, Pencil, Trash2 } from "lucide-react";
+import { Flag, Plus, CheckCircle2, Circle, Clock, AlertTriangle, Pencil, Trash2, History, ClockArrowUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddDeptDialog } from "./components/add-dept-dialog";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
@@ -15,8 +15,9 @@ import { Building2 } from "lucide-react";
 import { useSnackbar } from "@/lib/useSnackbar";
 import type { PlanPermissions } from "@/lib/permissions";
 import { PlanningInsights } from "./components/planning-insights";
-import { GanttChart } from "./components/gantt-chart";
+import { TimelineChart, TimelineChartDialog } from "./components/timeline-chart";
 import { ExtendDeadlineDialog } from "./components/extend-deadline-dialog";
+import { MilestoneHistoryDialog } from "./components/milestone-history-dialog";
 
 const STATUS_CONFIG: Record<
   MilestoneStatus,
@@ -38,6 +39,7 @@ function MilestoneCard({
   onEdit,
   onDelete,
   onExtend,
+  onViewHistory,
   canEdit,
   canDelete,
 }: {
@@ -45,6 +47,7 @@ function MilestoneCard({
   onEdit: (m: Milestone) => void;
   onDelete: (id: string) => void;
   onExtend: (m: Milestone) => void;
+  onViewHistory: (m: Milestone) => void;
   canEdit?: boolean;
   canDelete?: boolean;
 }) {
@@ -66,11 +69,17 @@ function MilestoneCard({
             )}
           </div>
         </div>
-        {(canEdit || canDelete) && (
+
+        {(canEdit || canDelete || !!milestone.originalDueDate) && (
           <div className="flex items-center gap-1 shrink-0">
+            {milestone.originalDueDate && (
+              <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" title="View deadline history" onClick={() => onViewHistory(milestone)}>
+                <History className="h-3.5 w-3.5" />
+              </Button>
+            )}
             {canEdit && (
               <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" title="Extend deadline" onClick={() => onExtend(milestone)}>
-                <Clock className="h-3.5 w-3.5" />
+                <ClockArrowUp className="h-3.5 w-3.5" />
               </Button>
             )}
             {canEdit && (
@@ -172,8 +181,21 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
   const [deleteMilestoneId, setDeleteMilestoneId] = useState<string | null>(null);
   const [confirmMilestoneOpen, setConfirmMilestoneOpen] = useState(false);
-
+  const [projectRange, setProjectRange] = useState<{ start: Date; end: Date } | null>(null);
   const [extendingMilestone, setExtendingMilestone] = useState<Milestone | null>(null);
+  const [viewingHistoryFor, setViewingHistoryFor] = useState<Milestone | null>(null);
+
+  useEffect(() => {
+    if (!currentPlanId) return;
+    (async () => {
+      try {
+        const res = await authClient.request(`/api/plan/${currentPlanId}/timeline-range`);
+        setProjectRange({ start: new Date(res.data.data.start), end: new Date(res.data.data.end) });
+      } catch (err) {
+        console.error("Failed to fetch timeline range:", err);
+      }
+    })();
+  }, [currentPlanId]);
 
   const remainingBudget = (eventData.eventBudget || 0) - departments
     .filter((d) => d.id !== editingDept?.id)
@@ -554,7 +576,12 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
           </div>
 
           <PlanningInsights milestones={milestones} />
-          <GanttChart milestones={milestones} />
+          <div className="space-y-2">
+            <div className="flex justify-end">
+              <TimelineChartDialog milestones={milestones} projectRange={projectRange} />
+            </div>
+            <TimelineChart milestones={milestones} projectRange={projectRange} compact />
+          </div>
 
           {/* milestone grid */}
           {filteredMilestones.length === 0 ? (
@@ -591,6 +618,7 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
                   onEdit={(m) => { setEditingMilestone(m); setMilestoneDialogOpen(true); }}
                   onDelete={(id) => { setDeleteMilestoneId(id); setConfirmMilestoneOpen(true); }}
                   onExtend={(m) => setExtendingMilestone(m)}
+                  onViewHistory={(m) => setViewingHistoryFor(m)}
                   canEdit={permissions.canEditMilestone}
                   canDelete={permissions.canDeleteMilestone}
                 />
@@ -616,6 +644,7 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
         editing={editingMilestone}
         departments={departments}
         availableTasks={tasks}
+        allMilestones={milestones}
         onCreate={createMilestone}
         onUpdate={updateMilestoneHandler}
         onClose={() => {
@@ -631,6 +660,16 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
         currentDueDate={extendingMilestone?.dueDate}
         onConfirm={extendMilestoneDeadline}
       />
+
+      {viewingHistoryFor && (
+        <MilestoneHistoryDialog
+          open={!!viewingHistoryFor}
+          onOpenChange={(open) => { if (!open) setViewingHistoryFor(null); }}
+          planId={currentPlanId!}
+          milestoneId={viewingHistoryFor.id}
+          milestoneTitle={viewingHistoryFor.title}
+        />
+      )}
     </div>
   );
 }

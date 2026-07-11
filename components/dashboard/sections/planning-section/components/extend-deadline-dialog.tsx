@@ -99,10 +99,10 @@ export function ExtendDeadlineDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <Button className="cursor-pointer hover:text-gray-600" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={submitting}>
+          <Button className="cursor-pointer hover:text-gray-100" onClick={handleConfirm} disabled={submitting}>
             {submitting ? "Extending..." : "Extend deadline"}
           </Button>
         </DialogFooter>

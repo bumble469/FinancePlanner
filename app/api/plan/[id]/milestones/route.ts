@@ -116,6 +116,24 @@ export async function POST(
           { status: 400 }
         );
       }
+
+      const alreadyLinked = await prisma.milestoneTask.findMany({
+        where: { taskId: { in: taskIds } },
+        include: {
+          task: { select: { title: true } },
+          milestone: { select: { title: true } },
+        },
+      });
+
+      if (alreadyLinked.length > 0) {
+        const names = alreadyLinked
+          .map((l) => `"${l.task.title}" (in "${l.milestone.title}")`)
+          .join(", ");
+        return NextResponse.json(
+          { error: `These tasks already belong to another milestone: ${names}` },
+          { status: 400 }
+        );
+      }
     }
 
     const milestone = await prisma.milestone.create({
