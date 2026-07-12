@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { notify, getDepartmentMemberUserIds } from "@/lib/notify";
 
 export async function GET(
   req: NextRequest,
@@ -159,6 +160,48 @@ export async function POST(
         },
       },
     });
+
+    if (taskIds.length > 0) {
+      const linkedTasks = await prisma.task.findMany({
+        where: { id: { in: taskIds } },
+        select: {
+          departmentId: true,
+          members: { select: { workItemMember: { select: { userId: true } } } },
+        },
+      });
+
+      const deptIds = Array.from(new Set(linkedTasks.map((t) => t.departmentId).filter(Boolean))) as string[];
+      const assigneeUserIds = Array.from(
+        new Set(linkedTasks.flatMap((t) => t.members.map((m) => m.workItemMember.userId)))
+      );
+
+      if (deptIds.length > 0) {
+        const deptUserIds = await getDepartmentMemberUserIds(deptIds, user.sub);
+        await notify({
+          workItemId,
+          userIds: deptUserIds.filter((id) => !assigneeUserIds.includes(id)),
+          scope: "GENERAL",
+          type: "MILESTONE_CREATED",
+          title: "New milestone created",
+          message: `"${milestone.title}" was created for your department.`,
+          entityType: "milestone",
+          entityId: milestone.id,
+        });
+      }
+
+      if (assigneeUserIds.length > 0) {
+        await notify({
+          workItemId,
+          userIds: assigneeUserIds,
+          scope: "PERSONAL",
+          type: "MILESTONE_TASK_INCLUDED",
+          title: "Your tasks are part of a new milestone",
+          message: `Your task(s) are now part of the milestone "${milestone.title}".`,
+          entityType: "milestone",
+          entityId: milestone.id,
+        });
+      }
+    }
 
     const formatted = {
       ...milestone,

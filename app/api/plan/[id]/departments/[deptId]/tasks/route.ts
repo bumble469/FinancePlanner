@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { notify, getDepartmentMemberUserIds } from "@/lib/notify";
 
 const TASK_SELECT = {
   id: true,
@@ -163,6 +164,35 @@ export async function POST(
         }),
       },
       select: TASK_SELECT,
+    });
+
+    if (memberIds.length > 0) {
+      const assignees = await prisma.workItemMember.findMany({
+        where: { id: { in: memberIds } },
+        select: { userId: true },
+      });
+      await notify({
+        workItemId,
+        userIds: assignees.map((a) => a.userId),
+        scope: "PERSONAL",
+        type: "TASK_ASSIGNED",
+        title: "New task assigned",
+        message: `You've been assigned to "${task.title}"`,
+        entityType: "task",
+        entityId: task.id,
+      });
+    }
+
+    const deptUserIds = await getDepartmentMemberUserIds([deptId], user.sub);
+    await notify({
+      workItemId,
+      userIds: deptUserIds,
+      scope: "GENERAL",
+      type: "TASK_CREATED",
+      title: "New task created",
+      message: `"${task.title}" was added to your department`,
+      entityType: "task",
+      entityId: task.id,
     });
 
     return NextResponse.json(

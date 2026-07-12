@@ -1,7 +1,7 @@
 "use client";
 
 import { useFinancialStore, calculateMetrics } from "@/lib/store";
-import { MetricCard } from "@/components/dashboard/metric-card";
+import { MetricCard } from "@/components/dashboard/components/metric-card";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";

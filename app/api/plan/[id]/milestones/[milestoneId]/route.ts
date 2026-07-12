@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { notify } from "@/lib/notify";
 
 async function resolveAccess(workItemId: string, userId: string) {
   const account = await prisma.account.findUnique({ where: { userId } });
@@ -240,6 +241,28 @@ export async function PATCH(
           reason: extension.reason.trim(),
           extendedById,
         },
+      });
+    }
+
+    const assigneeUserIds = await prisma.taskMember
+      .findMany({
+        where: { taskId: { in: existing.tasks.map((t) => t.taskId) } },
+        select: { workItemMember: { select: { userId: true } } },
+      })
+      .then((rows) => Array.from(new Set(rows.map((r) => r.workItemMember.userId))));
+
+    if (assigneeUserIds.length > 0) {
+      await notify({
+        workItemId,
+        userIds: assigneeUserIds,
+        scope: "PERSONAL",
+        type: extension ? "MILESTONE_UPDATED" : "MILESTONE_UPDATED",
+        title: extension ? "Milestone deadline extended" : "Milestone updated",
+        message: extension
+          ? `The deadline for "${updated.title}" was extended to ${new Date(extension.newDueDate).toLocaleDateString("en-IN")}.`
+          : `"${updated.title}" was updated.`,
+        entityType: "milestone",
+        entityId: milestoneId,
       });
     }
 

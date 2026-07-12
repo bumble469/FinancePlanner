@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 import { deriveIncomeStatus } from "@/lib/financial-status";
+import { notify, getPlanAdminUserIds } from "@/lib/notify";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -161,6 +162,18 @@ export async function POST(req: NextRequest, { params }: Params) {
         department: { select: { id: true, name: true } },
         createdBy: { include: { user: { select: { name: true } } } },
       },
+    });
+
+    const adminUserIds = await getPlanAdminUserIds(planId);
+    await notify({
+      workItemId: planId,
+      userIds: adminUserIds,
+      scope: "GENERAL",
+      type: "INCOME_ADDED",
+      title: "New income recorded",
+      message: `${source.trim()} — ${type.toLowerCase()} income of ₹${numAmount.toLocaleString("en-IN")} was added.`,
+      entityType: "income",
+      entityId: income.id,
     });
 
     return NextResponse.json({ success: true, data: formatIncome(income) }, { status: 201 });

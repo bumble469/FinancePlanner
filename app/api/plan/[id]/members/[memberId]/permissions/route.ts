@@ -13,6 +13,7 @@ import {
 } from "@/lib/permissions";
 import type { MemberRole } from "@prisma/client";
 import { emitToUser } from "@/lib/socket-server";
+import { notify } from "@/lib/notify";
 
 type Params = { params: Promise<{ id: string; memberId: string }> };
 
@@ -154,6 +155,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         role: updated.role,
         permissions: updated.permissions,
         departmentIds: updated.departmentMembers.map((d) => d.departmentId),
+      });
+      await notify({
+        workItemId: planId,
+        userIds: [updated.userId],
+        scope: "PERSONAL",
+        type: "PERMISSIONS_UPDATED",
+        title: "Your permissions were updated",
+        message: `Your permissions on this plan have been changed.`,
+        entityType: "member",
+        entityId: updated.id,
       });
     }
 

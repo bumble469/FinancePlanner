@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 import { deriveExpensePaymentStatus } from "@/lib/financial-status";
+import { notify } from "@/lib/notify";
 
 type Params = { params: Promise<{ id: string; expenseId: string }> };
 
@@ -134,6 +135,29 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         },
         include: EXPENSE_INCLUDE,
       });
+    }
+
+    if ((action === "approve" || action === "reject") && updated.requestedBy) {
+      const requesterUserId = (await prisma.workItemMember.findUnique({
+        where: { id: updated.requestedById! },
+        select: { userId: true },
+      }))?.userId;
+
+      if (requesterUserId) {
+        await notify({
+          workItemId: planId,
+          userIds: [requesterUserId],
+          scope: "PERSONAL",
+          type: action === "approve" ? "EXPENSE_APPROVED" : "EXPENSE_REJECTED",
+          title: action === "approve" ? "Expense approved" : "Expense rejected",
+          message:
+            action === "approve"
+              ? `Your ₹${Number(updated.amount).toLocaleString("en-IN")} expense request was approved.`
+              : `Your expense request was rejected: ${updated.rejectionReason}`,
+          entityType: "expense",
+          entityId: expenseId,
+        });
+      }
     }
 
     return NextResponse.json({ success: true, data: formatExpense(updated) });

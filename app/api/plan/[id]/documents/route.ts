@@ -4,6 +4,7 @@ import { getAuthUser } from "@/lib/auth";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
+import { notify, getAllPlanUserIds } from "@/lib/notify";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -41,7 +42,6 @@ function canCreate(access: NonNullable<Awaited<ReturnType<typeof resolveAccess>>
 
 // ── GET /api/plan/[id]/documents ─────────────────────────────────────────────
 // All roles can view all documents
-
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const user = await getAuthUser();
@@ -81,7 +81,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 // ── POST /api/plan/[id]/documents ────────────────────────────────────────────
 // Creates a note (JSON) or uploads a file (multipart/form-data)
-
 export async function POST(req: NextRequest, { params }: Params) {
   try {
     const user = await getAuthUser();
@@ -127,7 +126,6 @@ export async function POST(req: NextRequest, { params }: Params) {
         "video/webm",
         "video/quicktime",
 
-        // Archives
         "application/zip",
         "application/x-zip-compressed",
       ];
@@ -198,6 +196,18 @@ export async function POST(req: NextRequest, { params }: Params) {
       include: {
         uploadedBy: { select: { id: true, name: true, email: true } },
       },
+    });
+
+    const recipientUserIds = await getAllPlanUserIds(planId, user.sub);
+    await notify({
+      workItemId: planId,
+      userIds: recipientUserIds,
+      scope: "GENERAL",
+      type: "DOCUMENT_UPLOADED",
+      title: "New document uploaded",
+      message: `"${title}" was uploaded.`,
+      entityType: "document",
+      entityId: doc.id,
     });
 
     return NextResponse.json({

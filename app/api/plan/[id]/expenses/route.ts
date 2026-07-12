@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { notify, getPlanAdminUserIds } from "@/lib/notify";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -140,6 +141,18 @@ export async function POST(req: NextRequest, { params }: Params) {
         occurredAt: occurredAt ? new Date(occurredAt) : new Date(),
       },
       include: EXPENSE_INCLUDE,
+    });
+
+    const approverUserIds = await getPlanAdminUserIds(planId);
+    await notify({
+      workItemId: planId,
+      userIds: approverUserIds,
+      scope: "GENERAL",
+      type: "EXPENSE_REQUESTED",
+      title: "New expense request",
+      message: `A ₹${Number(amount).toLocaleString("en-IN")} expense request is awaiting your approval.`,
+      entityType: "expense",
+      entityId: expense.id,
     });
 
     return NextResponse.json({ success: true, data: formatExpense(expense) }, { status: 201 });
