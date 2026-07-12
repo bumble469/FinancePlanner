@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Sidebar } from "./sidebar";
+import { Sidebar, navItems } from "./navigation/sidebar";
+import { Topbar } from "./navigation/topbar";
 import { OverviewSection } from "./sections/overview-section";
 import { TeamSection } from "./sections/team_role_section/team-section";
 import { RevenueExpenseSection } from "./sections/rev_exp_section/rev-exp_section";
@@ -16,6 +17,7 @@ import type { Plan } from "@/lib/types";
 import { getPermissions } from "@/lib/permissions";
 import { useRealtimePermissions } from "@/hooks/use-realtime-permissions";
 import { Workspace } from "./sections/workspace_section/workspace";
+import { NotificationBell } from "./components/notification-bell";
 
 interface DashboardLayoutProps {
   planId: string;
@@ -23,9 +25,10 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ planId }: DashboardLayoutProps) {
   const router = useRouter();
-  const { currentPlanMeta } = useFinancialStore();   // ← use this instead of plans[]
+  const { currentPlanMeta } = useFinancialStore();
   const [activeSection, setActiveSection] = useState("overview");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const permissions = getPermissions(currentPlanMeta);
   useRealtimePermissions(planId);
 
@@ -38,6 +41,7 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
   }
 
   const isOwner = currentPlanMeta.isOwner;
+  const activeTitle = navItems.find((n) => n.id === activeSection)?.label ?? "Overview";
 
   const renderSection = () => {
     switch (activeSection) {
@@ -66,6 +70,8 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
           planName={currentPlanMeta.name}
           entityName={currentPlanMeta.name}
           isOwner={isOwner}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
         />
       </div>
 
@@ -89,9 +95,13 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
             </div>
           </div>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-          {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </Button>
+
+        <div className="flex items-center gap-1">
+          <NotificationBell planId={planId} />
+          <Button className="cursor-pointer" variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+            {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
+        </div>
       </div>
 
       {/* Mobile Overlay */}
@@ -115,10 +125,16 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
         />
       </div>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto pt-14 lg:pt-0">
-        <div className="mx-auto max-w-7xl p-6 lg:p-8">{renderSection()}</div>
-      </main>
+      {/* Right column: topbar + content, connected to the sidebar (not floating over it) */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="hidden lg:block">
+          <Topbar title={activeTitle} planId={planId} />
+        </div>
+
+        <main className="flex-1 overflow-y-auto pt-14 lg:pt-0">
+          <div className="mx-auto max-w-7xl p-6 lg:p-8">{renderSection()}</div>
+        </main>
+      </div>
     </div>
   );
 }

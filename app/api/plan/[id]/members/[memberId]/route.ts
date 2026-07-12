@@ -8,6 +8,7 @@ import {
 } from "@/lib/permissions";
 import { emitToUser } from "@/lib/socket-server";
 import { validateMemberBudget } from "@/lib/budget-validation";
+import { notify, getDepartmentMemberUserIds } from "@/lib/notify";
 
 type Params = { params: Promise<{ id: string; memberId: string }> };
 
@@ -21,7 +22,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const { id: planId, memberId } = await params;
     const body = await req.json();
-    const { role, departmentIds, monthlyCost, departmentCostShares  } = body;
+    const { role, departmentIds, monthlyCost, departmentCostShares } = body;
 
     // Check owner first
     const account = await prisma.account.findUnique({ where: { userId: user.sub } });
@@ -58,9 +59,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const effectiveDeptIds: string[] = Array.isArray(departmentIds)
       ? departmentIds
       : (await prisma.departmentMember.findMany({
-          where: { workItemMemberId: memberId },
-          select: { departmentId: true },
-        })).map((d) => d.departmentId);
+        where: { workItemMemberId: memberId },
+        select: { departmentId: true },
+      })).map((d) => d.departmentId);
 
     if (effectiveMonthlyCost > 0) {
       const check = await validateMemberBudget({
@@ -145,7 +146,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         departmentIds: updated.departmentMembers.map((d) => d.departmentId),
       });
     }
-
+    if (Array.isArray(departmentIds) && departmentIds.length > 0 && updated) {
+      const existingDeptUserIds = await getDepartmentMemberUserIds(departmentIds, updated.userId);
+      await notify({
+        workItemId: planId,
+        userIds: existingDeptUserIds,
+        scope: "GENERAL",
+        type: "MEMBER_JOINED_DEPARTMENT",
+        title: "New team member",
+        message: `${updated.user.name ?? "A new member"} joined your department.`,
+        entityType: "member",
+        entityId: updated.id,
+      });
+    }
     return NextResponse.json(updated);
   } catch (err) {
     console.error("[PATCH /members/:memberId]", err);

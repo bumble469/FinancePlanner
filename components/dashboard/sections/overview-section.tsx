@@ -1,8 +1,8 @@
 "use client";
 
 import { useFinancialStore } from "@/lib/store";
-import { MetricCard } from "@/components/dashboard/metric-card";
-import { SplinePlaceholder } from "@/components/dashboard/spline-placeholder";
+import { MetricCard } from "@/components/dashboard/components/metric-card";
+import { SplinePlaceholder } from "@/components/dashboard/components/spline-placeholder";
 import {
   Wallet,
   ArrowDownCircle,

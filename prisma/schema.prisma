@@ -113,6 +113,27 @@ enum TaskStatus {
   BLOCKED
 }
 
+enum NotificationScope {
+  GENERAL
+  PERSONAL
+}
+
+enum NotificationType {
+  INVITATION
+  TASK_ASSIGNED
+  TASK_CREATED
+  PERMISSIONS_UPDATED
+  MILESTONE_CREATED
+  MILESTONE_TASK_INCLUDED
+  MILESTONE_UPDATED
+  MEMBER_JOINED_DEPARTMENT
+  INCOME_ADDED
+  EXPENSE_REQUESTED
+  EXPENSE_APPROVED
+  EXPENSE_REJECTED
+  DOCUMENT_UPLOADED
+}
+
 //////////////////////
 // AUTH / IDENTITY (unchanged)
 //////////////////////
@@ -135,6 +156,7 @@ model User {
   createdMilestones Milestone[] @relation("MilestoneCreator")
   sentInvitations WorkItemMemberInvitation[]
   uploadedDocuments   WorkItemDocument[]
+  notifications Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -209,12 +231,10 @@ model WorkItem {
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
-  // type-specific details
   project  Project?
   event    Event?
   planInfo PlanInfo?
 
-  // collaboration
   members WorkItemMember[]
   invitations WorkItemMemberInvitation[]
 
@@ -227,6 +247,7 @@ model WorkItem {
   milestones Milestone[]
   permissionAuditLogs PermissionAuditLog[]
   documents   WorkItemDocument[]
+  notifications Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -670,4 +691,24 @@ model WorkItemDocument {
   updatedAt DateTime @updatedAt
 
   @@map("work_item_documents")
+}
+
+model Notification {
+  id         String            @id @default(uuid())
+  workItemId String
+  userId     String
+  scope      NotificationScope
+  type       NotificationType
+  title      String
+  message    String
+  entityType String?
+  entityId   String?
+  isRead     Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workItemId, userId, isRead])
+  @@map("notifications")
 }
