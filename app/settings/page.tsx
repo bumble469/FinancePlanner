@@ -1,6 +1,7 @@
 import { TopNav } from "@/components/layout/top-nav";
 import { Card } from "@/components/ui/card";
 import { LogoutSection } from "@/components/settings/logout-section";
+import { EmailUpdatesToggle } from "@/components/settings/email-updates-toggle";
 
 export const metadata = {
   title: "Settings - FinanceFlow",
@@ -49,14 +50,18 @@ export default function SettingsPage() {
               <p className="text-muted-foreground mb-4">
                 Customize your experience.
               </p>
-              <p className="text-sm text-muted-foreground italic">
-                Future features:
-              </p>
-              <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 mt-2">
-                <li>Theme selection (light/dark)</li>
-                <li>Currency preference</li>
-                <li>Notification settings</li>
-              </ul>
+
+              <EmailUpdatesToggle />
+
+              <div className="mt-8 pt-6 border-t border-border">
+                <p className="text-sm text-muted-foreground italic">
+                  Future features:
+                </p>
+                <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 mt-2">
+                  <li>Theme selection (light/dark)</li>
+                  <li>Currency preference</li>
+                </ul>
+              </div>
             </Card>
 
             {/* Architecture Info */}
