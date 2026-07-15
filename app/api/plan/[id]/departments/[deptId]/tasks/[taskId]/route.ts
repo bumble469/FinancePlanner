@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { notify, getAllPlanUserIds } from "@/lib/notify";
 
 export async function PATCH(
   req: NextRequest,
@@ -123,6 +124,20 @@ export async function PATCH(
         },
       },
     });
+
+    if (status === "DONE" && existing.status !== "DONE") {
+      const recipients = await getAllPlanUserIds(workItemId, user.sub);
+      await notify({
+        workItemId,
+        userIds: recipients,
+        scope: "GENERAL",
+        type: "TASK_COMPLETED",
+        title: "Task completed",
+        message: `${user.name ?? "A member"} completed "${task.title}"`,
+        entityType: "task",
+        entityId: task.id,
+      });
+    }
 
     return NextResponse.json({
       ...task,
