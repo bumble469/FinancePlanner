@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { emitToUser } from "@/lib/socket-server";
 import type { NotificationType, NotificationScope } from "@prisma/client";
+import { sendEmail, notificationEmailHtml } from "@/lib/email";
 
 export async function notify({
   workItemId,
@@ -50,6 +51,49 @@ export async function notify({
       createdAt,
     });
   }
+  const eligibleUsers = await prisma.user.findMany({
+    where: {
+      id: { in: recipients },
+      emailNotificationsEnabled: true,
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      emailNotificationScope: true,
+      emailNotificationPlans: {
+        where: { workItemId },
+        select: { id: true },
+      },
+    },
+  });
+
+  const workItem = await prisma.workItem.findUnique({
+    where: { id: workItemId },
+    select: { name: true },
+  });
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+  const toSend = eligibleUsers.filter(
+    (u) => u.emailNotificationScope === "ALL" || (u as any).emailNotificationPlans?.length > 0
+  );
+
+  void Promise.allSettled(
+    toSend.map((u) =>
+      sendEmail({
+        to: u.email,
+        toName: u.name,
+        subject: title,
+        htmlContent: notificationEmailHtml({
+          title,
+          message,
+          planName: workItem?.name,
+          appUrl: `${appUrl}/plans/${workItemId}`,
+        }),
+      })
+    )
+  );
 }
 
 export async function getDepartmentMemberUserIds(departmentIds: string[], excludeUserId?: string) {

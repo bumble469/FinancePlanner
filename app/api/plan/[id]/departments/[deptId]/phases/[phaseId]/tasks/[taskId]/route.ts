@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { notify, getAllPlanUserIds } from "@/lib/notify";
 
 async function resolveTask(workItemId: string, deptId: string, phaseId: string, taskId: string) {
   return prisma.task.findFirst({
@@ -114,6 +115,20 @@ export async function PATCH(
       },
       select: TASK_SELECT,
     });
+
+    if (status === "DONE" && existing.status !== "DONE") {
+      const recipients = await getAllPlanUserIds(workItemId, user.sub);
+      await notify({
+        workItemId,
+        userIds: recipients,
+        scope: "GENERAL",
+        type: "TASK_COMPLETED",
+        title: "Task completed",
+        message: `${user.name ?? "A member"} completed "${task.title}"`,
+        entityType: "task",
+        entityId: task.id,
+      });
+    }
 
     return NextResponse.json(flattenMilestones(task));
   } catch (err) {
