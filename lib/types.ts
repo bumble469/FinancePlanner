@@ -237,6 +237,7 @@ export interface Milestone {
   extensionReason?: string;
   status: MilestoneStatus;
   achievedAt?: string;
+  departmentId?: string;
   tasks: MilestoneTask[];
 }
 
@@ -284,3 +285,63 @@ export type Task = {
   createdAt?: string;
   updatedAt?: string;
 };
+
+export interface ExtensionRequest {
+  id: string;
+
+  targetType: "TASK" | "MILESTONE";
+  status: "PENDING" | "APPROVED" | "REJECTED";
+
+  taskId?: string;
+  milestoneId?: string;
+
+  currentDueDate?: string;
+  requestedDueDate: string;
+
+  reason: string;
+
+  reviewNote?: string;
+  applyMode?: string;
+
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt?: string;
+
+  requestedBy: {
+    id: string;
+    role: string;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      image?: string | null;
+    };
+  };
+
+  reviewedBy?: {
+    id: string;
+    role: string;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      image?: string | null;
+    };
+  } | null;
+
+  task?: {
+    id: string;
+    title: string;
+  } | null;
+
+  milestone?: {
+    id: string;
+    title: string;
+    dueDate?: string;
+  } | null;
+
+  department?: {
+    id: string;
+    name: string;
+  } | null;
+}

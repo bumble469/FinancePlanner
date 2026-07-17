@@ -2,8 +2,8 @@
 import { useState, useEffect } from "react";
 import { useFinancialStore } from "@/lib/store";
 import { authClient } from "@/lib/auth-client";
-import { Department, Milestone, MilestoneStatus, MilestoneTask, MilestoneFormData } from "@/lib/types";
-import { Flag, Plus, CheckCircle2, Circle, Clock, AlertTriangle, Pencil, Trash2, History, ClockArrowUp } from "lucide-react";
+import { Department, Milestone, MilestoneStatus, MilestoneTask, MilestoneFormData, ExtensionRequest } from "@/lib/types";
+import { Flag, Plus, CheckCircle2, Circle, Clock, CalendarArrowUp, AlertTriangle, Pencil, Trash2, History, ClockArrowUp, FileClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddDeptDialog } from "./components/add-dept-dialog";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
@@ -18,6 +18,8 @@ import { PlanningInsights } from "./components/planning-insights";
 import { TimelineChart, TimelineChartDialog } from "./components/timeline-chart";
 import { ExtendDeadlineDialog } from "./components/extend-deadline-dialog";
 import { MilestoneHistoryDialog } from "./components/milestone-history-dialog";
+import { RequestExtensionDialog } from "@/components/shared/request-extension-dialog";
+import { ViewRequestExtensionDialog } from "./components/view-extension-requests-dialog";
 
 const STATUS_CONFIG: Record<
   MilestoneStatus,
@@ -36,25 +38,44 @@ function getMilestoneProgress(tasks: MilestoneTask[]) {
 
 function MilestoneCard({
   milestone,
+  planId,
   onEdit,
   onDelete,
   onExtend,
   onViewHistory,
   canEdit,
   canDelete,
+  canExtendDirectly,
+  canRequestExtension,
+  canViewExtensionRequests,
+  canApproveExtensionRequests,
+  fetchExtensionRequests,
+  extensionRequests,
+  loadingExtensionRequests,
+  pendingCount
 }: {
   milestone: Milestone;
+  planId: string;
   onEdit: (m: Milestone) => void;
   onDelete: (id: string) => void;
   onExtend: (m: Milestone) => void;
   onViewHistory: (m: Milestone) => void;
   canEdit?: boolean;
   canDelete?: boolean;
+  canExtendDirectly?: boolean;
+  canRequestExtension?: boolean;
+  canViewExtensionRequests?: boolean;
+  canApproveExtensionRequests?: boolean;
+  fetchExtensionRequests: (milestoneId: string) => Promise<void>;
+  extensionRequests: ExtensionRequest[];
+  loadingExtensionRequests?: boolean;
+  pendingCount: number;
 }) {
   const cfg = STATUS_CONFIG[milestone.status];
   const StatusIcon = cfg.icon;
   const progress = getMilestoneProgress(milestone.tasks);
   const doneTasks = milestone.tasks.filter((t) => t.status === "DONE").length;
+  const allTasksCompleted = milestone.tasks.length > 0 && milestone.tasks.every(task => task.status === "DONE");
 
   return (
     <div className="rounded-xl border border-border bg-card p-5 space-y-4">
@@ -70,17 +91,56 @@ function MilestoneCard({
           </div>
         </div>
 
-        {(canEdit || canDelete || !!milestone.originalDueDate) && (
+        {(canEdit || canDelete || canExtendDirectly || canRequestExtension || !!milestone.originalDueDate) && (
           <div className="flex items-center gap-1 shrink-0">
             {milestone.originalDueDate && (
               <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" title="View deadline history" onClick={() => onViewHistory(milestone)}>
                 <History className="h-3.5 w-3.5" />
               </Button>
             )}
-            {canEdit && (
+            {canExtendDirectly && !allTasksCompleted && (
               <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" title="Extend deadline" onClick={() => onExtend(milestone)}>
                 <ClockArrowUp className="h-3.5 w-3.5" />
               </Button>
+            )}
+            {canViewExtensionRequests && (
+              <ViewRequestExtensionDialog
+                planId={planId}
+                requests={extensionRequests}
+                canApprove={!!canApproveExtensionRequests}
+                loading={loadingExtensionRequests}
+                onReviewed={() => fetchExtensionRequests(milestone.id)}
+                trigger={
+                    <Button
+                        size="icon"
+                        variant="ghost"
+                        className="relative cursor-pointer"
+                        onClick={() => fetchExtensionRequests(milestone.id)}
+                        title="View Extension Requests"
+                    >
+                        <FileClock className="h-3.5 w-3.5" />
+                        {!!pendingCount && (
+                          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+                            {pendingCount}
+                          </span>
+                        )}
+                    </Button>
+                }
+            />
+            )}
+            {!canExtendDirectly && !allTasksCompleted && (
+              <RequestExtensionDialog
+                planId={planId}
+                targetType="MILESTONE"
+                targetId={milestone.id}
+                itemLabel={milestone.title}
+                currentDueDate={milestone.dueDate}
+                trigger={
+                  <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" title="Request Extension">
+                    <CalendarArrowUp className="h-3.5 w-3.5" />
+                  </Button>
+                }
+              />
             )}
             {canEdit && (
               <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" onClick={() => onEdit(milestone)}>
@@ -185,6 +245,21 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
   const [extendingMilestone, setExtendingMilestone] = useState<Milestone | null>(null);
   const [viewingHistoryFor, setViewingHistoryFor] = useState<Milestone | null>(null);
 
+  //extension-requests
+  const [extensionRequests, setExtensionRequests] = useState<ExtensionRequest[]>([]);
+  const [loadingExtensionRequests, setLoadingExtensionRequests] = useState(false);
+  const [milestonePendingCounts, setMilestonePendingCounts] = useState<Record<string, number>>({});
+
+  const fetchMilestoneExtensionCounts = async () => {
+    if (!currentPlanId) return;
+    try {
+      const res = await authClient.request(`/api/plan/${currentPlanId}/extension-requests/pending-counts`);
+      setMilestonePendingCounts(res.data.data.byMilestone || {});
+    } catch (err) {
+      console.error("Failed to fetch milestone extension counts:", err);
+    }
+  };
+
   useEffect(() => {
     if (!currentPlanId) return;
     (async () => {
@@ -205,7 +280,7 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
 
   useEffect(() => { fetchDepartments(); }, [currentPlanId]);
   useEffect(() => { if (activeDept) fetchPhases(activeDept.id); }, [activeDept]);
-  useEffect(() => { fetchMilestones(); }, [currentPlanId]);
+  useEffect(() => { fetchMilestones(); fetchMilestoneExtensionCounts(); }, [currentPlanId]);
 
   const { show } = useSnackbar();
 
@@ -416,6 +491,28 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
     }
   };
 
+  const fetchExtensionRequests = async (milestoneId: string) => {
+    try {
+      setLoadingExtensionRequests(true);
+
+      const res = await authClient.request(
+        `/api/plan/${currentPlanId}/milestones/${milestoneId}/extension-requests`,
+        {
+          method: "GET",
+        }
+      );
+      setExtensionRequests(res.data);
+    } catch (err: any) {
+      console.error(err);
+      show(
+        err?.response?.data?.error || "Failed to fetch extension requests",
+        "error"
+      );
+    } finally {
+      setLoadingExtensionRequests(false);
+    }
+  };
+
   const filteredMilestones = milestones.filter(
     (m) => milestoneFilter === "ALL" || m.status === milestoneFilter
   );
@@ -615,12 +712,21 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
                 <MilestoneCard
                   key={milestone.id}
                   milestone={milestone}
+                  planId={currentPlanId!}
                   onEdit={(m) => { setEditingMilestone(m); setMilestoneDialogOpen(true); }}
                   onDelete={(id) => { setDeleteMilestoneId(id); setConfirmMilestoneOpen(true); }}
                   onExtend={(m) => setExtendingMilestone(m)}
                   onViewHistory={(m) => setViewingHistoryFor(m)}
                   canEdit={permissions.canEditMilestone}
                   canDelete={permissions.canDeleteMilestone}
+                  canExtendDirectly={permissions.canExtendMilestoneDirectly()}
+                  canRequestExtension={permissions.canRequestMilestoneExtension(milestone.departmentId ?? "")}
+                  canViewExtensionRequests={permissions.canViewExtensionRequests(milestone.departmentId ?? "")}
+                  canApproveExtensionRequests={permissions.canApproveExtensionRequests(milestone.departmentId ?? "")}
+                  fetchExtensionRequests={fetchExtensionRequests}
+                  extensionRequests={extensionRequests}
+                  loadingExtensionRequests={loadingExtensionRequests}
+                  pendingCount={milestonePendingCounts[milestone.id] ?? 0}
                 />
               ))}
             </div>

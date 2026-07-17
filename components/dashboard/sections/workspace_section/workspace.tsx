@@ -22,8 +22,12 @@ import {
   ChevronDown,
   ChevronUp,
   MessageSquarePlus,
+  CalendarClock,
 } from "lucide-react";
 import { useSnackbar } from "@/lib/useSnackbar";
+import { getPermissions, type PlanPermissions } from "@/lib/permissions";
+import { RequestExtensionDialog } from "@/components/shared/request-extension-dialog";
+import { DepartmentExtensionRequestsDialog } from "./components/department-extension-requests-dialog";
 
 // ─── types ───────────────────────────────────────────────────────────────
 
@@ -53,6 +57,7 @@ type TaskItem = {
   assignees: Assignee[];
   reactions: Reaction[];
   notes: Note[];
+  milestones?: { id: string; title: string; status: string; dueDate: string | null }[];
 };
 
 const EMOJI_OPTIONS = ["👍", "🔥", "✅", "❤️"];
@@ -78,6 +83,7 @@ export function Workspace({ planId }: { planId: string }) {
   const role = currentPlanMeta?.isOwner ? "OWNER" : (currentPlanMeta?.role ?? "MEMBER");
   const isAdminLevel = role === "OWNER" || role === "ADMIN" || role === "CO_ADMIN";
   const isManager = role === "MANAGER";
+  const perms = getPermissions(currentPlanMeta);
 
   const [departments, setDepartments] = useState<DeptCard[]>([]);
   const [loadingDepts, setLoadingDepts] = useState(true);
@@ -142,7 +148,13 @@ export function Workspace({ planId }: { planId: string }) {
       </div>
 
       {!selectedDept ? (
-        <DepartmentGrid departments={departments} loading={loadingDepts} onOpen={openDepartment} />
+        <DepartmentGrid
+          departments={departments}
+          loading={loadingDepts}
+          onOpen={openDepartment}
+          planId={planId}
+          perms={perms}
+        />
       ) : (
         <DepartmentDetail
           dept={selectedDept}
@@ -153,6 +165,8 @@ export function Workspace({ planId }: { planId: string }) {
           role={role}
           canAnnotate={canAnnotate}
           isMember={role === "MEMBER"}
+          perms={perms}
+          memberId={currentPlanMeta?.memberId ?? undefined}
           onTaskUpdated={(updated) =>
             setTasks((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)))
           }
@@ -169,11 +183,25 @@ function DepartmentGrid({
   departments,
   loading,
   onOpen,
+  planId,
+  perms,
 }: {
   departments: DeptCard[];
   loading: boolean;
   onOpen: (d: DeptCard) => void;
+  planId: string;
+  perms: PlanPermissions;
 }) {
+  const [viewRequestsFor, setViewRequestsFor] = useState<DeptCard | null>(null);
+  const [pendingCounts, setPendingCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    authClient
+      .request(`/api/plan/${planId}/extension-requests/pending-counts`)
+      .then((res) => setPendingCounts(res.data.data.byDepartment || {}))
+      .catch((err) => console.error("Failed to fetch pending extension counts:", err));
+  }, [planId, departments.length]);
+
   if (loading) {
     return <p className="text-sm text-muted-foreground">Loading departments...</p>;
   }
@@ -213,11 +241,39 @@ function DepartmentGrid({
             </div>
           </div>
 
-          <Button size="sm" variant="outline" className="w-full cursor-pointer hover:text-gray-600" onClick={() => onOpen(dept)}>
-            Open
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="flex-1 cursor-pointer hover:text-gray-600" onClick={() => onOpen(dept)}>
+              Open
+            </Button>
+            {perms.canViewExtensionRequests(dept.id) && (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="relative px-3 cursor-pointer hover:text-gray-600"
+                onClick={() => setViewRequestsFor(dept)}
+              >
+                <CalendarClock className="h-4 w-4" />
+                {!!pendingCounts[dept.id] && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+                    {pendingCounts[dept.id]}
+                  </span>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
       ))}
+
+      {viewRequestsFor && (
+        <DepartmentExtensionRequestsDialog
+          planId={planId}
+          deptId={viewRequestsFor.id}
+          deptName={viewRequestsFor.name}
+          open={!!viewRequestsFor}
+          onOpenChange={(o) => !o && setViewRequestsFor(null)}
+          canApprove={perms.canApproveExtensionRequests(viewRequestsFor.id)}
+        />
+      )}
     </div>
   );
 }
@@ -233,6 +289,8 @@ function DepartmentDetail({
   role,
   canAnnotate,
   isMember,
+  perms,
+  memberId,
   onTaskUpdated,
   show,
 }: {
@@ -244,6 +302,8 @@ function DepartmentDetail({
   role: string;
   canAnnotate: boolean;
   isMember: boolean;
+  perms: PlanPermissions;
+  memberId?: string;
   onTaskUpdated: (task: TaskItem) => void;
   show: (msg: string, type?: "success" | "error") => void;
 }) {
@@ -304,6 +364,15 @@ function DepartmentDetail({
               deptId={dept.id}
               canAnnotate={canAnnotate}
               isMember={isMember}
+              canRequestExtension={perms.canRequestTaskExtension(dept.id, task.assignees.some(a => a.workItemMemberId === memberId))}
+              milestoneDueDate={
+                task.milestones && task.milestones.length > 0
+                  ? task.milestones
+                    .map((m) => m.dueDate)
+                    .filter((d): d is string => !!d)
+                    .sort()[0] // earliest milestone due date
+                  : undefined
+              }
               onRequestStatusChange={(newStatus) => setStatusChangeFor({ task, newStatus })}
               onTaskUpdated={onTaskUpdated}
               show={show}
@@ -324,10 +393,10 @@ function DepartmentDetail({
             </span>?
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setStatusChangeFor(null)} disabled={submitting}>
+            <Button className="cursor-pointer hover:text-gray-600" variant="outline" onClick={() => setStatusChangeFor(null)} disabled={submitting}>
               Cancel
             </Button>
-            <Button onClick={handleConfirmStatusChange} disabled={submitting}>
+            <Button className="cursor-pointer" onClick={handleConfirmStatusChange} disabled={submitting}>
               {submitting ? "Updating..." : "Confirm"}
             </Button>
           </DialogFooter>
@@ -345,6 +414,8 @@ function TaskCard({
   deptId,
   canAnnotate,
   isMember,
+  canRequestExtension,
+  milestoneDueDate,
   onRequestStatusChange,
   onTaskUpdated,
   show,
@@ -354,6 +425,8 @@ function TaskCard({
   deptId: string;
   canAnnotate: boolean;
   isMember: boolean;
+  canRequestExtension: boolean;
+  milestoneDueDate?: string;
   onRequestStatusChange: (status: TaskItem["status"]) => void;
   onTaskUpdated: (task: TaskItem) => void;
   show: (msg: string, type?: "success" | "error") => void;
@@ -415,24 +488,82 @@ function TaskCard({
                 Assigned: {task.assignees.map((a) => a.name ?? "Unnamed").join(", ")}
               </span>
             )}
+            {task.dueDate && (
+              <span className="text-xs text-muted-foreground">
+                Due: {new Date(task.dueDate).toLocaleDateString()}
+              </span>
+            )}
+            {task.milestones && task.milestones.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {task.milestones.map((m) => {
+                  const isOverdue =
+                    m.dueDate &&
+                    m.status !== "ACHIEVED" &&
+                    new Date(m.dueDate) < new Date();
+                  const statusDot =
+                    m.status === "ACHIEVED"
+                      ? "bg-green-500"
+                      : m.status === "IN_PROGRESS"
+                        ? "bg-yellow-500"
+                        : m.status === "MISSED"
+                          ? "bg-destructive"
+                          : "bg-muted-foreground/40";
+                  return (
+                    <span
+                      key={m.id}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs",
+                        isOverdue
+                          ? "border-destructive/30 bg-destructive/5 text-destructive"
+                          : "border-border bg-muted/40 text-muted-foreground"
+                      )}
+                      title={`Milestone: ${m.title}${m.dueDate ? ` · Due ${new Date(m.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : ""}`}
+                    >
+                      <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusDot)} />
+                      <span className="max-w-[140px] truncate font-medium">{m.title}</span>
+                      {m.dueDate && (
+                        <span className="shrink-0 opacity-70">
+                          · {new Date(m.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                        </span>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="flex flex-col items-end gap-2 shrink-0">
           <div className="flex gap-1">
+            {canRequestExtension && task.status !== "DONE" && (
+              <RequestExtensionDialog
+                planId={planId}
+                targetType="TASK"
+                targetId={task.id}
+                itemLabel={task.title}
+                currentDueDate={task.dueDate ?? undefined}
+                maxDate={milestoneDueDate}
+                trigger={
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs cursor-pointer">
+                    Request Extension
+                  </Button>
+                }
+              />
+            )}
             {task.status !== "IN_PROGRESS" && task.status !== "DONE" && (
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onRequestStatusChange("IN_PROGRESS")}>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs cursor-pointer" onClick={() => onRequestStatusChange("IN_PROGRESS")}>
                 Start
               </Button>
             )}
             {task.status !== "DONE" && (
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-green-600 hover:text-green-700" onClick={() => onRequestStatusChange("DONE")}>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs cursor-pointer text-green-600 hover:text-green-700" onClick={() => onRequestStatusChange("DONE")}>
                 Mark done
               </Button>
             )}
           </div>
           {canAnnotate && (
-            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => setExpanded((v) => !v)}>
+            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs cursor-pointer text-muted-foreground" onClick={() => setExpanded((v) => !v)}>
               {expanded ? <ChevronUp className="h-3 w-3 mr-1" /> : <ChevronDown className="h-3 w-3 mr-1" />}
               {task.notes.length > 0 ? `${task.notes.length} note${task.notes.length > 1 ? "s" : ""}` : "Notes"}
             </Button>

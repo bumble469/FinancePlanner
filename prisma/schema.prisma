@@ -138,6 +138,20 @@ enum NotificationType {
   EXPENSE_APPROVED
   EXPENSE_REJECTED
   DOCUMENT_UPLOADED
+  EXTENSION_REQUESTED
+  EXTENSION_APPROVED
+  EXTENSION_REJECTED
+}
+
+enum ExtensionTargetType {
+  TASK
+  MILESTONE
+}
+
+enum ExtensionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 //////////////////////
@@ -259,6 +273,7 @@ model WorkItem {
   documents   WorkItemDocument[]
   notifications Notification[]
   emailNotificationSubscribers UserEmailNotificationPlan[]
+  extensionRequests ExtensionRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -297,6 +312,8 @@ model WorkItemMember {
   taskNotes     TaskNote[]
   taskReactions TaskReaction[]
   milestoneExtensions MilestoneExtensionLog[]
+  extensionRequestsMade     ExtensionRequest[] @relation("ExtensionRequester")
+  extensionRequestsReviewed ExtensionRequest[] @relation("ExtensionReviewer")
 
   joinedAt DateTime @default(now())
 
@@ -355,6 +372,7 @@ model Department {
   members  DepartmentMember[]
   income Income[]
   expenses Expense[]
+  extensionRequests ExtensionRequest[]
 
   phases Phase[]
   tasks  Task[]
@@ -553,6 +571,8 @@ model Milestone {
 
   tasks     MilestoneTask[]
   extensionLogs MilestoneExtensionLog[]
+  extensionRequests ExtensionRequest[]
+  
   createdBy String
   creator     User   @relation("MilestoneCreator", fields: [createdBy], references: [id], onDelete: Restrict)
 
@@ -615,6 +635,7 @@ model Task {
   members TaskMember[]
   notes     TaskNote[]
   reactions TaskReaction[]
+  extensionRequests ExtensionRequest[]
 
   dependsOn TaskDependency[] @relation("TaskDependent")
   blocks    TaskDependency[] @relation("TaskBlocker")
@@ -735,4 +756,44 @@ model UserEmailNotificationPlan {
 
   @@unique([userId, workItemId])
   @@map("user_email_notification_plans")
+}
+
+model ExtensionRequest {
+  id         String              @id @default(uuid())
+  workItemId String
+  targetType ExtensionTargetType
+
+  taskId      String?
+  milestoneId String?
+
+  departmentId String?
+
+  currentDueDate   DateTime?
+  requestedDueDate DateTime
+  reason           String
+
+  status ExtensionRequestStatus @default(PENDING)
+
+  requestedById String
+  reviewedById  String?
+  reviewedAt    DateTime?
+  reviewNote    String?
+
+  applyMode String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workItem   WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  task       Task?       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  milestone  Milestone?  @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  requestedBy WorkItemMember  @relation("ExtensionRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  reviewedBy  WorkItemMember? @relation("ExtensionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([workItemId])
+  @@index([departmentId])
+  @@index([status])
+  @@map("extension_requests")
 }
