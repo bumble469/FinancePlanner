@@ -30,7 +30,7 @@ import {
   type AccessLevel,
 } from "@/lib/permissions";
 import type { TeamMember } from "@/lib/types";
-import { ShieldAlert, Users, LayoutTemplate, Wallet, FileText, KeyRound } from "lucide-react";
+import { ShieldAlert, Users, LayoutTemplate, Wallet, FileText, KeyRound, CalendarClock } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -197,6 +197,10 @@ export function PermissionsDialog({ open, onOpenChange, member, planId, onSaved 
                   <FileText className="h-4 w-4 mr-2" /> Reports
                 </TabsTrigger>
 
+                <TabsTrigger value="extensions" className="justify-start px-3 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <CalendarClock className="h-4 w-4 mr-2" /> Extensions
+                </TabsTrigger>
+
                 {(role === "CO_ADMIN" || role === "MANAGER") && (
                   <TabsTrigger value="access" className="justify-start px-3 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                     <KeyRound className="h-4 w-4 mr-2" /> Access
@@ -334,6 +338,47 @@ export function PermissionsDialog({ open, onOpenChange, member, planId, onSaved 
                       onChange={(v) => role === "MANAGER" ? setManagerPerms((p) => ({ ...p, reports: v })) : setCoManagerPerms((p) => ({ ...p, reports: v }))}
                     />
                   </>
+                )}
+              </TabsContent>
+
+              {/* EXTENSIONS TAB */}
+              <TabsContent value="extensions" className="mt-0 divide-y divide-border">
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-foreground">Extension Requests</h3>
+                  <p className="text-xs text-muted-foreground">Manage permissions for task and milestone extensions.</p>
+                </div>
+
+                {role === "CO_ADMIN" && (
+                  <SwitchRow
+                    label="Approve Extensions"
+                    description="Can review and approve/reject extension requests"
+                    checked={coAdminPerms.extensions?.approve || false}
+                    onCheckedChange={(v) =>
+                      setCoAdminPerms((p) => ({ ...p, extensions: { ...p.extensions, approve: v } }))
+                    }
+                  />
+                )}
+
+                {role === "MANAGER" && (
+                  <SwitchRow
+                    label="Approve Extensions"
+                    description="Can review and approve/reject extension requests for their assigned departments"
+                    checked={managerPerms.canApproveExtensionRequests || false}
+                    onCheckedChange={(v) =>
+                      setManagerPerms((p) => ({ ...p, canApproveExtensionRequests: v }))
+                    }
+                  />
+                )}
+
+                {role === "CO_MANAGER" && (
+                  <SwitchRow
+                    label="Request Extensions"
+                    description="Can request extensions for tasks and milestones in their assigned departments"
+                    checked={coManagerPerms.canRequestExtension || false}
+                    onCheckedChange={(v) =>
+                      setCoManagerPerms((p) => ({ ...p, canRequestExtension: v }))
+                    }
+                  />
                 )}
               </TabsContent>
 

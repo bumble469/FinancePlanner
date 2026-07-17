@@ -35,8 +35,16 @@ export interface PlanPermissions {
   canDeleteTask: boolean;
   canCompleteTask: boolean;
 
+  // document permissions
   canAddReport: boolean;
   canDeleteReport: boolean;
+
+  // extension requests permissions
+  canRequestTaskExtension: (deptId: string, isAssignedToMe: boolean) => boolean;
+  canExtendMilestoneDirectly: () => boolean;
+  canRequestMilestoneExtension: (deptId: string) => boolean;
+  canViewExtensionRequests: (deptId: string) => boolean;
+  canApproveExtensionRequests: (deptId: string) => boolean;
 }
 
 export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
@@ -168,6 +176,35 @@ export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
       ca("reports", "delete") ||
       (isManager && managerCan("reports", "MANAGE")) ||
       (isCoManager && coManagerCan("reports", "MANAGE")),
+
+    canRequestTaskExtension: (deptId, isAssignedToMe) =>
+      (role === "MEMBER" && isAssignedToMe) ||
+      (isManager && inScope(deptId)) ||
+      (isCoManager && inScope(deptId) && coManagerPerms?.canRequestExtension === true),
+
+    // direct milestone extension — bypasses the request flow entirely.
+    // Only OWNER/ADMIN, or a CO_ADMIN explicitly granted extensions.approve.
+    canExtendMilestoneDirectly: () =>
+      isOwnerOrAdmin || ca("extensions", "approve"),
+
+    // request-based extension — managers/co-managers only (not members).
+    // A missing/empty deptId means the milestone is plan-wide; managers are
+    // always in-scope for those. Co-managers need canRequestExtension granted.
+    canRequestMilestoneExtension: (deptId) => {
+      const milestoneInScope = !deptId || inScope(deptId);
+      return (
+        (isManager && milestoneInScope) ||
+        (isCoManager && milestoneInScope && coManagerPerms?.canRequestExtension === true)
+      );
+    },
+
+    canViewExtensionRequests: (deptId) =>
+      isOwnerOrAdmin || isCoAdmin || (isManager && inScope(deptId)),
+
+    canApproveExtensionRequests: (deptId) =>
+      isOwnerOrAdmin ||
+      ca("extensions", "approve") ||
+      (isManager && inScope(deptId) && managerPerms?.canApproveExtensionRequests === true),
   };
 }
 
@@ -187,6 +224,7 @@ export interface CoAdminPermissions {
   revenue: { create: boolean; edit: boolean; delete: boolean };
   expenses: { create: boolean; edit: boolean; delete: boolean; approve: boolean };
   reports: { create: boolean; edit: boolean; delete: boolean };
+  extensions: { approve: boolean };
   canManagePermissions: boolean;
 }
 
@@ -194,6 +232,7 @@ export interface ManagerPermissions {
   revenue: AccessLevel;
   expenses: AccessLevel;
   reports: AccessLevel;
+  canApproveExtensionRequests: boolean;
   canManageCoManagerPermissions: boolean;
 }
 
@@ -201,6 +240,7 @@ export interface CoManagerPermissions {
   revenue: AccessLevel;
   expenses: AccessLevel;
   reports: AccessLevel;
+  canRequestExtension: boolean;
 }
 
 export const DEFAULT_CO_ADMIN_PERMISSIONS: CoAdminPermissions = {
@@ -210,6 +250,7 @@ export const DEFAULT_CO_ADMIN_PERMISSIONS: CoAdminPermissions = {
   revenue: { create: false, edit: false, delete: false },
   expenses: { create: false, edit: false, delete: false, approve: false },
   reports: { create: false, edit: false, delete: false },
+  extensions: { approve: false },
   canManagePermissions: false,
 };
 
@@ -217,6 +258,7 @@ export const DEFAULT_MANAGER_PERMISSIONS: ManagerPermissions = {
   revenue: "NONE",
   expenses: "NONE",
   reports: "NONE",
+  canApproveExtensionRequests: false,
   canManageCoManagerPermissions: false,
 };
 
@@ -224,6 +266,7 @@ export const DEFAULT_CO_MANAGER_PERMISSIONS: CoManagerPermissions = {
   revenue: "NONE",
   expenses: "NONE",
   reports: "NONE",
+  canRequestExtension: false,
 };
 
 type ActingMember = { role: MemberRole; permissions: CoAdminPermissions | ManagerPermissions | null };

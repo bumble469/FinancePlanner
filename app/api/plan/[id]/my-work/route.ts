@@ -32,6 +32,9 @@ const TASK_INCLUDE = {
     orderBy: { createdAt: "desc" as const },
     include: { author: { include: { user: { select: { name: true } } } } },
   },
+  milestones: {
+    include: { milestone: { select: { id: true, title: true, dueDate: true, status: true } } },
+  },
 };
 
 function formatTask(t: any) {
@@ -64,6 +67,12 @@ function formatTask(t: any) {
       authorName: n.author.user.name,
       createdAt: n.createdAt.toISOString(),
     })),
+    milestones: t.milestones?.map((m: any) => ({
+      id: m.milestone.id,
+      title: m.milestone.title,
+      status: m.milestone.status,
+      dueDate: m.milestone.dueDate ? m.milestone.dueDate.toISOString() : null,
+    })) || [],
   };
 }
 
