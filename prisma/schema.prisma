@@ -109,8 +109,11 @@ enum MilestoneStatus {
 enum TaskStatus {
   TODO
   IN_PROGRESS
-  DONE
   BLOCKED
+  DONE               // legacy — no longer set by the app, kept for old rows
+  SUBMITTED
+  CHANGES_REQUESTED
+  COMPLETED
 }
 
 enum NotificationScope {
@@ -128,6 +131,9 @@ enum NotificationType {
   TASK_ASSIGNED
   TASK_CREATED
   TASK_COMPLETED
+  TASK_SUBMITTED
+  TASK_SUBMISSION_APPROVED
+  TASK_SUBMISSION_REJECTED
   PERMISSIONS_UPDATED
   MILESTONE_CREATED
   MILESTONE_TASK_INCLUDED
@@ -152,6 +158,18 @@ enum ExtensionRequestStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum SubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EvidenceType {
+  IMAGE
+  VIDEO
+  DOCUMENT
 }
 
 //////////////////////
@@ -314,6 +332,8 @@ model WorkItemMember {
   milestoneExtensions MilestoneExtensionLog[]
   extensionRequestsMade     ExtensionRequest[] @relation("ExtensionRequester")
   extensionRequestsReviewed ExtensionRequest[] @relation("ExtensionReviewer")
+  submissionsMade     TaskSubmission[] @relation("SubmissionSubmitter")
+  submissionsReviewed TaskSubmission[] @relation("SubmissionReviewer")
 
   joinedAt DateTime @default(now())
 
@@ -636,6 +656,8 @@ model Task {
   notes     TaskNote[]
   reactions TaskReaction[]
   extensionRequests ExtensionRequest[]
+  requirement TaskRequirement?
+  submissions TaskSubmission[]
 
   dependsOn TaskDependency[] @relation("TaskDependent")
   blocks    TaskDependency[] @relation("TaskBlocker")
@@ -696,6 +718,67 @@ model TaskReaction {
 
   @@unique([taskId, authorId])
   @@map("task_reactions")
+}
+
+model TaskRequirement {
+  id        String   @id @default(uuid())
+  taskId    String   @unique
+
+  requireApproval            Boolean @default(true)
+  requireDescription         Boolean @default(false)
+  requireImages              Boolean @default(false)
+  minImages                  Int?
+  maxImages                  Int?
+  requireVideo               Boolean @default(false)
+  requireDocument            Boolean @default(false)
+  allowMultipleEvidenceTypes Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("task_requirements")
+}
+
+model TaskSubmission {
+  id            String           @id @default(uuid())
+  taskId        String
+  submittedById String
+  description   String?
+  status        SubmissionStatus @default(PENDING)
+
+  reviewedById  String?
+  reviewedAt    DateTime?
+  reviewComment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task        Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  submittedBy WorkItemMember  @relation("SubmissionSubmitter", fields: [submittedById], references: [id], onDelete: Cascade)
+  reviewedBy  WorkItemMember? @relation("SubmissionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  files       TaskSubmissionFile[]
+
+  @@index([taskId])
+  @@index([status])
+  @@map("task_submissions")
+}
+
+model TaskSubmissionFile {
+  id           String       @id @default(uuid())
+  submissionId String
+  fileType     EvidenceType
+  fileName     String
+  filePath     String
+  fileSize     Int
+  mimeType     String
+  createdAt    DateTime     @default(now())
+
+  submission TaskSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@map("task_submission_files")
 }
 
 //////////////////////

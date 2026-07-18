@@ -26,6 +26,18 @@ const TASK_SELECT = {
   completedAt: true,
   createdAt: true,
   updatedAt: true,
+  requirement: {
+    select: {
+      requireApproval: true,
+      requireDescription: true,
+      requireImages: true,
+      minImages: true,
+      maxImages: true,
+      requireVideo: true,
+      requireDocument: true,
+      allowMultipleEvidenceTypes: true,
+    },
+  },
   members: {
     select: {
       workItemMember: {
@@ -74,9 +86,10 @@ export async function PATCH(
       startDate,
       dueDate,
       extension,
+      requirement,
     } = body;
 
-    const VALID_STATUSES = ["TODO", "IN_PROGRESS", "DONE", "BLOCKED"];
+    const VALID_STATUSES = ["TODO", "IN_PROGRESS", "DONE", "BLOCKED", "SUBMITTED", "CHANGES_REQUESTED", "COMPLETED"];
     if (status !== undefined && !VALID_STATUSES.includes(status)) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
@@ -97,6 +110,13 @@ export async function PATCH(
       }
     }
 
+    if (status === "COMPLETED" || status === "SUBMITTED" || status === "CHANGES_REQUESTED") {
+      return NextResponse.json(
+        { error: "This status can only change through the submission/review workflow." },
+        { status: 400 }
+      );
+    }
+
     const task = await prisma.task.update({
       where: { id: taskId },
       data: {
@@ -112,23 +132,35 @@ export async function PATCH(
           extensionReason: extension.reason.trim(),
         }),
         ...(status === "DONE" && { completedAt: new Date() }),
+        ...(requirement && {
+          requirement: {
+            upsert: {
+              create: {
+                requireApproval: requirement.requireApproval ?? true,
+                requireDescription: requirement.requireDescription ?? false,
+                requireImages: requirement.requireImages ?? false,
+                minImages: requirement.minImages ?? null,
+                maxImages: requirement.maxImages ?? null,
+                requireVideo: requirement.requireVideo ?? false,
+                requireDocument: requirement.requireDocument ?? false,
+                allowMultipleEvidenceTypes: requirement.allowMultipleEvidenceTypes ?? true,
+              },
+              update: {
+                requireApproval: requirement.requireApproval ?? true,
+                requireDescription: requirement.requireDescription ?? false,
+                requireImages: requirement.requireImages ?? false,
+                minImages: requirement.minImages ?? null,
+                maxImages: requirement.maxImages ?? null,
+                requireVideo: requirement.requireVideo ?? false,
+                requireDocument: requirement.requireDocument ?? false,
+                allowMultipleEvidenceTypes: requirement.allowMultipleEvidenceTypes ?? true,
+              },
+            },
+          },
+        }),
       },
       select: TASK_SELECT,
     });
-
-    if (status === "DONE" && existing.status !== "DONE") {
-      const recipients = await getAllPlanUserIds(workItemId, user.sub);
-      await notify({
-        workItemId,
-        userIds: recipients,
-        scope: "GENERAL",
-        type: "TASK_COMPLETED",
-        title: "Task completed",
-        message: `${user.name ?? "A member"} completed "${task.title}"`,
-        entityType: "task",
-        entityId: task.id,
-      });
-    }
 
     return NextResponse.json(flattenMilestones(task));
   } catch (err) {

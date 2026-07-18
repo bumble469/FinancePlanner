@@ -8,32 +8,41 @@ export interface PlanPermissions {
   canAddDepartment: boolean;
   canEditDepartment: (deptId: string) => boolean;
   canDeleteDepartment: boolean;
+
   // phases
   canAddPhase: (deptId: string) => boolean;
   canEditPhase: (deptId: string) => boolean;
   canDeletePhase: boolean;
+
   // milestones
   canAddMilestone: boolean;
   canEditMilestone: boolean;
   canDeleteMilestone: boolean;
+
   // income / expenses
   canAddIncome: boolean;
   canEditIncome: boolean;
   canDeleteIncome: boolean;
+
   // any member can submit an expense request — approval is gated separately
   canAddExpense: boolean;
   canEditExpense: boolean;
   canDeleteExpense: boolean;
+
   // approve / reject / mark-paid — OWNER/ADMIN always, CO_ADMIN only if granted
   canApproveExpense: boolean;
+
   // members
   canInviteMember: boolean;
   canEditMember: boolean;
   canDeleteMember: boolean;
+
   // tasks
   canAddTask: (deptId?: string) => boolean;
   canDeleteTask: boolean;
   canCompleteTask: boolean;
+  canSubmitTaskWork: (isAssignedToMe: boolean) => boolean;
+  canApproveTaskSubmission: (deptId: string) => boolean;
 
   // document permissions
   canAddReport: boolean;
@@ -164,6 +173,15 @@ export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
       (isManager && (!deptId || inScope(deptId))),
     canDeleteTask: isOwnerOrAdmin || isCoAdmin,
     canCompleteTask: true,
+    // any assignee can submit their own work for review, regardless of role
+    canSubmitTaskWork: (isAssignedToMe) => isAssignedToMe === true,
+
+    // Admin/Co-Admin/Manager always; Co-Manager only if explicitly granted
+    canApproveTaskSubmission: (deptId) =>
+      isOwnerOrAdmin ||
+      isCoAdmin ||
+      (isManager && inScope(deptId)) ||
+      (isCoManager && inScope(deptId) && coManagerPerms?.canApproveTaskSubmissions === true),
 
     canAddReport:
       isOwnerOrAdmin ||
@@ -241,6 +259,7 @@ export interface CoManagerPermissions {
   expenses: AccessLevel;
   reports: AccessLevel;
   canRequestExtension: boolean;
+  canApproveTaskSubmissions: boolean;
 }
 
 export const DEFAULT_CO_ADMIN_PERMISSIONS: CoAdminPermissions = {
@@ -267,6 +286,7 @@ export const DEFAULT_CO_MANAGER_PERMISSIONS: CoManagerPermissions = {
   expenses: "NONE",
   reports: "NONE",
   canRequestExtension: false,
+  canApproveTaskSubmissions: false,
 };
 
 type ActingMember = { role: MemberRole; permissions: CoAdminPermissions | ManagerPermissions | null };

@@ -251,7 +251,14 @@ export interface MilestoneFormData {
   taskIds: string[];
 }
 
-export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE" | "BLOCKED";
+export type TaskStatus =
+  | "TODO"
+  | "IN_PROGRESS"
+  | "DONE"
+  | "BLOCKED"
+  | "SUBMITTED"
+  | "CHANGES_REQUESTED"
+  | "COMPLETED";
 
 export interface TaskAssignee {
   id: string; // WorkItemMember id
@@ -263,6 +270,17 @@ export interface TaskMilestoneRef {
   id: string;
   title: string;
   status: MilestoneStatus;
+}
+
+export interface TaskRequirement {
+  requireApproval: boolean;
+  requireDescription: boolean;
+  requireImages: boolean;
+  minImages: number | null;
+  maxImages: number | null;
+  requireVideo: boolean;
+  requireDocument: boolean;
+  allowMultipleEvidenceTypes: boolean;
 }
 
 export type Task = {
@@ -282,6 +300,7 @@ export type Task = {
   assignees?: TaskAssignee[];
   dependsOnIds?: string[];
   milestones?: TaskMilestoneRef[];
+  requirement?: TaskRequirement | null;
   createdAt?: string;
   updatedAt?: string;
 };

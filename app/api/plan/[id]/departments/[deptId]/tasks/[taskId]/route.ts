@@ -55,7 +55,7 @@ export async function PATCH(
     }
 
     // Validate status if provided
-    const VALID_STATUSES = ["TODO", "IN_PROGRESS", "DONE", "BLOCKED"];
+    const VALID_STATUSES = ["TODO", "IN_PROGRESS", "DONE", "BLOCKED", "SUBMITTED", "CHANGES_REQUESTED", "COMPLETED"];
     if (status !== undefined && !VALID_STATUSES.includes(status)) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
@@ -73,6 +73,13 @@ export async function PATCH(
       if (!phase) {
         return NextResponse.json({ error: "Phase not found" }, { status: 404 });
       }
+    }
+
+    if (status === "COMPLETED" || status === "SUBMITTED" || status === "CHANGES_REQUESTED") {
+      return NextResponse.json(
+        { error: "This status can only change through the submission/review workflow." },
+        { status: 400 }
+      );
     }
 
     const task = await prisma.task.update({
@@ -124,20 +131,6 @@ export async function PATCH(
         },
       },
     });
-
-    if (status === "DONE" && existing.status !== "DONE") {
-      const recipients = await getAllPlanUserIds(workItemId, user.sub);
-      await notify({
-        workItemId,
-        userIds: recipients,
-        scope: "GENERAL",
-        type: "TASK_COMPLETED",
-        title: "Task completed",
-        message: `${user.name ?? "A member"} completed "${task.title}"`,
-        entityType: "task",
-        entityId: task.id,
-      });
-    }
 
     return NextResponse.json({
       ...task,

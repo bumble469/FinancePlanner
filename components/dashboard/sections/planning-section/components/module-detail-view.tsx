@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Module, Task } from "@/lib/types";
+import { Module, Task, TaskRequirement } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Plus } from "lucide-react";
 import { TaskListView } from "./task-list-view";
@@ -8,6 +8,7 @@ import { TaskDialog } from "./task-dialog";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { authClient } from "@/lib/auth-client";
 import { useFinancialStore } from "@/lib/store";
+import { getPermissions } from "@/lib/permissions";
 
 export function ModuleDetailView({
   module,
@@ -16,7 +17,8 @@ export function ModuleDetailView({
   module: Module;
   onBack: () => void;
 }) {
-  const { currentPlanId } = useFinancialStore();
+  const { currentPlanId, currentPlanMeta } = useFinancialStore();
+  const perms = getPermissions(currentPlanMeta);
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +34,6 @@ export function ModuleDetailView({
 
   useEffect(() => {
     fetchTasks();
-    console.log("module: ", module);
   }, [module.id]);
 
   const fetchTasks = async () => {
@@ -50,7 +51,7 @@ export function ModuleDetailView({
     }
   };
 
-  const createTask = async (data: { title: string; description?: string }) => {
+  const createTask = async (data: { title: string; description?: string; requirement: TaskRequirement }) => {
     if (!currentPlanId) return;
     const tempId = crypto.randomUUID();
     const optimistic: Task = {
@@ -58,8 +59,10 @@ export function ModuleDetailView({
       title: data.title,
       description: data.description,
       status: "TODO",
+      priority: 0,
       phaseId: module.id,
       departmentId: module.departmentId,
+      requirement: data.requirement,
     };
     setTasks((prev) => [...prev, optimistic]);
     try {
@@ -79,7 +82,7 @@ export function ModuleDetailView({
 
   const updateTask = async (
     id: string,
-    data: Partial<{ title: string; description: string; status: Task["status"] }>
+    data: Partial<{ title: string; description: string; status: Task["status"]; requirement: TaskRequirement }>
   ) => {
     if (!currentPlanId) return;
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...data } : t)));
@@ -125,7 +128,7 @@ export function ModuleDetailView({
         <div className="shrink-0 text-right">
           <p className="text-xs text-muted-foreground">Tasks</p>
           <p className="text-sm font-mono font-medium text-foreground">
-            {tasks.filter((t) => t.status === "DONE").length}/{tasks.length}
+            {tasks.filter((t) => t.status === "COMPLETED" || t.status === "DONE").length}/{tasks.length}
           </p>
         </div>
       </div>
@@ -158,6 +161,8 @@ export function ModuleDetailView({
             setDeleteTaskId(id);
             setConfirmOpen(true);
           }}
+          canApproveSubmissions={perms.canApproveTaskSubmission(module.departmentId ?? "")}
+          onSubmissionReviewed={fetchTasks}
         />
       )}
 

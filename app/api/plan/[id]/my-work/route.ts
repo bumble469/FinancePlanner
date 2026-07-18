@@ -35,6 +35,18 @@ const TASK_INCLUDE = {
   milestones: {
     include: { milestone: { select: { id: true, title: true, dueDate: true, status: true } } },
   },
+  requirement: {
+    select: {
+      requireApproval: true,
+      requireDescription: true,
+      requireImages: true,
+      minImages: true,
+      maxImages: true,
+      requireVideo: true,
+      requireDocument: true,
+      allowMultipleEvidenceTypes: true,
+    },
+  },
 };
 
 function formatTask(t: any) {
@@ -43,6 +55,7 @@ function formatTask(t: any) {
     title: t.title,
     description: t.description,
     status: t.status,
+    requirement: t.requirement ?? null,
     departmentId: t.departmentId,
     phaseId: t.phaseId,
     phaseName: t.phase?.name ?? null,
@@ -122,7 +135,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         total: d.tasks.length,
         pending: d.tasks.filter((t) => t.status === "TODO").length,
         ongoing: d.tasks.filter((t) => t.status === "IN_PROGRESS").length,
-        completed: d.tasks.filter((t) => t.status === "DONE").length,
+        completed: d.tasks.filter((t) => t.status === "DONE" || t.status === "COMPLETED").length,
       },
     }));
 
