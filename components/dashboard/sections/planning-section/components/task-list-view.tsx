@@ -206,7 +206,7 @@ export function TaskListView({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 px-2 text-xs cursor-pointer"
+                        className="h-7 px-2 text-xs cursor-pointer hover:text-gray-600"
                         onClick={() => fetchPendingSubmission(t.id)}
                       >
                         Load submission to review

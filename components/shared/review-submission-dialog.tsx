@@ -74,7 +74,7 @@ export function ReviewSubmissionDialog({ planId, deptId, taskId, submission, onR
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger ?? (
-          <Button size="sm" variant="outline" className="gap-1.5 cursor-pointer">
+          <Button size="sm" variant="outline" className="gap-1.5 cursor-pointer hover:text-gray-600">
             <Eye className="h-3.5 w-3.5" />
             Review
           </Button>
