@@ -23,11 +23,20 @@ import {
   ChevronUp,
   MessageSquarePlus,
   CalendarClock,
+  Send,
+  AlertTriangle,
+  History,
+  FileText,
+  Image as ImageIcon,
+  Video,
 } from "lucide-react";
 import { useSnackbar } from "@/lib/useSnackbar";
 import { getPermissions, type PlanPermissions } from "@/lib/permissions";
 import { RequestExtensionDialog } from "@/components/shared/request-extension-dialog";
 import { DepartmentExtensionRequestsDialog } from "./components/department-extension-requests-dialog";
+import { SubmitWorkDialog } from "@/components/shared/submit-work-dialog";
+import { ReviewSubmissionDialog } from "@/components/shared/review-submission-dialog";
+import { TaskRequirement } from "@/lib/types";
 
 // ─── types ───────────────────────────────────────────────────────────────
 
@@ -42,11 +51,13 @@ type Assignee = { workItemMemberId: string; name: string | null; image: string |
 type Reaction = { id: string; emoji: string; authorName: string | null; authorId: string };
 type Note = { id: string; body: string; authorName: string | null; createdAt: string };
 
+type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE" | "SUBMITTED" | "CHANGES_REQUESTED" | "COMPLETED";
+
 type TaskItem = {
   id: string;
   title: string;
   description: string | null;
-  status: "TODO" | "IN_PROGRESS" | "DONE";
+  status: TaskStatus;
   departmentId: string | null;
   phaseId: string | null;
   phaseName: string | null;
@@ -58,20 +69,46 @@ type TaskItem = {
   reactions: Reaction[];
   notes: Note[];
   milestones?: { id: string; title: string; status: string; dueDate: string | null }[];
+  requirement?: TaskRequirement | null;
+};
+
+type SubmissionFile = {
+  id: string;
+  fileType: "IMAGE" | "VIDEO" | "DOCUMENT";
+  fileName: string;
+  filePath: string;
+};
+
+type Submission = {
+  id: string;
+  description: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  reviewComment: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  submittedBy: { user: { name: string | null; email: string } };
+  reviewedBy: { user: { name: string | null } } | null;
+  files: SubmissionFile[];
 };
 
 const EMOJI_OPTIONS = ["👍", "🔥", "✅", "❤️"];
 
-const STATUS_LABEL: Record<TaskItem["status"], string> = {
+const STATUS_LABEL: Record<TaskStatus, string> = {
   TODO: "Pending",
   IN_PROGRESS: "Ongoing",
   DONE: "Completed",
+  SUBMITTED: "Submitted",
+  CHANGES_REQUESTED: "Changes Requested",
+  COMPLETED: "Completed",
 };
 
-const STATUS_BADGE_CLASS: Record<TaskItem["status"], string> = {
+const STATUS_BADGE_CLASS: Record<TaskStatus, string> = {
   TODO: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
   IN_PROGRESS: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   DONE: "bg-green-500/10 text-green-600 dark:text-green-400",
+  SUBMITTED: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
+  CHANGES_REQUESTED: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+  COMPLETED: "bg-green-500/10 text-green-600 dark:text-green-400",
 };
 
 // ─── main component ──────────────────────────────────────────────────────
@@ -170,6 +207,7 @@ export function Workspace({ planId }: { planId: string }) {
           onTaskUpdated={(updated) =>
             setTasks((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)))
           }
+          onRefreshTasks={() => fetchTasks(selectedDept.id)}
           show={show}
         />
       )}
@@ -292,6 +330,7 @@ function DepartmentDetail({
   perms,
   memberId,
   onTaskUpdated,
+  onRefreshTasks,
   show,
 }: {
   dept: DeptCard;
@@ -305,9 +344,10 @@ function DepartmentDetail({
   perms: PlanPermissions;
   memberId?: string;
   onTaskUpdated: (task: TaskItem) => void;
+  onRefreshTasks: () => void;
   show: (msg: string, type?: "success" | "error") => void;
 }) {
-  const [statusChangeFor, setStatusChangeFor] = useState<{ task: TaskItem; newStatus: TaskItem["status"] } | null>(null);
+  const [statusChangeFor, setStatusChangeFor] = useState<{ task: TaskItem; newStatus: TaskStatus } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const handleConfirmStatusChange = async () => {
@@ -365,6 +405,8 @@ function DepartmentDetail({
               canAnnotate={canAnnotate}
               isMember={isMember}
               canRequestExtension={perms.canRequestTaskExtension(dept.id, task.assignees.some(a => a.workItemMemberId === memberId))}
+              canSubmitWork={perms.canSubmitTaskWork(task.assignees.some(a => a.workItemMemberId === memberId))}
+              canApproveSubmission={perms.canApproveTaskSubmission(dept.id)}
               milestoneDueDate={
                 task.milestones && task.milestones.length > 0
                   ? task.milestones
@@ -375,6 +417,7 @@ function DepartmentDetail({
               }
               onRequestStatusChange={(newStatus) => setStatusChangeFor({ task, newStatus })}
               onTaskUpdated={onTaskUpdated}
+              onWorkflowChanged={onRefreshTasks}
               show={show}
             />
           ))}
@@ -415,9 +458,12 @@ function TaskCard({
   canAnnotate,
   isMember,
   canRequestExtension,
+  canSubmitWork,
+  canApproveSubmission,
   milestoneDueDate,
   onRequestStatusChange,
   onTaskUpdated,
+  onWorkflowChanged,
   show,
 }: {
   task: TaskItem;
@@ -426,14 +472,50 @@ function TaskCard({
   canAnnotate: boolean;
   isMember: boolean;
   canRequestExtension: boolean;
+  canSubmitWork: boolean;
+  canApproveSubmission: boolean;
   milestoneDueDate?: string;
-  onRequestStatusChange: (status: TaskItem["status"]) => void;
+  onRequestStatusChange: (status: TaskStatus) => void;
   onTaskUpdated: (task: TaskItem) => void;
+  onWorkflowChanged: () => void;
   show: (msg: string, type?: "success" | "error") => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [submittingNote, setSubmittingNote] = useState(false);
+
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+
+  const isDone = task.status === "DONE" || task.status === "COMPLETED";
+  const canResubmit = task.status === "TODO" || task.status === "IN_PROGRESS" || task.status === "CHANGES_REQUESTED";
+
+  useEffect(() => {
+    if (canApproveSubmission && task.status === "SUBMITTED") fetchSubmissions();
+  }, [task.status]);
+
+  const fetchSubmissions = async () => {
+    setLoadingSubmissions(true);
+    try {
+      const res = await authClient.request(
+        `/api/plan/${planId}/departments/${deptId}/tasks/${task.id}/submissions`
+      );
+      setSubmissions(res.data.data || []);
+    } catch (err) {
+      console.error("Failed to fetch submissions:", err);
+    } finally {
+      setLoadingSubmissions(false);
+    }
+  };
+
+  const toggleHistory = () => {
+    const next = !historyOpen;
+    setHistoryOpen(next);
+    if (next) fetchSubmissions();
+  };
+
+  const pendingSubmission = submissions.find((s) => s.status === "PENDING");
 
   const handleAddNote = async () => {
     if (!noteText.trim()) return;
@@ -531,12 +613,19 @@ function TaskCard({
                 })}
               </div>
             )}
+
+            {task.status === "CHANGES_REQUESTED" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/10 px-2 py-0.5 text-xs text-orange-600 dark:text-orange-400">
+                <AlertTriangle className="h-3 w-3" />
+                Changes requested — see history for reviewer's note
+              </span>
+            )}
           </div>
         </div>
 
         <div className="flex flex-col items-end gap-2 shrink-0">
-          <div className="flex gap-1">
-            {canRequestExtension && task.status !== "DONE" && (
+          <div className="flex gap-1 flex-wrap justify-end">
+            {canRequestExtension && !isDone && (
               <RequestExtensionDialog
                 planId={planId}
                 targetType="TASK"
@@ -551,23 +640,73 @@ function TaskCard({
                 }
               />
             )}
-            {task.status !== "IN_PROGRESS" && task.status !== "DONE" && (
+            {task.status === "TODO" && (
               <Button size="sm" variant="ghost" className="h-7 px-2 text-xs cursor-pointer" onClick={() => onRequestStatusChange("IN_PROGRESS")}>
                 Start
               </Button>
             )}
-            {task.status !== "DONE" && (
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs cursor-pointer text-green-600 hover:text-green-700" onClick={() => onRequestStatusChange("DONE")}>
-                Mark done
-              </Button>
+
+            {/* Submit / resubmit — assignee only, never a direct completion */}
+            {canSubmitWork && canResubmit && (
+              <SubmitWorkDialog
+                planId={planId}
+                deptId={deptId}
+                taskId={task.id}
+                taskTitle={task.title}
+                requirement={task.requirement}
+                isResubmit={task.status === "CHANGES_REQUESTED"}
+                onSubmitted={onWorkflowChanged}
+                trigger={
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs cursor-pointer text-green-600 hover:text-green-700 gap-1">
+                    <Send className="h-3 w-3" />
+                    {task.status === "CHANGES_REQUESTED" ? "Resubmit Work" : "Submit Work"}
+                  </Button>
+                }
+              />
+            )}
+
+            {/* Review — approvers only, when there's something pending */}
+            {canApproveSubmission && task.status === "SUBMITTED" && (
+              pendingSubmission ? (
+                <ReviewSubmissionDialog
+                  planId={planId}
+                  deptId={deptId}
+                  taskId={task.id}
+                  submission={pendingSubmission}
+                  onReviewed={() => {
+                    fetchSubmissions();
+                    onWorkflowChanged();
+                  }}
+                  trigger={
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs cursor-pointer text-indigo-600 hover:text-indigo-700">
+                      Review Submission
+                    </Button>
+                  }
+                />
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs cursor-pointer text-indigo-600 hover:text-indigo-700"
+                  onClick={fetchSubmissions}
+                >
+                  Load Submission
+                </Button>
+              )
             )}
           </div>
-          {canAnnotate && (
-            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs cursor-pointer text-muted-foreground" onClick={() => setExpanded((v) => !v)}>
-              {expanded ? <ChevronUp className="h-3 w-3 mr-1" /> : <ChevronDown className="h-3 w-3 mr-1" />}
-              {task.notes.length > 0 ? `${task.notes.length} note${task.notes.length > 1 ? "s" : ""}` : "Notes"}
+          <div className="flex gap-1">
+            {canAnnotate && (
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs cursor-pointer text-muted-foreground" onClick={() => setExpanded((v) => !v)}>
+                {expanded ? <ChevronUp className="h-3 w-3 mr-1" /> : <ChevronDown className="h-3 w-3 mr-1" />}
+                {task.notes.length > 0 ? `${task.notes.length} note${task.notes.length > 1 ? "s" : ""}` : "Notes"}
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs cursor-pointer text-muted-foreground gap-1" onClick={toggleHistory}>
+              <History className="h-3 w-3" />
+              History
             </Button>
-          )}
+          </div>
         </div>
       </div>
 
@@ -621,6 +760,74 @@ function TaskCard({
               <MessageSquarePlus className="h-4 w-4" />
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* Submission History */}
+      {historyOpen && (
+        <div className="space-y-2 pt-2 border-t border-border">
+          <p className="text-xs font-medium text-muted-foreground">Submission History</p>
+          {loadingSubmissions ? (
+            <p className="text-xs text-muted-foreground">Loading...</p>
+          ) : submissions.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No submissions yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {submissions.map((s) => (
+                <div key={s.id} className="rounded-lg border border-border p-3 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-foreground">
+                      {s.submittedBy.user.name || s.submittedBy.user.email}
+                    </span>
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 font-medium",
+                        s.status === "PENDING"
+                          ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                          : s.status === "APPROVED"
+                            ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                            : "bg-red-500/10 text-red-600 dark:text-red-400"
+                      )}
+                    >
+                      {s.status}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground">{new Date(s.createdAt).toLocaleString()}</p>
+                  {s.description && <p className="text-foreground">{s.description}</p>}
+                  {s.files.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {s.files.map((f) => (
+                        <a
+                          key={f.id}
+                          href={f.filePath}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 hover:bg-muted/50"
+                        >
+                          {f.fileType === "IMAGE" ? (
+                            <ImageIcon className="h-3 w-3" />
+                          ) : f.fileType === "VIDEO" ? (
+                            <Video className="h-3 w-3" />
+                          ) : (
+                            <FileText className="h-3 w-3" />
+                          )}
+                          {f.fileName}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {s.reviewComment && (
+                    <p className="text-muted-foreground italic">"{s.reviewComment}"</p>
+                  )}
+                  {s.reviewedBy && (
+                    <p className="text-muted-foreground">
+                      Reviewed by {s.reviewedBy.user.name} on {s.reviewedAt && new Date(s.reviewedAt).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

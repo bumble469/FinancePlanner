@@ -24,6 +24,18 @@ const TASK_SELECT = {
   completedAt: true,
   createdAt: true,
   updatedAt: true,
+  requirement: {
+    select: {
+      requireApproval: true,
+      requireDescription: true,
+      requireImages: true,
+      minImages: true,
+      maxImages: true,
+      requireVideo: true,
+      requireDocument: true,
+      allowMultipleEvidenceTypes: true,
+    },
+  },
   members: {
     select: {
       workItemMember: {
@@ -103,6 +115,7 @@ export async function POST(
       dueDate,
       memberIds = [],
       dependsOnIds = [],
+      requirement,
     } = body;
 
     if (!title || typeof title !== "string" || !title.trim()) {
@@ -143,6 +156,20 @@ export async function POST(
         }),
         ...(dependsOnIds.length > 0 && {
           dependsOn: { create: dependsOnIds.map((dependsOnId: string) => ({ dependsOnId })) },
+        }),
+        ...(requirement && {
+          requirement: {
+            create: {
+              requireApproval: requirement.requireApproval ?? true,
+              requireDescription: requirement.requireDescription ?? false,
+              requireImages: requirement.requireImages ?? false,
+              minImages: requirement.minImages ?? null,
+              maxImages: requirement.maxImages ?? null,
+              requireVideo: requirement.requireVideo ?? false,
+              requireDocument: requirement.requireDocument ?? false,
+              allowMultipleEvidenceTypes: requirement.allowMultipleEvidenceTypes ?? true,
+            },
+          },
         }),
       },
       select: TASK_SELECT,
