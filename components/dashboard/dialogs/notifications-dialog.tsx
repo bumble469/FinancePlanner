@@ -17,6 +17,8 @@ interface NotificationsDialogProps {
   onOpenChange: (open: boolean) => void;
   general: NotificationItem[];
   personal: NotificationItem[];
+  unreadGeneral: number;
+  unreadPersonal: number;
   loading: boolean;
   onLoadTab: (scope: "GENERAL" | "PERSONAL") => void;
   onMarkRead: (id: string) => void;
@@ -76,6 +78,8 @@ export function NotificationsDialog({
   onOpenChange,
   general,
   personal,
+  unreadGeneral,
+  unreadPersonal,
   loading,
   onLoadTab,
   onMarkRead,
@@ -106,18 +110,23 @@ export function NotificationsDialog({
 
         <div className="flex gap-1 border-b border-border">
           {([
-            { key: "PERSONAL", label: "Associated with me" },
-            { key: "GENERAL", label: "General" },
+            { key: "PERSONAL", label: "Associated with me", unread: unreadPersonal },
+            { key: "GENERAL", label: "General", unread: unreadGeneral },
           ] as const).map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
               className={cn(
-                "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                "flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
                 tab === t.key ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
               {t.label}
+              {t.unread > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-white">
+                  {t.unread > 99 ? "99+" : t.unread}
+                </span>
+              )}
             </button>
           ))}
         </div>

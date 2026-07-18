@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 
 export function NotificationBell({ planId }: { planId: string | undefined }) {
   const [open, setOpen] = useState(false);
-  const { unreadCount, general, personal, loading, fetchTab, markRead, markAllRead } = useNotifications(planId);
+  const { unreadCount, unreadGeneral, unreadPersonal, general, personal, loading, fetchTab, markRead, markAllRead } = useNotifications(planId);
 
   return (
     <>
@@ -31,6 +31,8 @@ export function NotificationBell({ planId }: { planId: string | undefined }) {
         onOpenChange={setOpen}
         general={general}
         personal={personal}
+        unreadGeneral={unreadGeneral}
+        unreadPersonal={unreadPersonal}
         loading={loading}
         onLoadTab={fetchTab}
         onMarkRead={markRead}

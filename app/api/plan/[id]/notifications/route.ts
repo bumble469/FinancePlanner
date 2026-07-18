@@ -24,9 +24,11 @@ export async function GET(req: NextRequest, { params }: Params) {
       ...(scope ? { scope } : {}),
     };
 
-    const [total, unreadCount, items] = await Promise.all([
+    const [total, unreadCount, unreadGeneral, unreadPersonal, items] = await Promise.all([
       prisma.notification.count({ where }),
       prisma.notification.count({ where: { workItemId, userId: user.sub, isRead: false } }),
+      prisma.notification.count({ where: { workItemId, userId: user.sub, isRead: false, scope: "GENERAL" } }),
+      prisma.notification.count({ where: { workItemId, userId: user.sub, isRead: false, scope: "PERSONAL" } }),
       prisma.notification.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -37,7 +39,15 @@ export async function GET(req: NextRequest, { params }: Params) {
 
     return NextResponse.json({
       success: true,
-      data: { items, total, unreadCount, page, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
+      data: {
+        items,
+        total,
+        unreadCount,
+        unreadGeneral,
+        unreadPersonal,
+        page,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      },
     });
   } catch (err) {
     console.error("[GET /notifications]", err);

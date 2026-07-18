@@ -489,7 +489,6 @@ function TaskCard({
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
 
   const isDone = task.status === "DONE" || task.status === "COMPLETED";
-  const canResubmit = task.status === "TODO" || task.status === "IN_PROGRESS" || task.status === "CHANGES_REQUESTED";
 
   useEffect(() => {
     if (canApproveSubmission && task.status === "SUBMITTED") fetchSubmissions();
@@ -647,7 +646,7 @@ function TaskCard({
             )}
 
             {/* Submit / resubmit — assignee only, never a direct completion */}
-            {canSubmitWork && canResubmit && (
+            {canSubmitWork && (task.status === "IN_PROGRESS" || task.status === "CHANGES_REQUESTED") && (
               <SubmitWorkDialog
                 planId={planId}
                 deptId={deptId}
