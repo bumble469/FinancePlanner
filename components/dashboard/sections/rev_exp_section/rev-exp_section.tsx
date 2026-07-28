@@ -105,7 +105,7 @@ const PAYMENT_STATUS_BADGE_CLASS: Record<string, string> = {
 
 type IncomeFilter = "ALL" | typeof INCOME_TYPES[number];
 
-type Tab = "income" | "expenses" | "breakdown" | "phases" | "analytics" | "transactions";
+type Tab = "income" | "expenses" | "breakdown" | "phases" | "resources" | "variance" | "analytics" | "transactions";
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -642,6 +642,178 @@ function PhasePLTab({
   );
 }
 
+// ─── Resource Cost Tab ─────────────────────────────────────────────────────
+
+function ResourceCostTab({
+  data,
+  currency,
+}: {
+  data: { departments: any[]; phases: any[] };
+  currency: string;
+}) {
+  const [scope, setScope] = useState<"department" | "phase">("department");
+  const rows = scope === "department" ? data.departments : data.phases;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">
+          Resource cost by {scope === "department" ? "department" : "phase"}
+        </h3>
+        <div className="flex gap-1 rounded-full border border-border p-0.5">
+          {(["department", "phase"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setScope(s)}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                scope === s ? "bg-foreground text-background" : "text-muted-foreground"
+              )}
+            >
+              {s === "department" ? "Department" : "Phase"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+          No {scope === "department" ? "departments" : "phases"} to show yet.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rows.map((r: any) => (
+            <div key={r.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-foreground">{r.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {r.memberCount} member{r.memberCount !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Total monthly cost</p>
+                  <p className="font-mono font-semibold text-foreground">{fmt(r.totalMonthlyCost, currency)}</p>
+                </div>
+              </div>
+
+              {r.memberCosts.length > 0 && (
+                <div className="space-y-1 border-t border-border pt-2">
+                  {r.memberCosts.map((m: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        {m.name}
+                        {m.isOverridden && (
+                          <span className="ml-1.5 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] text-blue-600 dark:text-blue-400">
+                            custom split
+                          </span>
+                        )}
+                      </span>
+                      <span className="font-mono">{fmt(m.monthlyCost, currency)}/mo</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between border-t border-border pt-2 text-xs">
+                <span className="text-muted-foreground">Actual expenses recorded here</span>
+                <span className="font-mono font-medium text-destructive">{fmt(r.actualExpenses, currency)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Budget Variance Tab ────────────────────────────────────────────────────
+
+function BudgetVarianceTab({
+  departments,
+  currency,
+}: {
+  departments: any[];
+  currency: string;
+}) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-medium text-muted-foreground">Budget vs. actual, by department</h3>
+        <p className="text-xs text-muted-foreground/70 mt-0.5">
+          Phase-level budgets aren't tracked yet — only departments have a budget field today.
+        </p>
+      </div>
+
+      {departments.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+          No departments to show yet.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {departments.map((d) => {
+            const variance = d.budget - d.actualExpenses;
+            const pctUsed = d.budget > 0 ? (d.actualExpenses / d.budget) * 100 : 0;
+            const isOver = d.budget > 0 && d.actualExpenses > d.budget;
+            const noBudgetSet = d.budget === 0;
+
+            return (
+              <div key={d.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-foreground">{d.name}</p>
+                  {noBudgetSet ? (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                      No budget set
+                    </span>
+                  ) : (
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-xs font-medium",
+                        isOver
+                          ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                          : pctUsed > 85
+                            ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                            : "bg-green-500/10 text-green-600 dark:text-green-400"
+                      )}
+                    >
+                      {isOver ? "Over budget" : pctUsed > 85 ? "Nearing limit" : "On track"}
+                    </span>
+                  )}
+                </div>
+
+                {!noBudgetSet && (
+                  <>
+                    <div className="grid grid-cols-3 gap-3 text-xs">
+                      <div>
+                        <p className="text-muted-foreground">Planned budget</p>
+                        <p className="font-mono font-medium text-foreground">{fmt(d.budget, currency)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Actual spent</p>
+                        <p className="font-mono font-medium text-destructive">{fmt(d.actualExpenses, currency)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Variance</p>
+                        <p className={cn(
+                          "font-mono font-medium",
+                          variance >= 0 ? "text-green-600 dark:text-green-400" : "text-destructive"
+                        )}>
+                          {variance >= 0 ? "+" : ""}{fmt(variance, currency)}
+                        </p>
+                      </div>
+                    </div>
+                    <Progress value={Math.min(pctUsed, 100)} className={cn("h-1.5", isOver && "bg-red-500/20")} />
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PLRow({
   label,
   incomeTotal,
@@ -662,7 +834,22 @@ function PLRow({
       highlight ? "bg-muted/30" : "bg-card"
     )}>
       <div className="flex items-center justify-between mb-3">
-        <span className="font-medium text-sm">{label}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-sm">{label}</span>
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[10px] font-medium",
+              net > 0
+                ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                : net === 0
+                  ? "bg-muted text-muted-foreground"
+                  : "bg-red-500/10 text-red-600 dark:text-red-400"
+            )}
+          >
+            {net > 0 ? "Profitable" : net === 0 ? "Break-even" : "Over budget"}
+            {incomeTotal > 0 && ` · ${((net / incomeTotal) * 100).toFixed(0)}% margin`}
+          </span>
+        </div>
         <span className={cn(
           "text-sm font-mono font-semibold",
           net >= 0 ? "text-green-600 dark:text-green-400" : "text-destructive"
@@ -952,9 +1139,24 @@ export function RevenueExpenseSection({ planId, permissions }: { planId: string;
     }
   }
 
+  const [resourceCosts, setResourceCosts] = useState<{
+    departments: any[];
+    phases: any[];
+  }>({ departments: [], phases: [] });
+
+  async function fetchResourceCosts() {
+    try {
+      const res = await authClient.request(`/api/plan/${planId}/resource-costs`);
+      setResourceCosts(res.data.data);
+    } catch (err) {
+      console.error("Failed to fetch resource costs:", err);
+    }
+  }
+
   useEffect(() => {
     fetchExpense();
     fetchIncome();
+    fetchResourceCosts();
   }, [planId]);
 
   const [activeTab, setActiveTab] = useState<Tab>("income");
@@ -987,6 +1189,8 @@ export function RevenueExpenseSection({ planId, permissions }: { planId: string;
     { key: "expenses", label: "Expenses" },
     { key: "breakdown", label: "Breakdown" },
     { key: "phases", label: "Phase P&L" },
+    { key: "resources", label: "Resource Costs" },
+    { key: "variance", label: "Budget Variance" },
     { key: "analytics", label: "Analytics" },
     { key: "transactions", label: "Transactions" },
   ];
@@ -1082,6 +1286,7 @@ export function RevenueExpenseSection({ planId, permissions }: { planId: string;
           onClick={() => {
             fetchIncome();
             fetchExpense();
+            fetchResourceCosts();
             show("Revenue & Expenses reloaded", "success");
           }}
         >
@@ -1188,6 +1393,12 @@ export function RevenueExpenseSection({ planId, permissions }: { planId: string;
         )}
         {activeTab === "phases" && (
           <PhasePLTab income={income} expenses={expenses} currency={currency} />
+        )}
+        {activeTab === "resources" && (
+          <ResourceCostTab data={resourceCosts} currency={currency} />
+        )}
+        {activeTab === "variance" && (
+          <BudgetVarianceTab departments={resourceCosts.departments} currency={currency} />
         )}
         {activeTab === "analytics" && (
           <AnalyticsTab income={income} expenses={expenses} currency={currency} />
