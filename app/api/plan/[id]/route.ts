@@ -119,16 +119,17 @@ async function getPlanWithAccess(planId: string, userId: string): Promise<Access
 }
 
 // ─── GET /api/plan/[id] ────────────────────────────────────────────────────
-
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: planId } = await params;
+
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
-    const result = await getPlanWithAccess(params.id, user.sub);
+    const result = await getPlanWithAccess(planId, user.sub);
     if (!result) return NextResponse.json({ success: false, error: 'Plan not found or access denied' }, { status: 404 });
 
     const { plan, isOwner, role, departmentIds, permissions, memberId } = result;
@@ -139,7 +140,7 @@ export async function GET(
         ...plan,
         isOwner,
         role,
-        departmentIds, 
+        departmentIds,
         permissions,
         memberId,
       },
@@ -174,7 +175,7 @@ export async function PATCH(
     if (!existing) return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
 
     const body = await request.json();
-    const { name, status, budget, description, currency, startDate, endDate, methodology, eventDate, venue } = body;
+    const { name, status, budget, description, currency, startDate, endDate, methodology, eventDate, venue, hasTicketing, hasStalls } = body;
 
     if (status && !Object.values(WorkItemStatus).includes(status)) {
       return NextResponse.json({ success: false, error: 'Invalid status' }, { status: 400 });
@@ -207,6 +208,8 @@ export async function PATCH(
           data: {
             ...(eventDate !== undefined ? { eventDate: eventDate ? new Date(eventDate) : null } : {}),
             ...(venue !== undefined ? { venue: venue?.trim() || null } : {}),
+            ...(hasTicketing !== undefined ? { hasTicketing: !!hasTicketing } : {}),
+            ...(hasStalls !== undefined ? { hasStalls: !!hasStalls } : {}),
           },
         });
       }

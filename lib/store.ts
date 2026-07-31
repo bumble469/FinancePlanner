@@ -25,10 +25,12 @@ export interface CurrentPlanMeta {
   type: "project" | "event" | "plan";
   status: string;
   isOwner: boolean;
-  role: string; // "OWNER" | MemberRole
-  memberId: string | null; // the current user's WorkItemMember id (null for the plan OWNER)
+  role: string;
+  memberId: string | null;
   departmentIds: string[] | null;
   permissions: CoAdminPermissions | ManagerPermissions | CoManagerPermissions | null;
+  hasStalls?: boolean;
+  hasTicketing?: boolean;
 }
 
 interface AccountStore {

@@ -16,7 +16,7 @@ import { useFinancialStore } from "@/lib/store";
 import type { Plan } from "@/lib/types";
 import { getPermissions } from "@/lib/permissions";
 import { useRealtimePermissions } from "@/hooks/use-realtime-permissions";
-import { Workspace } from "./sections/workspace_section/workspace";
+import { Workspace } from "./sections/workspace-section/workspace";
 import { NotificationBell } from "./components/notification-bell";
 
 interface DashboardLayoutProps {

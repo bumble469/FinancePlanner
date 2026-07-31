@@ -54,6 +54,10 @@ export interface PlanPermissions {
   canRequestMilestoneExtension: (deptId: string) => boolean;
   canViewExtensionRequests: (deptId: string) => boolean;
   canApproveExtensionRequests: (deptId: string) => boolean;
+
+  canManageStalls: boolean;
+  canManageTicketing: boolean;
+  canCheckInAttendee: boolean;
 }
 
 export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
@@ -223,6 +227,10 @@ export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
       isOwnerOrAdmin ||
       ca("extensions", "approve") ||
       (isManager && inScope(deptId) && managerPerms?.canApproveExtensionRequests === true),
+
+    canManageStalls: isOwnerOrAdmin || isCoAdmin,
+    canManageTicketing: isOwnerOrAdmin || isCoAdmin,
+    canCheckInAttendee: isOwnerOrAdmin || isCoAdmin || isManager || isCoManager,
   };
 }
 

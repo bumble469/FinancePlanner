@@ -38,6 +38,7 @@ function formatExpense(e: any) {
     paidAmount: Number(e.paidAmount),
     phaseName: e.phase?.name ?? null,
     departmentName: e.department?.name ?? null,
+    stallName: e.stall?.name ?? null,
     requestedByName: e.requestedBy?.user?.name ?? null,
     approvedByName: e.approvedBy?.user?.name ?? null,
     rejectedByName: e.rejectedBy?.user?.name ?? null,
@@ -51,6 +52,7 @@ function formatExpense(e: any) {
 const EXPENSE_INCLUDE = {
   phase: { select: { id: true, name: true } },
   department: { select: { id: true, name: true } },
+  stall: { select: { id: true, name: true } },
   requestedBy: { include: { user: { select: { name: true } } } },
   approvedBy: { include: { user: { select: { name: true } } } },
   rejectedBy: { include: { user: { select: { name: true } } } },
@@ -108,7 +110,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const body = await req.json();
-    const { category, amount, description, phaseId, departmentId, occurredAt } = body;
+    const { category, amount, description, phaseId, departmentId, stallId, occurredAt } = body;
 
     const validCategories = VALID_CATEGORIES;
     if (!category || !validCategories.includes(category)) {
@@ -126,6 +128,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       const dept = await prisma.department.findFirst({ where: { id: departmentId, workItemId: planId } });
       if (!dept) return NextResponse.json({ error: "Invalid department" }, { status: 400 });
     }
+    if (stallId) {
+      const stall = await prisma.stall.findFirst({ where: { id: stallId, workItemId: planId } });
+      if (!stall) return NextResponse.json({ error: "Invalid stall" }, { status: 400 });
+    }
 
     const expense = await prisma.expense.create({
       data: {
@@ -135,6 +141,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         description: description?.trim() || null,
         phaseId: phaseId || null,
         departmentId: departmentId || null,
+        stallId: stallId || null,
         requestedById: access.memberId,
         status: "PENDING_APPROVAL",
         paymentStatus: "PENDING",

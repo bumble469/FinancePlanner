@@ -15,6 +15,7 @@ const VALID_INCOME_TYPES = [
   "MERCHANDISE",
   "REFUND",
   "CLIENT_PAYMENT",
+  "STALL_INCOME",
   "OTHER",
 ];
 
@@ -58,6 +59,7 @@ function formatIncome(i: any) {
     receivedAmount: Number(i.receivedAmount),
     phaseName: i.phase?.name ?? null,
     departmentName: i.department?.name ?? null,
+    stallName: i.stall?.name ?? null,
     createdByName: i.createdBy?.user?.name ?? null,
     receivedAt: i.receivedAt ? i.receivedAt.toISOString() : null,
   };
@@ -79,6 +81,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       include: {
         phase: { select: { id: true, name: true } },
         department: { select: { id: true, name: true } },
+        stall: { select: { id: true, name: true } },
         createdBy: { include: { user: { select: { name: true } } } },
       },
       orderBy: { createdAt: "desc" },
@@ -107,7 +110,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     const body = await req.json();
-    const { type, amount, source, description, phaseId, departmentId, receivedAt, receivedAmount, cancelled } = body;
+    const { type, amount, source, description, phaseId, departmentId, stallId, receivedAt, receivedAmount, cancelled } = body;
 
     if (!type || !VALID_INCOME_TYPES.includes(type)) {
       return NextResponse.json({ error: "Invalid income type" }, { status: 400 });
@@ -137,6 +140,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       const dept = await prisma.department.findFirst({ where: { id: departmentId, workItemId: planId } });
       if (!dept) return NextResponse.json({ error: "Invalid department" }, { status: 400 });
     }
+    if (stallId) {
+      const stall = await prisma.stall.findFirst({ where: { id: stallId, workItemId: planId } });
+      if (!stall) return NextResponse.json({ error: "Invalid stall" }, { status: 400 });
+    }
 
     const derived = cancelled
       ? { status: "CANCELLED" as const, paymentStatus: "PENDING" as const }
@@ -154,12 +161,14 @@ export async function POST(req: NextRequest, { params }: Params) {
         description: description?.trim() || null,
         phaseId: phaseId || null,
         departmentId: departmentId || null,
+        stallId: stallId || null,
         createdById: access.memberId,
         receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
       },
       include: {
         phase: { select: { id: true, name: true } },
         department: { select: { id: true, name: true } },
+        stall: { select: { id: true, name: true } },
         createdBy: { include: { user: { select: { name: true } } } },
       },
     });

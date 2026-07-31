@@ -21,6 +21,8 @@ import {
   RefreshCw,
   Landmark,
   Clock,
+  Ticket,
+  ArrowLeft,
 } from "lucide-react";
 import {
   BarChart,
@@ -48,19 +50,63 @@ import { getCurrencySymbol } from "@/lib/currency";
 import type { Expense, Income, ExpenseCategory, FinancialStatus, IncomeType, IncomeStatus } from "@/lib/types";
 import { AddIncomeDialog } from "./components/add-income-dialog";
 import { AddExpenseDialog } from "./components/add-expense-dialog";
+import { TicketingSection } from "./components/ticketing-section/ticketing-section";
 import type { PlanPermissions } from "@/lib/permissions";
 import { useSnackbar } from '@/lib/useSnackbar';
 
 // ─── config ────────────────────────────────────────────────────────────────
 const CATEGORY_CONFIG: Record<
   ExpenseCategory,
-  { label: string; icon: typeof Users; colorClass: string; badgeClass: string; hex: string }> = {
-  SALARY: { label: "Salary", icon: Users, colorClass: "bg-chart-1/15 text-chart-1", badgeClass: "bg-chart-1/10 text-chart-1", hex: "#6366f1" },
-  MARKETING: { label: "Marketing", icon: Megaphone, colorClass: "bg-chart-2/15 text-chart-2", badgeClass: "bg-chart-2/10 text-chart-2", hex: "#ec4899" },
-  TOOLS: { label: "Tools", icon: Wrench, colorClass: "bg-chart-3/15 text-chart-3", badgeClass: "bg-chart-3/10 text-chart-3", hex: "#0ea5e9" },
-  OPERATIONS: { label: "Operations", icon: Building2, colorClass: "bg-chart-4/15 text-chart-4", badgeClass: "bg-chart-4/10 text-chart-4", hex: "#f59e0b" },
-  EVENT: { label: "Event", icon: PartyPopper, colorClass: "bg-chart-5/15 text-chart-5", badgeClass: "bg-chart-5/10 text-chart-5", hex: "#8b5cf6" },
-  OTHER: { label: "Other", icon: Wallet, colorClass: "bg-muted text-muted-foreground", badgeClass: "bg-muted text-muted-foreground", hex: "#9ca3af" },
+  {
+    label: string;
+    icon: typeof Users;
+    colorClass: string;
+    badgeClass: string;
+    hex: string;
+  }
+> = {
+  SALARY: {
+    label: "Salary",
+    icon: Users,
+    colorClass: "bg-chart-1/15 text-chart-1",
+    badgeClass: "bg-chart-1/10 text-chart-1",
+    hex: "#6366f1",
+  },
+  MARKETING: {
+    label: "Marketing",
+    icon: Megaphone,
+    colorClass: "bg-chart-2/15 text-chart-2",
+    badgeClass: "bg-chart-2/10 text-chart-2",
+    hex: "#ec4899",
+  },
+  TOOLS: {
+    label: "Tools",
+    icon: Wrench,
+    colorClass: "bg-chart-3/15 text-chart-3",
+    badgeClass: "bg-chart-3/10 text-chart-3",
+    hex: "#0ea5e9",
+  },
+  OPERATIONS: {
+    label: "Operations",
+    icon: Building2,
+    colorClass: "bg-chart-4/15 text-chart-4",
+    badgeClass: "bg-chart-4/10 text-chart-4",
+    hex: "#f59e0b",
+  },
+  EVENT: {
+    label: "Event",
+    icon: PartyPopper,
+    colorClass: "bg-chart-5/15 text-chart-5",
+    badgeClass: "bg-chart-5/10 text-chart-5",
+    hex: "#8b5cf6",
+  },
+  OTHER: {
+    label: "Other",
+    icon: Wallet,
+    colorClass: "bg-muted text-muted-foreground",
+    badgeClass: "bg-muted text-muted-foreground",
+    hex: "#9ca3af",
+  },
 };
 
 const EXPENSE_CATEGORIES = Object.keys(CATEGORY_CONFIG) as ExpenseCategory[];
@@ -1117,9 +1163,12 @@ export function RevenueExpenseSection({ planId, permissions }: { planId: string;
     setIncome,
     setExpenses,
     updateExpense,
+    currentPlanMeta,
   } = useFinancialStore();
 
   const { show } = useSnackbar();
+
+  const [ticketingOpen, setTicketingOpen] = useState(false);
 
   async function fetchIncome() {
     try {
@@ -1269,185 +1318,221 @@ export function RevenueExpenseSection({ planId, permissions }: { planId: string;
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            Revenue & Expenses
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Track income, spending, and profitability across phases and departments
-          </p>
-        </div>
-
-        <Button
-          variant="outline"
-          className="cursor-pointer shrink-0 hover:text-gray-600"
-          onClick={() => {
-            fetchIncome();
-            fetchExpense();
-            fetchResourceCosts();
-            show("Revenue & Expenses reloaded", "success");
-          }}
-        >
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Reload
-        </Button>
-      </div>
-
-      {/* Summary metric cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-        <MetricCard
-          label="Total income"
-          value={fmt(totalIncome, currency)}
-          sub={`${income.length} entries`}
-          valueClass="text-green-600 dark:text-green-400"
-        />
-        <MetricCard
-          label="Total expenses"
-          value={fmt(totalExpenses, currency)}
-          sub={`${expenses.length} entries`}
-          valueClass="text-destructive"
-        />
-        <MetricCard
-          label="Current balance"
-          value={(currentBalance >= 0 ? "+" : "") + fmt(currentBalance, currency)}
-          sub="Received − Paid (cash basis)"
-          valueClass={currentBalance >= 0 ? "text-green-600 dark:text-green-400" : "text-destructive"}
-        />
-        <MetricCard
-          label="Budget utilized"
-          value={`${budgetUsedPct}%`}
-          sub={`of ${fmt(budget, currency)} budget`}
-          valueClass={
-            budgetUsedPct <= 70
-              ? "text-foreground"
-              : budgetUsedPct <= 100
-                ? "text-yellow-600 dark:text-yellow-400"
-                : "text-destructive"
-          }
-        />
-        <MetricCard
-          label="Pending receivables"
-          value={fmt(pendingReceivables, currency)}
-          sub="Expected / partial income"
-          valueClass="text-yellow-600 dark:text-yellow-400"
-        />
-        <MetricCard
-          label="Pending payables"
-          value={fmt(pendingPayables, currency)}
-          sub="Approved, awaiting payment"
-          valueClass="text-yellow-600 dark:text-yellow-400"
-        />
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-border overflow-x-auto">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={cn(
-              "px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap",
-              activeTab === tab.key
-                ? "border-foreground text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
+      {ticketingOpen ? (
+        <div className="space-y-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 -ml-2 cursor-pointer"
+            onClick={() => setTicketingOpen(false)}
           >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to Revenue & Expenses
+          </Button>
+          <TicketingSection planId={planId} permissions={permissions} />
+        </div>
+      ) : (
+        <>
+          {/* Page header */}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">
+                Revenue & Expenses
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Track income, spending, and profitability across phases and departments
+              </p>
+            </div>
 
-      {/* Tab content */}
-      <div>
-        {activeTab === "income" && (
-          <IncomeTab
-            income={income}
-            currency={currency}
-            onAdd={() => { setEditingIncome(null); setIncomeDialogOpen(true); }}
-            onEdit={handleEditIncome}
-            onDelete={handleDeleteIncome}
-            canAdd={permissions.canAddIncome}
-            canEdit={permissions.canEditIncome}
-            canDelete={permissions.canDeleteIncome}
-          />
-        )}
-        {activeTab === "expenses" && (
-          <ExpensesTab
-            expenses={expenses}
-            currency={currency}
-            onAdd={() => { setEditingExpense(null); setExpenseDialogOpen(true); }}
-            onEdit={handleEditExpense}
-            onDelete={handleDeleteExpense}
-            onApprove={handleApproveExpense}
-            onReject={handleRejectExpense}
-            canAdd={permissions.canAddExpense}
-            canEdit={permissions.canEditExpense}
-            canDelete={permissions.canDeleteExpense}
-            canApprove={permissions.canApproveExpense}
-          />
-        )}
-        {activeTab === "breakdown" && (
-          <BreakdownTab expenses={expenses} currency={currency} />
-        )}
-        {activeTab === "phases" && (
-          <PhasePLTab income={income} expenses={expenses} currency={currency} />
-        )}
-        {activeTab === "resources" && (
-          <ResourceCostTab data={resourceCosts} currency={currency} />
-        )}
-        {activeTab === "variance" && (
-          <BudgetVarianceTab departments={resourceCosts.departments} currency={currency} />
-        )}
-        {activeTab === "analytics" && (
-          <AnalyticsTab income={income} expenses={expenses} currency={currency} />
-        )}
-        {activeTab === "transactions" && (
-          <TransactionsTab income={income} expenses={expenses} currency={currency} />
-        )}
-      </div>
+            <Button
+              variant="outline"
+              className="cursor-pointer shrink-0 hover:text-gray-600"
+              onClick={() => {
+                fetchIncome();
+                fetchExpense();
+                fetchResourceCosts();
+                show("Revenue & Expenses reloaded", "success");
+              }}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Reload
+            </Button>
+          </div>
 
-      <AddIncomeDialog
-        open={incomeDialogOpen}
-        onOpenChange={setIncomeDialogOpen}
-        editing={editingIncome}
-        onClose={() => { setIncomeDialogOpen(false); setEditingIncome(null); }}
-        workItemId={planId}
-      />
-
-      <AddExpenseDialog
-        open={expenseDialogOpen}
-        onOpenChange={setExpenseDialogOpen}
-        editing={editingExpense}
-        onClose={() => { setExpenseDialogOpen(false); setEditingExpense(null); }}
-        workItemId={planId}
-      />
-
-      <Dialog open={!!rejectingExpenseId} onOpenChange={(open) => { if (!open) setRejectingExpenseId(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Reject expense request</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-1.5 pt-2">
-            <Textarea
-              placeholder="Explain why this expense is being rejected..."
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              rows={3}
-              className="resize-none"
+          {/* Summary metric cards */}
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+            <MetricCard
+              label="Total income"
+              value={fmt(totalIncome, currency)}
+              sub={`${income.length} entries`}
+              valueClass="text-green-600 dark:text-green-400"
+            />
+            <MetricCard
+              label="Total expenses"
+              value={fmt(totalExpenses, currency)}
+              sub={`${expenses.length} entries`}
+              valueClass="text-destructive"
+            />
+            <MetricCard
+              label="Current balance"
+              value={(currentBalance >= 0 ? "+" : "") + fmt(currentBalance, currency)}
+              sub="Received − Paid (cash basis)"
+              valueClass={currentBalance >= 0 ? "text-green-600 dark:text-green-400" : "text-destructive"}
+            />
+            <MetricCard
+              label="Budget utilized"
+              value={`${budgetUsedPct}%`}
+              sub={`of ${fmt(budget, currency)} budget`}
+              valueClass={
+                budgetUsedPct <= 70
+                  ? "text-foreground"
+                  : budgetUsedPct <= 100
+                    ? "text-yellow-600 dark:text-yellow-400"
+                    : "text-destructive"
+              }
+            />
+            <MetricCard
+              label="Pending receivables"
+              value={fmt(pendingReceivables, currency)}
+              sub="Expected / partial income"
+              valueClass="text-yellow-600 dark:text-yellow-400"
+            />
+            <MetricCard
+              label="Pending payables"
+              value={fmt(pendingPayables, currency)}
+              sub="Approved, awaiting payment"
+              valueClass="text-yellow-600 dark:text-yellow-400"
             />
           </div>
-          <DialogFooter>
-            <Button className="cursor-pointer hover:text-gray-600" variant="outline" onClick={() => setRejectingExpenseId(null)} disabled={rejectSubmitting}>
-              Cancel
-            </Button>
-            <Button className="cursor-pointer" variant="destructive" onClick={handleConfirmReject} disabled={rejectSubmitting || !rejectionReason.trim()}>
-              {rejectSubmitting ? "Rejecting..." : "Reject expense"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+          {/* ── Ticketing block (event-only) ── */}
+          {currentPlanMeta?.type === "event" && currentPlanMeta?.hasTicketing && (
+            <button
+              onClick={() => setTicketingOpen(true)}
+              className="w-full text-left rounded-2xl border border-border bg-card overflow-hidden hover:border-foreground/30 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center justify-between px-6 py-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-background border border-border">
+                    <Ticket className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                  <span className="font-medium text-sm text-foreground">Ticketing</span>
+                  <span className="text-xs text-muted-foreground">Ticket types, bookings, and check-in — revenue source</span>
+                </div>
+                <ArrowLeft className="h-3.5 w-3.5 text-muted-foreground rotate-180" />
+              </div>
+            </button>
+          )}
+
+          {/* Tabs */}
+          <div className="flex gap-1 border-b border-border overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  "px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap",
+                  activeTab === tab.key
+                    ? "border-foreground text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          <div>
+            {activeTab === "income" && (
+              <IncomeTab
+                income={income}
+                currency={currency}
+                onAdd={() => { setEditingIncome(null); setIncomeDialogOpen(true); }}
+                onEdit={handleEditIncome}
+                onDelete={handleDeleteIncome}
+                canAdd={permissions.canAddIncome}
+                canEdit={permissions.canEditIncome}
+                canDelete={permissions.canDeleteIncome}
+              />
+            )}
+            {activeTab === "expenses" && (
+              <ExpensesTab
+                expenses={expenses}
+                currency={currency}
+                onAdd={() => { setEditingExpense(null); setExpenseDialogOpen(true); }}
+                onEdit={handleEditExpense}
+                onDelete={handleDeleteExpense}
+                onApprove={handleApproveExpense}
+                onReject={handleRejectExpense}
+                canAdd={permissions.canAddExpense}
+                canEdit={permissions.canEditExpense}
+                canDelete={permissions.canDeleteExpense}
+                canApprove={permissions.canApproveExpense}
+              />
+            )}
+            {activeTab === "breakdown" && (
+              <BreakdownTab expenses={expenses} currency={currency} />
+            )}
+            {activeTab === "phases" && (
+              <PhasePLTab income={income} expenses={expenses} currency={currency} />
+            )}
+            {activeTab === "resources" && (
+              <ResourceCostTab data={resourceCosts} currency={currency} />
+            )}
+            {activeTab === "variance" && (
+              <BudgetVarianceTab departments={resourceCosts.departments} currency={currency} />
+            )}
+            {activeTab === "analytics" && (
+              <AnalyticsTab income={income} expenses={expenses} currency={currency} />
+            )}
+            {activeTab === "transactions" && (
+              <TransactionsTab income={income} expenses={expenses} currency={currency} />
+            )}
+          </div>
+
+          <AddIncomeDialog
+            open={incomeDialogOpen}
+            onOpenChange={setIncomeDialogOpen}
+            editing={editingIncome}
+            onClose={() => { setIncomeDialogOpen(false); setEditingIncome(null); }}
+            workItemId={planId}
+          />
+
+          <AddExpenseDialog
+            open={expenseDialogOpen}
+            onOpenChange={setExpenseDialogOpen}
+            editing={editingExpense}
+            onClose={() => { setExpenseDialogOpen(false); setEditingExpense(null); }}
+            workItemId={planId}
+          />
+
+          <Dialog open={!!rejectingExpenseId} onOpenChange={(open) => { if (!open) setRejectingExpenseId(null); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Reject expense request</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-1.5 pt-2">
+                <Textarea
+                  placeholder="Explain why this expense is being rejected..."
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  rows={3}
+                  className="resize-none"
+                />
+              </div>
+              <DialogFooter>
+                <Button className="cursor-pointer hover:text-gray-600" variant="outline" onClick={() => setRejectingExpenseId(null)} disabled={rejectSubmitting}>
+                  Cancel
+                </Button>
+                <Button className="cursor-pointer" variant="destructive" onClick={handleConfirmReject} disabled={rejectSubmitting || !rejectionReason.trim()}>
+                  {rejectSubmitting ? "Rejecting..." : "Reject expense"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
     </div>
   );
 }

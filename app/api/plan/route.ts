@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     const {
       name, type, budget, description, status, currency,
       startDate, endDate, methodology,
-      eventDate, venue,
+      eventDate, venue, hasTicketing, hasStalls
     } = body;
 
     if (!name?.trim()) {
@@ -164,12 +164,12 @@ export async function POST(request: NextRequest) {
             workItemId: workItem.id,
             eventDate: eventDate ? new Date(eventDate) : null,
             venue: venue?.trim() || null,
+            hasTicketing: !!hasTicketing,
+            hasStalls: !!hasStalls
           },
         });
-      } else if (type === WorkItemType.PLAN) {
-        await tx.planInfo.create({
-          data: { workItemId: workItem.id },
-        });
+      } else {
+        return NextResponse.json({ success: false, error: 'Invalid plan type' }, { status: 400 });
       }
 
       return tx.workItem.findUnique({
