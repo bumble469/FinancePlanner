@@ -3,12 +3,14 @@ import { useState, useEffect } from "react";
 import { useFinancialStore } from "@/lib/store";
 import { authClient } from "@/lib/auth-client";
 import { Department, Milestone, MilestoneStatus, MilestoneTask, MilestoneFormData, ExtensionRequest } from "@/lib/types";
-import { Flag, Plus, CheckCircle2, Circle, Clock, CalendarArrowUp, AlertTriangle, Pencil, Trash2, History, ClockArrowUp, FileClock } from "lucide-react";
+import { Flag, Plus, CheckCircle2, Circle, Clock, CalendarArrowUp, AlertTriangle, Pencil, Trash2, History, ClockArrowUp, FileClock, ArrowLeft, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddDeptDialog } from "./components/add-dept-dialog";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { DepartmentListView } from "./components/dept-list-view";
 import { DepartmentDetailView } from "./components/dept-detail-view";
+import { EventDepartmentDetailView } from "./components/event-dept-detail-view";
+import { StallsSection } from "./components/stalls-section/stalls-section";
 import { MilestoneDialog } from "./components/milestones-dialog";
 import { Button } from "@/components/ui/button";
 import { Building2 } from "lucide-react";
@@ -222,9 +224,11 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
     currentPlanId, mode, eventData, expenses, simulation,
     departments, addDepartment, updateDepartment, removeDepartment,
     modules, addModule, updateModule, removeModule, currency, tasks, milestones, addMilestone, updateMilestone, removeMilestone,
+    currentPlanMeta,
   } = useFinancialStore();
 
   const isProject = mode === "project";
+  const [stallsOpen, setStallsOpen] = useState(false);
 
   // dept state
   const [editingDept, setEditingDept] = useState<Department | null>(null);
@@ -526,213 +530,257 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
 
   return (
     <div className="space-y-5">
-      {/* ── Page Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">Planning</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Departments, phases, tasks and milestones
-          </p>
+      {stallsOpen ? (
+        <div className="space-y-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 -ml-2 cursor-pointer"
+            onClick={() => setStallsOpen(false)}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to Planning
+          </Button>
+          <StallsSection planId={currentPlanId!} permissions={permissions} />
         </div>
-      </div>
-
-      {/* ── Departments block ── */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden">
-        {/* block header bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-background border border-border">
-              <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+      ) : (
+        <>
+          {/* ── Page Header ── */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">Planning</h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Departments, phases, tasks and milestones
+              </p>
             </div>
-            <span className="font-medium text-sm text-foreground">Departments</span>
-            {!activeDept && (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground font-medium">
-                {departments.length}
-              </span>
-            )}
           </div>
 
-          {!activeDept && (
-            <div className="flex items-center gap-2">
-              {permissions.canAddDepartment &&
-                <AddDeptDialog
-                  onCreate={createDepartment}
-                  onUpdate={(id, name, budget) => updateDepartmentHandler(id, { name, budget })}
-                  onDeptCreated={fetchDepartments}
-                  maxBudget={remainingBudget}
-                  editingDept={editingDept}
-                  open={deptDialogOpen}
-                  setOpen={(v) => { setDeptDialogOpen(v); if (!v) setEditingDept(null); }}
-                />}
+          {/* ── Departments block ── */}
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
+            {/* block header bar */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-background border border-border">
+                  <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                </div>
+                <span className="font-medium text-sm text-foreground">Departments</span>
+                {!activeDept && (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground font-medium">
+                    {departments.length}
+                  </span>
+                )}
+              </div>
+
+              {!activeDept && (
+                <div className="flex items-center gap-2">
+                  {permissions.canAddDepartment &&
+                    <AddDeptDialog
+                      onCreate={createDepartment}
+                      onUpdate={(id, name, budget) => updateDepartmentHandler(id, { name, budget })}
+                      onDeptCreated={fetchDepartments}
+                      maxBudget={remainingBudget}
+                      editingDept={editingDept}
+                      open={deptDialogOpen}
+                      setOpen={(v) => { setDeptDialogOpen(v); if (!v) setEditingDept(null); }}
+                    />}
+                  <ConfirmDeleteDialog
+                    open={confirmDeptOpen}
+                    type="department"
+                    setOpen={setConfirmDeptOpen}
+                    onConfirm={() => {
+                      if (deleteDeptId) { deleteDepartmentHandler(deleteDeptId); setDeleteDeptId(null); }
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* module confirm delete — always mounted */}
               <ConfirmDeleteDialog
-                open={confirmDeptOpen}
-                type="department"
-                setOpen={setConfirmDeptOpen}
+                open={confirmModuleOpen}
+                type="module"
+                setOpen={setConfirmModuleOpen}
                 onConfirm={() => {
-                  if (deleteDeptId) { deleteDepartmentHandler(deleteDeptId); setDeleteDeptId(null); }
+                  if (deleteModuleId) { deletePhaseHandler(deleteModuleId); setDeleteModuleId(null); }
                 }}
               />
             </div>
-          )}
 
-          {/* module confirm delete — always mounted */}
-          <ConfirmDeleteDialog
-            open={confirmModuleOpen}
-            type="module"
-            setOpen={setConfirmModuleOpen}
-            onConfirm={() => {
-              if (deleteModuleId) { deletePhaseHandler(deleteModuleId); setDeleteModuleId(null); }
-            }}
-          />
-        </div>
-
-        {/* block body */}
-        <div className="p-6">
-          {activeDept ? (
-            <DepartmentDetailView
-              dept={activeDept}
-              modules={modules}
-              currency={currency}
-              onBack={() => setActiveDept(null)}
-              onAddModule={(name) => createPhase(activeDept.id, name)}
-              onEditModule={(module, name) => updatePhaseHandler(activeDept.id, module.id, { name })}
-              onDeleteModule={(id) => { setDeleteModuleId(id); setConfirmModuleOpen(true); }}
-              canAddModule={permissions.canAddPhase(activeDept.id)}
-              canEditModule={permissions.canEditPhase(activeDept.id)}
-              canDeleteModule={permissions.canDeletePhase}
-            />
-          ) : (
-            <DepartmentListView
-              departments={departments}
-              currency={currency}
-              isProject={isProject}
-              onEdit={(d) => { setEditingDept(d); setDeptDialogOpen(true); }}
-              onDelete={(id) => { setDeleteDeptId(id); setConfirmDeptOpen(true); }}
-              onDrillDown={(d) => setActiveDept(d)}
-              canEdit={permissions.canEditDepartment}
-              canDelete={permissions.canDeleteDepartment}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* ── Milestones block ── */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden">
-        {/* block header bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-background border border-border">
-              <Flag className="h-3.5 w-3.5 text-muted-foreground" />
+            {/* block body */}
+            <div className="p-6">
+              {activeDept ? (
+                isProject ? (
+                  <DepartmentDetailView
+                    dept={activeDept}
+                    modules={modules}
+                    currency={currency}
+                    onBack={() => setActiveDept(null)}
+                    onAddModule={(name) => createPhase(activeDept.id, name)}
+                    onEditModule={(module, name) => updatePhaseHandler(activeDept.id, module.id, { name })}
+                    onDeleteModule={(id) => { setDeleteModuleId(id); setConfirmModuleOpen(true); }}
+                    canAddModule={permissions.canAddPhase(activeDept.id)}
+                    canEditModule={permissions.canEditPhase(activeDept.id)}
+                    canDeleteModule={permissions.canDeletePhase}
+                  />
+                ) : (
+                  <EventDepartmentDetailView
+                    dept={activeDept}
+                    currency={currency}
+                    onBack={() => setActiveDept(null)}
+                  />
+                )
+              ) : (
+                <DepartmentListView
+                  departments={departments}
+                  currency={currency}
+                  isProject={isProject}
+                  onEdit={(d) => { setEditingDept(d); setDeptDialogOpen(true); }}
+                  onDelete={(id) => { setDeleteDeptId(id); setConfirmDeptOpen(true); }}
+                  onDrillDown={(d) => setActiveDept(d)}
+                  canEdit={permissions.canEditDepartment}
+                  canDelete={permissions.canDeleteDepartment}
+                />
+              )}
             </div>
-            <span className="font-medium text-sm text-foreground">Milestones</span>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground font-medium">
-              {milestones.length}
-            </span>
           </div>
-          {permissions.canAddMilestone && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 h-8 text-xs font-medium hover:text-gray-400 cursor-pointer"
-              onClick={() => { setEditingMilestone(null); setMilestoneDialogOpen(true); }}
+
+          {/* ── Stalls block (event-only) ── */}
+          {!isProject && currentPlanMeta?.hasStalls && (
+            <button
+              onClick={() => setStallsOpen(true)}
+              className="w-full text-left rounded-2xl border border-border bg-card overflow-hidden hover:border-foreground/30 transition-colors cursor-pointer"
             >
-              <Plus className="h-3.5 w-3.5" />
-              Add milestone
-            </Button>
+              <div className="flex items-center justify-between px-6 py-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-background border border-border">
+                    <Store className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                  <span className="font-medium text-sm text-foreground">Stalls</span>
+                  <span className="text-xs text-muted-foreground">Manage stall teams and assignments</span>
+                </div>
+                <ArrowLeft className="h-3.5 w-3.5 text-muted-foreground rotate-180" />
+              </div>
+            </button>
           )}
-        </div>
 
-        <div className="p-6 space-y-5">
-          {/* status filter chips */}
-          <div className="flex flex-wrap gap-1.5">
-            {(["ALL", "UPCOMING", "IN_PROGRESS", "ACHIEVED", "MISSED"] as const).map((f) => {
-              const count = f === "ALL" ? milestones.length : milestoneCounts[f];
-              return (
-                <button
-                  key={f}
-                  onClick={() => setMilestoneFilter(f)}
-                  className={cn(
-                    "rounded-full px-3 py-1 text-xs font-medium border transition-all inline-flex items-center gap-1.5",
-                    milestoneFilter === f
-                      ? "bg-foreground text-background border-foreground shadow-sm"
-                      : "border-border text-muted-foreground bg-background hover:bg-muted hover:text-foreground"
-                  )}
-                >
-                  {f === "ALL" ? "All" : STATUS_CONFIG[f].label}
-                  <span className={cn(
-                    "rounded-full min-w-[18px] text-center px-1 py-0.5 text-[10px] font-semibold",
-                    milestoneFilter === f
-                      ? "bg-background/20 text-background"
-                      : "bg-muted text-muted-foreground"
-                  )}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <PlanningInsights milestones={milestones} />
-          <div className="space-y-2">
-            <div className="flex justify-end">
-              <TimelineChartDialog milestones={milestones} projectRange={projectRange} />
-            </div>
-            <TimelineChart milestones={milestones} projectRange={projectRange} compact />
-          </div>
-
-          {/* milestone grid */}
-          {filteredMilestones.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-14 text-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                <Flag className="h-5 w-5 text-muted-foreground/50" />
+          {/* ── Milestones block ── */}
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
+            {/* block header bar */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-background border border-border">
+                  <Flag className="h-3.5 w-3.5 text-muted-foreground" />
+                </div>
+                <span className="font-medium text-sm text-foreground">Milestones</span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground font-medium">
+                  {milestones.length}
+                </span>
               </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">No milestones</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {milestoneFilter === "ALL"
-                    ? "Create your first milestone to track progress"
-                    : `No ${STATUS_CONFIG[milestoneFilter as keyof typeof STATUS_CONFIG]?.label.toLowerCase()} milestones`}
-                </p>
-              </div>
-              {milestoneFilter === "ALL" && permissions.canAddMilestone && (
+              {permissions.canAddMilestone && (
                 <Button
-                  variant="outline"
                   size="sm"
-                  className="text-xs mt-1"
+                  variant="outline"
+                  className="gap-1.5 h-8 text-xs font-medium hover:text-gray-400 cursor-pointer"
                   onClick={() => { setEditingMilestone(null); setMilestoneDialogOpen(true); }}
                 >
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  <Plus className="h-3.5 w-3.5" />
                   Add milestone
                 </Button>
               )}
             </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {filteredMilestones.map((milestone) => (
-                <MilestoneCard
-                  key={milestone.id}
-                  milestone={milestone}
-                  planId={currentPlanId!}
-                  onEdit={(m) => { setEditingMilestone(m); setMilestoneDialogOpen(true); }}
-                  onDelete={(id) => { setDeleteMilestoneId(id); setConfirmMilestoneOpen(true); }}
-                  onExtend={(m) => setExtendingMilestone(m)}
-                  onViewHistory={(m) => setViewingHistoryFor(m)}
-                  canEdit={permissions.canEditMilestone}
-                  canDelete={permissions.canDeleteMilestone}
-                  canExtendDirectly={permissions.canExtendMilestoneDirectly()}
-                  canRequestExtension={permissions.canRequestMilestoneExtension(milestone.departmentId ?? "")}
-                  canViewExtensionRequests={permissions.canViewExtensionRequests(milestone.departmentId ?? "")}
-                  canApproveExtensionRequests={permissions.canApproveExtensionRequests(milestone.departmentId ?? "")}
-                  fetchExtensionRequests={fetchExtensionRequests}
-                  extensionRequests={extensionRequests}
-                  loadingExtensionRequests={loadingExtensionRequests}
-                  pendingCount={milestonePendingCounts[milestone.id] ?? 0}
-                />
-              ))}
+
+            <div className="p-6 space-y-5">
+              {/* status filter chips */}
+              <div className="flex flex-wrap gap-1.5">
+                {(["ALL", "UPCOMING", "IN_PROGRESS", "ACHIEVED", "MISSED"] as const).map((f) => {
+                  const count = f === "ALL" ? milestones.length : milestoneCounts[f];
+                  return (
+                    <button
+                      key={f}
+                      onClick={() => setMilestoneFilter(f)}
+                      className={cn(
+                        "rounded-full px-3 py-1 text-xs font-medium border transition-all inline-flex items-center gap-1.5",
+                        milestoneFilter === f
+                          ? "bg-foreground text-background border-foreground shadow-sm"
+                          : "border-border text-muted-foreground bg-background hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      {f === "ALL" ? "All" : STATUS_CONFIG[f].label}
+                      <span className={cn(
+                        "rounded-full min-w-[18px] text-center px-1 py-0.5 text-[10px] font-semibold",
+                        milestoneFilter === f
+                          ? "bg-background/20 text-background"
+                          : "bg-muted text-muted-foreground"
+                      )}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <PlanningInsights milestones={milestones} />
+              <div className="space-y-2">
+                <div className="flex justify-end">
+                  <TimelineChartDialog milestones={milestones} projectRange={projectRange} />
+                </div>
+                <TimelineChart milestones={milestones} projectRange={projectRange} compact />
+              </div>
+
+              {/* milestone grid */}
+              {filteredMilestones.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-14 text-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                    <Flag className="h-5 w-5 text-muted-foreground/50" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">No milestones</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {milestoneFilter === "ALL"
+                        ? "Create your first milestone to track progress"
+                        : `No ${STATUS_CONFIG[milestoneFilter as keyof typeof STATUS_CONFIG]?.label.toLowerCase()} milestones`}
+                    </p>
+                  </div>
+                  {milestoneFilter === "ALL" && permissions.canAddMilestone && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs mt-1"
+                      onClick={() => { setEditingMilestone(null); setMilestoneDialogOpen(true); }}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1.5" />
+                      Add milestone
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {filteredMilestones.map((milestone) => (
+                    <MilestoneCard
+                      key={milestone.id}
+                      milestone={milestone}
+                      planId={currentPlanId!}
+                      onEdit={(m) => { setEditingMilestone(m); setMilestoneDialogOpen(true); }}
+                      onDelete={(id) => { setDeleteMilestoneId(id); setConfirmMilestoneOpen(true); }}
+                      onExtend={(m) => setExtendingMilestone(m)}
+                      onViewHistory={(m) => setViewingHistoryFor(m)}
+                      canEdit={permissions.canEditMilestone}
+                      canDelete={permissions.canDeleteMilestone}
+                      canExtendDirectly={permissions.canExtendMilestoneDirectly()}
+                      canRequestExtension={permissions.canRequestMilestoneExtension(milestone.departmentId ?? "")}
+                      canViewExtensionRequests={permissions.canViewExtensionRequests(milestone.departmentId ?? "")}
+                      canApproveExtensionRequests={permissions.canApproveExtensionRequests(milestone.departmentId ?? "")}
+                      fetchExtensionRequests={fetchExtensionRequests}
+                      extensionRequests={extensionRequests}
+                      loadingExtensionRequests={loadingExtensionRequests}
+                      pendingCount={milestonePendingCounts[milestone.id] ?? 0}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        </>
+      )}
 
       {/* ── Dialogs ── */}
       <ConfirmDeleteDialog

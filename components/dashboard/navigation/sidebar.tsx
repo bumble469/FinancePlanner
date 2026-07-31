@@ -2,18 +2,12 @@
 
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard,
-  Users,
-  Receipt,
-  CalendarDays,
-  FileBarChart,
-  KanbanSquare,
-  ChevronLeft,
-  ChevronRight,
-  ArrowLeft,
+  LayoutDashboard, Users, Receipt, CalendarDays, FileBarChart,
+  KanbanSquare, ChevronLeft, ChevronRight, ArrowLeft, Store, Ticket,
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useFinancialStore } from "@/lib/store";
 
 interface SidebarProps {
   activeSection: string;
@@ -43,6 +37,9 @@ export function Sidebar({
   onToggleCollapse,
 }: SidebarProps) {
   const router = useRouter();
+  const { currentPlanMeta } = useFinancialStore();
+
+  const isEvent = currentPlanMeta?.type === "event";
 
   return (
     <aside
@@ -51,15 +48,8 @@ export function Sidebar({
         collapsed ? "w-16" : "w-64"
       )}
     >
-      {/* Logo / Brand */}
       <div className={cn("flex items-center gap-3 border-b border-border p-4", collapsed && "justify-center px-2")}>
-        <Image
-          src="/web_logo.png"
-          alt="FinanceFlow Logo"
-          width={36}
-          height={36}
-          className="rounded-lg shrink-0"
-        />
+        <Image src="/web_logo.png" alt="FinanceFlow Logo" width={36} height={36} className="rounded-lg shrink-0" />
         {!collapsed && (
           <div className="min-w-0">
             <h1 className="font-semibold text-sidebar-foreground truncate">FinanceFlow</h1>
@@ -68,7 +58,6 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Collapse toggle */}
       {onToggleCollapse && (
         <button
           onClick={onToggleCollapse}
@@ -79,7 +68,6 @@ export function Sidebar({
         </button>
       )}
 
-      {/* Back to plans */}
       <div className={cn("p-3", collapsed && "px-2")}>
         <button
           type="button"
@@ -95,7 +83,6 @@ export function Sidebar({
         </button>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 space-y-1 p-3 pt-0">
         {!collapsed && (
           <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -116,9 +103,7 @@ export function Sidebar({
               className={cn(
                 "cursor-pointer flex w-full items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-colors",
                 collapsed ? "justify-center px-0" : "px-3",
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent"
+                isActive ? "bg-primary text-primary-foreground" : "text-sidebar-foreground hover:bg-sidebar-accent"
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
@@ -128,7 +113,6 @@ export function Sidebar({
         })}
       </nav>
 
-      {/* Entity Info */}
       {!collapsed && (
         <div className="border-t border-border p-4">
           <div className="rounded-lg bg-secondary/50 p-3">

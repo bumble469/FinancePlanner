@@ -364,3 +364,60 @@ export interface ExtensionRequest {
     name: string;
   } | null;
 }
+
+export interface StallMemberEntry {
+  id: string; // StallMember.id
+  userId: string;
+  user: { id: string; name: string | null; email?: string; image?: string | null };
+}
+
+export interface Stall {
+  id: string;
+  workItemId: string;
+  name: string;
+  description?: string | null;
+  members: StallMemberEntry[];
+  _count?: { income: number; expenses: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TicketType {
+  id: string;
+  workItemId: string;
+  name: string;
+  price: number;
+  capacity: number | null;
+  salesStart?: string | null;
+  salesEnd?: string | null;
+  description?: string | null;
+  isActive: boolean;
+  _count?: { bookings: number };
+}
+
+export interface TicketAttendee {
+  id: string;
+  bookingId: string;
+  name: string;
+  email?: string | null;
+  checkedIn: boolean;
+  checkedInAt?: string | null;
+  checkedInById?: string | null;
+}
+
+export interface TicketBooking {
+  id: string;
+  workItemId: string;
+  ticketTypeId: string;
+  bookedByName: string;
+  bookedByEmail?: string | null;
+  bookedByPhone?: string | null;
+  quantity: number;
+  totalAmount: number;
+  paymentStatus: PaymentStatus;
+  status: "CONFIRMED" | "CANCELLED";
+  bookingCode: string;
+  ticketType?: { id: string; name: string; price: number };
+  attendees: TicketAttendee[];
+  createdAt: string;
+}

@@ -16,12 +16,19 @@ export default function PlanDashboardPage() {
   useEffect(() => {
     if (!planId) return;
 
+    let cancelled = false;
+    setLoading(true);
+    setNotFound(false);
+
     const init = async () => {
       try {
         setCurrentPlanId(planId);
         const res = await authClient.request(`/api/plan/${planId}`, {
           method: "GET",
         });
+
+        if (cancelled) return; // a newer navigation already took over
+
         const data = res.data.data;
 
         setCurrentPlanMeta({
@@ -30,10 +37,12 @@ export default function PlanDashboardPage() {
           type: data.type?.toLowerCase() as "project" | "event" | "plan",
           status: data.status?.toLowerCase(),
           isOwner: data.isOwner,
-          role: data.role, 
+          role: data.role,
           memberId: data.memberId ?? null,
           departmentIds: data.departmentIds,
           permissions: data.permissions ?? null,
+          hasStalls: data.event?.hasStalls ?? false,
+          hasTicketing: data.event?.hasTicketing ?? false,
         });
 
         setPlanMeta({
@@ -48,18 +57,22 @@ export default function PlanDashboardPage() {
 
         setIncome((data.income || []).map((i: any) => ({ ...i, amount: Number(i.amount) })));
         setExpenses((data.expenses || []).map((e: any) => ({ ...e, amount: Number(e.amount) })));
-
       } catch (err: any) {
+        if (cancelled) return;
         console.error("Failed to fetch plan:", err);
         if (err?.response?.status === 404 || err?.response?.status === 403) {
           setNotFound(true);
         }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     init();
+
+    return () => {
+      cancelled = true;
+    };
   }, [planId]);
 
   if (loading) {
