@@ -50,7 +50,7 @@ export function ModuleDetailView({
     }
   };
 
-  const createTask = async (data: { title: string; description?: string }) => {
+  const createTask = async (data: { title: string; description?: string; dueDate?: string }) => {
     if (!currentPlanId) return;
     const tempId = crypto.randomUUID();
     const optimistic: Task = {
@@ -58,8 +58,10 @@ export function ModuleDetailView({
       title: data.title,
       description: data.description,
       status: "TODO",
+      priority: 0,
       phaseId: module.id,
       departmentId: module.departmentId,
+      dueDate: data.dueDate,
     };
     setTasks((prev) => [...prev, optimistic]);
     try {
@@ -79,7 +81,7 @@ export function ModuleDetailView({
 
   const updateTask = async (
     id: string,
-    data: Partial<{ title: string; description: string; status: Task["status"] }>
+    data: Partial<{ title: string; description: string; dueDate: string; status: Task["status"] }>
   ) => {
     if (!currentPlanId) return;
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...data } : t)));

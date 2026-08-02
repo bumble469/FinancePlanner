@@ -12,7 +12,18 @@ import { StallMembersDialog } from "./components/stall-members-dialog";
 import type { PlanPermissions } from "@/lib/permissions";
 import type { Stall } from "@/lib/types";
 
-export function StallsSection({ planId, permissions }: { planId: string; permissions: PlanPermissions }) {
+interface Props {
+  planId: string;
+  permissions: PlanPermissions;
+  /** When true, hides the big page title/description — used when this component is
+   *  embedded inside another block (e.g. Planning section) that already shows a header. */
+  embedded?: boolean;
+  /** When set, caps the height of just the list/grid (not the Add button) and makes it
+   *  independently scrollable. Pass undefined/null for full, unconstrained height. */
+  maxHeight?: number | null;
+}
+
+export function StallsSection({ planId, permissions, embedded = false, maxHeight = null }: Props) {
   const { currency } = useFinancialStore();
   const { show } = useSnackbar();
 
@@ -25,6 +36,7 @@ export function StallsSection({ planId, permissions }: { planId: string; permiss
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const fetchStalls = async () => {
+    if (!planId) return;
     setLoading(true);
     try {
       const res = await authClient.request(`/api/plan/${planId}/stalls`);
@@ -61,24 +73,33 @@ export function StallsSection({ planId, permissions }: { planId: string; permiss
     }
   };
 
-  const symbol = getCurrencySymbol(currency);
+  const AddButton = permissions.canManageStalls ? (
+    <Button
+      size="sm"
+      className="gap-1.5 cursor-pointer"
+      onClick={() => { setEditingStall(null); setDialogOpen(true); }}
+    >
+      <Plus className="h-3.5 w-3.5" />
+      Add stall
+    </Button>
+  ) : null;
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">Stalls</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Track stall teams and their income/expenses — tagged directly onto your existing ledger
-          </p>
+    <div className="space-y-4">
+      {/* Header row — always visible, never scrolled away */}
+      {!embedded ? (
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">Stalls</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Track stall teams and their income/expenses — tagged directly onto your existing ledger
+            </p>
+          </div>
+          {AddButton}
         </div>
-        {permissions.canManageStalls && (
-          <Button size="sm" className="gap-1.5 cursor-pointer" onClick={() => { setEditingStall(null); setDialogOpen(true); }}>
-            <Plus className="h-3.5 w-3.5" />
-            Add stall
-          </Button>
-        )}
-      </div>
+      ) : (
+        AddButton && <div className="flex justify-end">{AddButton}</div>
+      )}
 
       {loading ? (
         <div className="py-14 text-center text-sm text-muted-foreground">Loading stalls...</div>
@@ -99,7 +120,10 @@ export function StallsSection({ planId, permissions }: { planId: string; permiss
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div
+          className="grid grid-cols-1 gap-3 md:grid-cols-2"
+          style={maxHeight ? { maxHeight, overflowY: "auto", paddingRight: 4 } : undefined}
+        >
           {stalls.map((s) => (
             <div key={s.id} className="rounded-xl border border-border bg-card p-5 space-y-3">
               <div className="flex items-start justify-between gap-3">

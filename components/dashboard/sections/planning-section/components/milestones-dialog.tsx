@@ -99,11 +99,32 @@ export function MilestoneDialog({
     setErrors({});
   }, [editing, open]);
 
+  function checkDueDateConflict(dueDate: string, taskIds: string[]): string | undefined {
+    if (!dueDate || taskIds.length === 0) return undefined;
+    const milestoneDate = new Date(dueDate);
+    const offender = availableTasks.find(
+      (t) => taskIds.includes(t.id) && t.dueDate && new Date(t.dueDate) > milestoneDate
+    );
+    if (!offender) return undefined;
+    return `"${offender.title}" is due ${new Date(offender.dueDate!).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}, after this milestone's date`;
+  }
+
+  // Live check — fires the moment the due date or task selection changes, not on submit
+  useEffect(() => {
+    const conflict = checkDueDateConflict(form.dueDate ?? "", form.taskIds);
+    setErrors((e) => ({ ...e, dueDate: conflict }));
+  }, [form.dueDate, form.taskIds]);
+
   function validate() {
-    const e: Partial<Record<keyof MilestoneFormData, string>> = {};
+    const e: Partial<Record<keyof MilestoneFormData, string>> = { ...errors };
     if (!form.title.trim()) e.title = "Title is required";
+    else e.title = undefined;
+
+    const conflict = checkDueDateConflict(form.dueDate ?? "", form.taskIds);
+    e.dueDate = conflict;
+
     setErrors(e);
-    return Object.keys(e).length === 0;
+    return !e.title && !e.dueDate;
   }
 
   async function handleSubmit() {
@@ -213,7 +234,9 @@ export function MilestoneDialog({
                 type="date"
                 value={form.dueDate}
                 onChange={(e) => set("dueDate", e.target.value)}
+                className={errors.dueDate ? "border-destructive" : ""}
               />
+              {errors.dueDate && <p className="text-xs text-destructive">{errors.dueDate}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>Status</Label>

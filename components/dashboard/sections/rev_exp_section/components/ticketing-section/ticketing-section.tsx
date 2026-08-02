@@ -93,7 +93,17 @@ function BookingRow({
   );
 }
 
-export function TicketingSection({ planId, permissions }: { planId: string; permissions: PlanPermissions }) {
+export function TicketingSection({
+  planId,
+  permissions,
+  embedded = false,
+  maxHeight = null,
+}: {
+  planId: string;
+  permissions: PlanPermissions;
+  embedded?: boolean;
+  maxHeight?: number | null;
+}) {
   const { currency } = useFinancialStore();
   const { show } = useSnackbar();
 
@@ -109,6 +119,7 @@ export function TicketingSection({ planId, permissions }: { planId: string; perm
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
 
   const fetchAll = async () => {
+    if (!planId) return;
     setLoading(true);
     try {
       const [typesRes, bookingsRes] = await Promise.all([
@@ -179,14 +190,18 @@ export function TicketingSection({ planId, permissions }: { planId: string; perm
   const totalRevenue = bookings.filter((b) => b.status === "CONFIRMED").reduce((s, b) => s + b.totalAmount, 0);
   const totalCheckedIn = bookings.reduce((s, b) => s + b.attendees.filter((a) => a.checkedIn).length, 0);
 
+  const scrollStyle = maxHeight ? { maxHeight, overflowY: "auto" as const, paddingRight: 4 } : undefined;
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">Ticketing</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">Ticket types, bookings, and attendee check-in</p>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">Ticketing</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">Ticket types, bookings, and attendee check-in</p>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-3 gap-4">
         <div className="rounded-xl border border-border bg-card p-4">
@@ -231,34 +246,36 @@ export function TicketingSection({ planId, permissions }: { planId: string; perm
             </div>
           )}
 
-          {ticketTypes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-14 text-center gap-3">
-              <Ticket className="h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm font-medium text-foreground">No ticket types yet</p>
-            </div>
-          ) : (
-            ticketTypes.map((t) => (
-              <div key={t.id} className="rounded-xl border border-border bg-card p-4 flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-foreground">{t.name}{!t.isActive && <span className="ml-2 text-xs text-muted-foreground">(inactive)</span>}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {fmt(t.price, currency)} · {t._count?.bookings ?? 0} bookings
-                    {t.capacity !== null && ` · capacity ${t.capacity}`}
-                  </p>
-                </div>
-                {permissions.canManageTicketing && (
-                  <div className="flex items-center gap-1">
-                    <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" onClick={() => { setEditingType(t); setTypeDialogOpen(true); }}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive cursor-pointer" onClick={() => { setDeleteTypeId(t.id); setConfirmOpen(true); }}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                )}
+          <div style={scrollStyle} className="space-y-3">
+            {ticketTypes.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-14 text-center gap-3">
+                <Ticket className="h-8 w-8 text-muted-foreground/40" />
+                <p className="text-sm font-medium text-foreground">No ticket types yet</p>
               </div>
-            ))
-          )}
+            ) : (
+              ticketTypes.map((t) => (
+                <div key={t.id} className="rounded-xl border border-border bg-card p-4 flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">{t.name}{!t.isActive && <span className="ml-2 text-xs text-muted-foreground">(inactive)</span>}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {fmt(t.price, currency)} · {t._count?.bookings ?? 0} bookings
+                      {t.capacity !== null && ` · capacity ${t.capacity}`}
+                    </p>
+                  </div>
+                  {permissions.canManageTicketing && (
+                    <div className="flex items-center gap-1">
+                      <Button size="icon" variant="ghost" className="h-7 w-7 cursor-pointer" onClick={() => { setEditingType(t); setTypeDialogOpen(true); }}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive cursor-pointer" onClick={() => { setDeleteTypeId(t.id); setConfirmOpen(true); }}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
@@ -269,23 +286,25 @@ export function TicketingSection({ planId, permissions }: { planId: string; perm
             </Button>
           </div>
 
-          {bookings.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-14 text-center gap-3">
-              <Ticket className="h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm font-medium text-foreground">No bookings yet</p>
-            </div>
-          ) : (
-            bookings.map((b) => (
-              <BookingRow
-                key={b.id}
-                booking={b}
-                currency={currency}
-                canManage={!!permissions.canCheckInAttendee}
-                onCheckIn={handleCheckIn}
-                onCancel={handleCancelBooking}
-              />
-            ))
-          )}
+          <div style={scrollStyle} className="space-y-3">
+            {bookings.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-14 text-center gap-3">
+                <Ticket className="h-8 w-8 text-muted-foreground/40" />
+                <p className="text-sm font-medium text-foreground">No bookings yet</p>
+              </div>
+            ) : (
+              bookings.map((b) => (
+                <BookingRow
+                  key={b.id}
+                  booking={b}
+                  currency={currency}
+                  canManage={!!permissions.canCheckInAttendee}
+                  onCheckIn={handleCheckIn}
+                  onCancel={handleCancelBooking}
+                />
+              ))
+            )}
+          </div>
         </div>
       )}
 
