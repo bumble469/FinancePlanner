@@ -109,6 +109,23 @@ export async function PATCH(
       extension,
     } = body;
 
+    if (dueDate && taskIds && taskIds.length > 0) {
+      const tasksWithDueDates = await prisma.task.findMany({
+        where: { id: { in: taskIds }, dueDate: { not: null } },
+        select: { title: true, dueDate: true },
+      });
+      const milestoneDate = new Date(dueDate);
+      const offender = tasksWithDueDates.find((t) => t.dueDate! > milestoneDate);
+      if (offender) {
+        return NextResponse.json(
+          {
+            error: `Task "${offender.title}" is due ${offender.dueDate!.toISOString().split("T")[0]}, which is after this milestone's due date. Choose a later milestone date or remove that task.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     if (title !== undefined && (!title || title.trim() === "")) {
       return NextResponse.json(
         { error: "Title cannot be empty" },

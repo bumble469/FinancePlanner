@@ -171,17 +171,35 @@ export function TaskListView({
 
                 {t.milestones && t.milestones.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    {t.milestones.map((m) => (
-                      <span
-                        key={m.id}
-                        title={`Part of milestone: ${m.title} (${m.status.replace("_", " ").toLowerCase()})`}
-                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium"
-                      >
-                        <Flag className="h-3 w-3" />
-                        {m.title}
-                      </span>
-                    ))}
+                    {t.milestones.map((m) => {
+                      const exceeds = t.dueDate && m.dueDate && new Date(t.dueDate) > new Date(m.dueDate);
+                      return (
+                        <span
+                          key={m.id}
+                          title={
+                            exceeds
+                              ? `Warning: this task's due date is after "${m.title}"'s milestone deadline`
+                              : `Part of milestone: ${m.title} (${m.status.replace("_", " ").toLowerCase()})`
+                          }
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+                            exceeds
+                              ? "bg-destructive/10 text-destructive"
+                              : "bg-primary/10 text-primary"
+                          )}
+                        >
+                          {exceeds ? <AlertTriangle className="h-3 w-3" /> : <Flag className="h-3 w-3" />}
+                          {m.title}
+                        </span>
+                      );
+                    })}
                   </div>
+                )}
+
+                {t.dueDate && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    Due {new Date(t.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                  </span>
                 )}
 
                 {/* Submitted → review action, only for those who can approve */}

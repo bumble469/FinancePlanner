@@ -49,7 +49,7 @@ export function EventDepartmentDetailView({
     }
   };
 
-  const createTask = async (data: { title: string; description?: string; requirement: TaskRequirement }) => {
+  const createTask = async (data: { title: string; description?: string; dueDate?: string; requirement: TaskRequirement }) => {
     if (!currentPlanId) return;
     const tempId = crypto.randomUUID();
     const optimistic: Task = {
@@ -72,7 +72,7 @@ export function EventDepartmentDetailView({
     }
   };
 
-  const updateTask = async (id: string, data: Partial<{ title: string; description: string; status: Task["status"]; requirement: TaskRequirement }>) => {
+  const updateTask = async (id: string, data: Partial<{ title: string; description: string; dueDate: string; status: Task["status"]; requirement: TaskRequirement }>) => {
     if (!currentPlanId) return;
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...data } : t)));
     try {

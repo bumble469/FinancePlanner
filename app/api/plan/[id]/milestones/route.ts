@@ -5,7 +5,7 @@ import { notify, getDepartmentMemberUserIds } from "@/lib/notify";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getAuthUser();
@@ -13,7 +13,20 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id: workItemId } = params;
+    const { id: workItemId } = await params;
+
+    const membership = await prisma.workItemMember.findUnique({
+      where: { workItemId_userId: { workItemId, userId: user.sub } },
+    });
+    if (!membership) {
+      const account = await prisma.account.findUnique({ where: { userId: user.sub } });
+      const isOwner = account
+        ? !!(await prisma.workItem.findFirst({ where: { id: workItemId, accountId: account.id } }))
+        : false;
+      if (!isOwner) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
 
     const milestones = await prisma.milestone.findMany({
       where: { workItemId },
@@ -116,6 +129,23 @@ export async function POST(
           { error: "Invalid taskIds provided" },
           { status: 400 }
         );
+      }
+
+      if (dueDate) {
+        const tasksWithDueDates = await prisma.task.findMany({
+          where: { id: { in: taskIds }, dueDate: { not: null } },
+          select: { title: true, dueDate: true },
+        });
+        const milestoneDate = new Date(dueDate);
+        const offender = tasksWithDueDates.find((t) => t.dueDate! > milestoneDate);
+        if (offender) {
+          return NextResponse.json(
+            {
+              error: `Task "${offender.title}" is due ${offender.dueDate!.toISOString().split("T")[0]}, which is after this milestone's due date. Choose a later milestone date or remove that task.`,
+            },
+            { status: 400 }
+          );
+        }
       }
 
       const alreadyLinked = await prisma.milestoneTask.findMany({

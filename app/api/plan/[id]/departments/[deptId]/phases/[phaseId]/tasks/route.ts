@@ -48,7 +48,7 @@ const TASK_SELECT = {
   },
   milestones: {
     select: {
-      milestone: { select: { id: true, title: true, status: true } },
+      milestone: { select: { id: true, title: true, status: true, dueDate: true } },
     },
   },
 } as const;

@@ -270,6 +270,7 @@ export interface TaskMilestoneRef {
   id: string;
   title: string;
   status: MilestoneStatus;
+  dueDate?: string;
 }
 
 export interface TaskRequirement {

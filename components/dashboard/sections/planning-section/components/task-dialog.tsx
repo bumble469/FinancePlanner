@@ -38,12 +38,13 @@ export function TaskDialog({
   open: boolean;
   editingTask?: (Task & { requirement?: TaskRequirementInput | null }) | null;
   onClose: () => void;
-  onSave: (data: { title: string; description?: string; requirement: TaskRequirementInput }) => void;
+  onSave: (data: { title: string; description?: string; dueDate?: string; requirement: TaskRequirementInput }) => void;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [requirement, setRequirement] = useState<TaskRequirementInput>(DEFAULT_REQUIREMENT);
   const [showRequirements, setShowRequirements] = useState(false);
+  const [dueDate, setDueDate] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -51,6 +52,7 @@ export function TaskDialog({
       setDescription(editingTask?.description ?? "");
       setRequirement(editingTask?.requirement ?? DEFAULT_REQUIREMENT);
       setShowRequirements(false);
+      setDueDate(editingTask?.dueDate ? editingTask.dueDate.split("T")[0] : "");
     }
   }, [open, editingTask]);
 
@@ -58,7 +60,12 @@ export function TaskDialog({
 
   const handleSave = () => {
     if (!title.trim()) return;
-    onSave({ title: title.trim(), description: description.trim() || undefined, requirement });
+    onSave({
+      title: title.trim(),
+      description: description.trim() || undefined,
+      dueDate: dueDate || undefined,
+      requirement,
+    });
   };
 
   const patchReq = (patch: Partial<TaskRequirementInput>) => setRequirement((prev) => ({ ...prev, ...patch }));
@@ -95,6 +102,16 @@ export function TaskDialog({
             placeholder="Add a description..."
             rows={3}
             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="task-due">Due date <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <Input
+            id="task-due"
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
           />
         </div>
 
