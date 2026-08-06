@@ -51,6 +51,7 @@ export function CreatePlanDialog({
   const [isActive, setIsActive] = useState(true);
   const [hasTicketing, setHasTicketing] = useState(false);
   const [hasStalls, setHasStalls] = useState(false);
+  const [hasHardware, setHasHardware] = useState(false);
 
   // project-specific
   const [startDate, setStartDate] = useState("");
@@ -72,6 +73,7 @@ export function CreatePlanDialog({
       setDescription(initialData.description || "");
       setCurrency(initialData.currency);
       setIsActive(initialData.status === "active");
+      setHasHardware(!!initialData.hasHardware);
 
       if (initialData.project) {
         setStartDate(initialData.project.startDate?.split("T")[0] ?? "");
@@ -99,6 +101,7 @@ export function CreatePlanDialog({
       setVenue("");
       setHasTicketing(false);
       setHasStalls(false);
+      setHasHardware(false);
     }
   }, [initialData, open]);
 
@@ -124,6 +127,7 @@ export function CreatePlanDialog({
           description: description.trim(),
           currency,
           status: isActive ? "ACTIVE" : "INACTIVE",
+          hasHardware,
           // type-specific
           ...(type === "project" && {
             startDate: startDate || undefined,
@@ -197,8 +201,8 @@ export function CreatePlanDialog({
               <Label
                 htmlFor="project"
                 className={`flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors ${type === "project"
-                    ? "border-foreground bg-muted/40"
-                    : "border-border"
+                  ? "border-foreground bg-muted/40"
+                  : "border-border"
                   }`}
               >
                 <RadioGroupItem value="project" id="project" />
@@ -208,8 +212,8 @@ export function CreatePlanDialog({
               <Label
                 htmlFor="event"
                 className={`flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors ${type === "event"
-                    ? "border-foreground bg-muted/40"
-                    : "border-border"
+                  ? "border-foreground bg-muted/40"
+                  : "border-border"
                   }`}
               >
                 <RadioGroupItem value="event" id="event" />
@@ -356,6 +360,18 @@ export function CreatePlanDialog({
                 <SelectItem value="EUR">EUR (€)</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+            <div>
+              <Label>Hardware Logistics</Label>
+              <p className="text-xs text-muted-foreground">Track equipment requests, rentals, and inventory</p>
+            </div>
+            <Switch
+              checked={hasHardware}
+              onCheckedChange={setHasHardware}
+              disabled={isLoading}
+            />
           </div>
 
           {/* DESCRIPTION */}

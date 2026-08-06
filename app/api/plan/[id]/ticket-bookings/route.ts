@@ -80,14 +80,18 @@ export async function POST(req: NextRequest, { params }: Params) {
       bookedByEmail,
       bookedByPhone,
       quantity,
-      attendees, // optional: [{ name, email }], length must equal quantity if provided
-      forceCreate, // client re-submits with this after seeing a duplicate warning
+      attendees, 
+      forceCreate,
+      paymentMethod,
     } = body;
 
     if (!ticketTypeId) return NextResponse.json({ error: "ticketTypeId is required" }, { status: 400 });
     if (!bookedByName?.trim()) return NextResponse.json({ error: "Booker name is required" }, { status: 400 });
     if (!bookedByEmail?.trim() && !bookedByPhone?.trim()) {
       return NextResponse.json({ error: "Either an email or a phone number is required" }, { status: 400 });
+    }
+    if (!paymentMethod || !["CASH", "UPI"].includes(paymentMethod)) {
+      return NextResponse.json({ error: "Payment method must be CASH or UPI" }, { status: 400 });
     }
     const qty = Number(quantity);
     if (!qty || isNaN(qty) || qty <= 0) {
@@ -159,7 +163,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         bookedByPhone: bookedByPhone?.trim() || null,
         quantity: qty,
         totalAmount,
-        paymentStatus: "PENDING",
+        paymentStatus: "COMPLETED",
+        paymentMethod,
         status: "CONFIRMED",
         bookingCode: generateBookingCode(),
         attendees: { create: attendeeData },

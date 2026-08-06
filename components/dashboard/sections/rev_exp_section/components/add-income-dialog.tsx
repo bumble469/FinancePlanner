@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useFinancialStore } from "@/lib/store";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Income, IncomeType } from "@/lib/types";
+import type { Income, IncomeType, Stall } from "@/lib/types";
 
 interface Props {
   open: boolean;
@@ -36,15 +37,25 @@ const EMPTY = {
   source: "",
   description: "",
   phaseId: "",
+  stallId: "",
   receivedAt: new Date().toISOString().split("T")[0],
 };
 
 export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItemId }: Props) {
-  const { addIncome, updateIncome, modules } = useFinancialStore();
+  const { addIncome, updateIncome, modules, currentPlanMeta } = useFinancialStore();
+  const isEvent = currentPlanMeta?.type === "event";
 
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof typeof EMPTY, string>>>({});
   const [loading, setLoading] = useState(false);
+  const [stalls, setStalls] = useState<Stall[]>([]);
+
+  useEffect(() => {
+    if (!open || !isEvent) return;
+    authClient.request(`/api/plan/${workItemId}/stalls`)
+      .then((res) => setStalls(res.data.data ?? []))
+      .catch((err) => console.error("Failed to fetch stalls:", err));
+  }, [open, isEvent, workItemId]);
 
   useEffect(() => {
     if (editing) {
@@ -55,6 +66,7 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
         source: editing.source ?? "",
         description: editing.description ?? "",
         phaseId: editing.phaseId ?? "",
+        stallId: (editing as any).stallId ?? "",
         receivedAt: new Date(editing.receivedAt ?? Date.now())
           .toISOString()
           .split("T")[0],
@@ -76,6 +88,7 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
       e.receivedAmount = "Cannot exceed the total amount";
     if (!form.source.trim()) e.source = "Source is required";
     if (!form.receivedAt) e.receivedAt = "Date is required";
+    if (form.type === "STALL_INCOME" && !form.stallId) e.stallId = "Select which stall this income belongs to";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -90,22 +103,19 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
       receivedAmount: form.receivedAmount ? Number(form.receivedAmount) : 0,
       source: form.source.trim(),
       description: form.description.trim() || undefined,
-      phaseId: form.phaseId || undefined,
+      phaseId: isEvent ? undefined : (form.phaseId || undefined),
+      stallId: isEvent ? (form.stallId || undefined) : undefined,
       receivedAt: new Date(form.receivedAt).toISOString(),
     };
 
     try {
-      const { authClient } = await import("@/lib/auth-client");
-
       if (editing) {
-        // PATCH /api/plan/[id]/income/[incomeId]
         const res = await authClient.request(
           `/api/plan/${workItemId}/income/${editing.id}`,
           { method: "PATCH", data: payload }
         );
         updateIncome(editing.id, res.data.data);
       } else {
-        // POST /api/plan/[id]/income
         const res = await authClient.request(
           `/api/plan/${workItemId}/income`,
           { method: "POST", data: payload }
@@ -130,7 +140,7 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit income" : "Add income"}</DialogTitle>
         </DialogHeader>
@@ -152,9 +162,9 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
                 <SelectItem value="CLIENT_PAYMENT">Client Payment</SelectItem>
                 <SelectItem value="MERCHANDISE">Merchandise</SelectItem>
                 <SelectItem value="REFUND">Refund</SelectItem>
+                {isEvent && <SelectItem value="STALL_INCOME">Stall Income</SelectItem>}
                 <SelectItem value="OTHER">Other</SelectItem>
               </SelectContent>
-
             </Select>
             {errors.type && <p className="text-xs text-destructive">{errors.type}</p>}
           </div>
@@ -202,29 +212,55 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
             {errors.receivedAmount && <p className="text-xs text-destructive">{errors.receivedAmount}</p>}
           </div>
 
-          {/* Module (optional) */}
-          <div className="space-y-1.5">
-            <Label>
-              Module{" "}
-              <span className="text-xs text-muted-foreground font-normal">(optional)</span>
-            </Label>
-            <Select
-              value={form.phaseId || "none"}
-              onValueChange={(v) => set("phaseId", v === "none" ? "" : v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Overall (no module)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Overall (no module)</SelectItem>
-                {modules?.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Module (optional, Project-only — events have no phases/modules) */}
+          {!isEvent && (
+            <div className="space-y-1.5">
+              <Label>
+                Module{" "}
+                <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Select
+                value={form.phaseId || "none"}
+                onValueChange={(v) => set("phaseId", v === "none" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Overall (no module)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Overall (no module)</SelectItem>
+                  {modules?.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Stall — only relevant when type is Stall Income */}
+          {isEvent && form.type === "STALL_INCOME" && (
+            <div className="space-y-1.5">
+              <Label>Stall</Label>
+              <Select
+                value={form.stallId || "none"}
+                onValueChange={(v) => set("stallId", v === "none" ? "" : v)}
+              >
+                <SelectTrigger className={errors.stallId ? "border-destructive" : ""}>
+                  <SelectValue placeholder="Select stall" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None selected</SelectItem>
+                  {stalls.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.stallId && <p className="text-xs text-destructive">{errors.stallId}</p>}
+            </div>
+          )}
 
           {/* Date */}
           <div className="space-y-1.5">
@@ -257,10 +293,10 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onClose} disabled={loading}>
+            <Button variant="outline" onClick={onClose} disabled={loading} className="cursor-pointer hover:text-gray-600">
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={loading}>
+            <Button onClick={handleSubmit} disabled={loading} className="cursor-pointer">
               {loading ? "Saving..." : editing ? "Update" : "Add"} income
             </Button>
           </div>

@@ -16,6 +16,12 @@ export const ROLES = [
 ] as const;
 
 export type Role = (typeof ROLES)[number];
+export type PaymentMethod = "CASH" | "UPI";
+
+export type HardwareCategory = "AV" | "FURNITURE" | "ELECTRICAL" | "STRUCTURAL" | "IT" | "OTHER";
+export type HardwareSource = "OWNED" | "RENTED" | "BORROWED";
+export type HardwareRequestStatus = "PENDING" | "APPROVED" | "DECLINED";
+export type HardwareCondition = "WORKING" | "IN_USE" | "BROKEN_DOWN" | "PURCHASED" | "RETURNED" | "LOST";
 
 export interface Account {
   id: string;
@@ -43,6 +49,7 @@ export interface Plan {
   currency: string;
   description: string;
   mode: "project" | "event";
+  hasHardware?: boolean;
 }
 
 // ============================================================
@@ -124,6 +131,7 @@ export type IncomeType =
   | "MERCHANDISE"
   | "REFUND"
   | "CLIENT_PAYMENT"
+  | "STALL_INCOME"
   | "OTHER";
 
 export interface Expense {
@@ -136,6 +144,8 @@ export interface Expense {
 
   departmentId?: string;
   departmentName?: string;
+
+  stallId?: string;
 
   category: ExpenseCategory;
 
@@ -173,6 +183,8 @@ export interface Income {
 
   departmentId?: string;
   departmentName?: string;
+
+  stallId?: string;
 
   type: IncomeType;
 
@@ -416,9 +428,46 @@ export interface TicketBooking {
   quantity: number;
   totalAmount: number;
   paymentStatus: PaymentStatus;
+  paymentMethod: PaymentMethod;
   status: "CONFIRMED" | "CANCELLED";
   bookingCode: string;
   ticketType?: { id: string; name: string; price: number };
   attendees: TicketAttendee[];
   createdAt: string;
+}
+
+export interface HardwareItem {
+  id: string;
+  workItemId: string;
+  name: string;
+  category: HardwareCategory;
+  source: HardwareSource;
+  quantity: number;
+  vendor?: string | null;
+  notes?: string | null;
+
+  departmentId?: string | null;
+  department?: { id: string; name: string } | null;
+  stallId?: string | null;
+  stall?: { id: string; name: string } | null;
+
+  requestStatus: HardwareRequestStatus;
+  requestedById: string;
+  requestedBy?: { id: string; user: { id: string; name: string | null } };
+  declineReason?: string | null;
+  reviewedById?: string | null;
+  reviewedBy?: { id: string; user: { id: string; name: string | null } } | null;
+  reviewedAt?: string | null;
+
+  condition?: HardwareCondition | null;
+
+  rentalStart?: string | null;
+  rentalEnd?: string | null;
+  monthlyRentAmount?: number | null;
+  lastBilledAt?: string | null;
+  depositAmount?: number | null;
+  depositReturned: boolean;
+
+  createdAt: string;
+  updatedAt: string;
 }

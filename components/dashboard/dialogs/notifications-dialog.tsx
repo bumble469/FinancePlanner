@@ -101,7 +101,7 @@ export function NotificationsDialog({
               <Bell className="h-4 w-4" />
               Notifications
             </DialogTitle>
-            <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => onMarkAllRead(tab)}>
+            <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs cursor-pointer" onClick={() => onMarkAllRead(tab)}>
               <CheckCheck className="h-3.5 w-3.5" />
               Mark all read
             </Button>

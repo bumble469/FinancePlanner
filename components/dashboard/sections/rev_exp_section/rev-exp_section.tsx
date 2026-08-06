@@ -245,7 +245,7 @@ function IncomeTab({
       )}
 
       {/* filter chips */}
-      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide custom-scrollbar">
         {(["ALL", ...INCOME_TYPES] as IncomeFilter[]).map((f) => (
           <button
             key={f}
@@ -267,7 +267,7 @@ function IncomeTab({
           No income entries yet. Add one to get started.
         </div>
       ) : (
-        <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
+        <div className="rounded-xl border border-border overflow-hidden overflow-x-auto custom-scrollbar">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
@@ -423,7 +423,7 @@ function ExpensesTab({
           No expenses found.
         </div>
       ) : (
-        <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
+        <div className="rounded-xl border border-border overflow-hidden overflow-x-auto custom-scrollbar">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
@@ -1104,7 +1104,7 @@ function TransactionsTab({
           No transactions yet.
         </div>
       ) : (
-        <div className="rounded-xl border border-border overflow-hidden overflow-x-auto">
+        <div className="rounded-xl border border-border overflow-hidden overflow-x-auto custom-scrollbar">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
@@ -1360,7 +1360,7 @@ export function RevenueExpenseSection({ planId, permissions }: { planId: string;
             </div>
           </div>
 
-          <div className={cn("p-6 space-y-6", fullViewBlock !== "revexp" && "max-h-[600px] overflow-y-auto")}>
+          <div className={cn("p-6 space-y-6", fullViewBlock !== "revexp" && "max-h-[600px] overflow-y-auto custom-scrollbar")}>
             {/* Summary metric cards */}
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
               <MetricCard
@@ -1408,7 +1408,7 @@ export function RevenueExpenseSection({ planId, permissions }: { planId: string;
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1 border-b border-border overflow-x-auto">
+            <div className="flex gap-1 border-b border-border overflow-x-auto custom-scrollbar">
               {tabs.map((tab) => (
                 <button
                   key={tab.key}

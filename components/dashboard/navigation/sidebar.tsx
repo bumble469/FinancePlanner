@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Receipt, CalendarDays, FileBarChart,
-  KanbanSquare, ChevronLeft, ChevronRight, ArrowLeft, Store, Ticket,
+  KanbanSquare, ChevronLeft, ChevronRight, ArrowLeft, Wrench
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -25,6 +25,7 @@ export const navItems = [
   { id: "workspace", label: "Workspace", icon: KanbanSquare },
   { id: "team", label: "Team & Roles", icon: Users },
   { id: "expenses", label: "Revenue and Expenses", icon: Receipt },
+  { id: "hardware", label: "Hardware", icon: Wrench },
   { id: "reports", label: "Reports & Docs", icon: FileBarChart },
 ];
 
@@ -90,7 +91,7 @@ export function Sidebar({
           </p>
         )}
 
-        {navItems.map((item) => {
+        {navItems.filter((item) => item.id !== "hardware" || currentPlanMeta?.hasHardware).map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
 

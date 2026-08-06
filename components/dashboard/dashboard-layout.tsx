@@ -4,11 +4,12 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar, navItems } from "./navigation/sidebar";
 import { Topbar } from "./navigation/topbar";
-import { OverviewSection } from "./sections/overview-section";
+import { OverviewSection } from "./sections/overview-section/overview-section";
 import { TeamSection } from "./sections/team_role_section/team-section";
 import { RevenueExpenseSection } from "./sections/rev_exp_section/rev-exp_section";
 import { PlanningSection } from "./sections/planning-section/planning-section";
 import { ReportsSection } from "./sections/reports-section/page";
+import { HardwareSection } from "./sections/hardware-section/hardware-section";
 import { Menu, X, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,7 @@ export function DashboardLayout({ planId }: DashboardLayoutProps) {
       case "expenses": return <RevenueExpenseSection planId={planId} permissions={permissions} />;
       case "event": return <PlanningSection permissions={permissions} />;
       case "workspace": return <Workspace planId={planId} />;
+      case "hardware": return <HardwareSection planId={planId} permissions={permissions} />;
       default: return <OverviewSection />;
     }
   };

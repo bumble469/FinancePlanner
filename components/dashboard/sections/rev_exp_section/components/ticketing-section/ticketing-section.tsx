@@ -6,10 +6,12 @@ import { useSnackbar } from "@/lib/useSnackbar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getCurrencySymbol } from "@/lib/currency";
-import { Ticket, Plus, Pencil, Trash2, CheckCircle2, Circle, ChevronDown, ChevronRight } from "lucide-react";
+import { Ticket, Plus, Pencil, Trash2, CheckCircle2, Circle, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { TicketTypeDialog } from "./components/ticket-type-dialog";
 import { NewBookingDialog } from "./components/new-booking-dialog";
+import { UpiQrManager } from "./components/upi-qr-manager";
+import { TicketViewDialog } from "./components/ticket-view-dialog";
 import type { PlanPermissions } from "@/lib/permissions";
 import type { TicketType, TicketBooking } from "@/lib/types";
 
@@ -19,13 +21,14 @@ function fmt(value: number, currency: string) {
 }
 
 function BookingRow({
-  booking, currency, canManage, onCheckIn, onCancel,
+  booking, currency, canManage, onCheckIn, onCancel, onViewTicket,
 }: {
   booking: TicketBooking;
   currency: string;
   canManage: boolean;
   onCheckIn: (bookingId: string, attendeeId: string, checkedIn: boolean) => void;
   onCancel: (bookingId: string) => void;
+  onViewTicket: (booking: TicketBooking) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const checkedInCount = booking.attendees.filter((a) => a.checkedIn).length;
@@ -42,6 +45,7 @@ function BookingRow({
             <p className="text-sm font-medium text-foreground truncate">{booking.bookedByName}</p>
             <p className="text-xs text-muted-foreground truncate">
               {booking.bookedByEmail || booking.bookedByPhone} · {booking.bookingCode}
+              {booking.paymentMethod && ` · ${booking.paymentMethod === "CASH" ? "Cash" : "UPI"}`}
             </p>
           </div>
         </div>
@@ -52,6 +56,13 @@ function BookingRow({
           )}>
             {booking.status === "CANCELLED" ? "Cancelled" : `${checkedInCount}/${booking.quantity} checked in`}
           </span>
+          <button
+            title="View / print ticket"
+            className="text-muted-foreground hover:text-foreground cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); onViewTicket(booking); }}
+          >
+            <FileText className="h-4 w-4" />
+          </button>
           <span className="text-sm font-mono font-medium">{fmt(booking.totalAmount, currency)}</span>
         </div>
       </button>
@@ -104,7 +115,7 @@ export function TicketingSection({
   embedded?: boolean;
   maxHeight?: number | null;
 }) {
-  const { currency } = useFinancialStore();
+  const { currency, currentPlanMeta } = useFinancialStore();
   const { show } = useSnackbar();
 
   const [tab, setTab] = useState<"types" | "bookings">("bookings");
@@ -117,6 +128,9 @@ export function TicketingSection({
   const [deleteTypeId, setDeleteTypeId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
+
+  const [upiQrUrl, setUpiQrUrl] = useState<string | null>(currentPlanMeta?.upiQrUrl ?? null);
+  const [viewingBooking, setViewingBooking] = useState<TicketBooking | null>(null);
 
   const fetchAll = async () => {
     if (!planId) return;
@@ -218,6 +232,13 @@ export function TicketingSection({
         </div>
       </div>
 
+      <UpiQrManager
+        planId={planId}
+        upiQrUrl={upiQrUrl}
+        canManage={!!permissions.canManageTicketingQr}
+        onChanged={setUpiQrUrl}
+      />
+
       <div className="flex gap-1 border-b border-border">
         {(["bookings", "types"] as const).map((t) => (
           <button
@@ -301,6 +322,7 @@ export function TicketingSection({
                   canManage={!!permissions.canCheckInAttendee}
                   onCheckIn={handleCheckIn}
                   onCancel={handleCancelBooking}
+                  onViewTicket={setViewingBooking}
                 />
               ))
             )}
@@ -320,7 +342,18 @@ export function TicketingSection({
         onOpenChange={setBookingDialogOpen}
         planId={planId}
         ticketTypes={ticketTypes}
-        onBooked={fetchAll}
+        upiQrUrl={upiQrUrl}
+        onBooked={(booking) => {
+          fetchAll();
+          setViewingBooking(booking);
+        }}
+      />
+
+      <TicketViewDialog
+        open={!!viewingBooking}
+        onOpenChange={(v) => { if (!v) setViewingBooking(null); }}
+        booking={viewingBooking}
+        eventName={currentPlanMeta?.name ?? ""}
       />
 
       <ConfirmDeleteDialog

@@ -30,6 +30,7 @@ import { useFinancialStore } from "@/lib/store";
 import { getPermissions } from "@/lib/permissions";
 import { authClient } from "@/lib/auth-client";
 import { getCurrencySymbol } from "@/lib/currency";
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -564,6 +565,8 @@ export function ReportsSection({ planId }: { planId: string }) {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [docsLoading, setDocsLoading] = useState(true);
   const [activeFolder, setActiveFolder] = useState<FileCategory>("all");
+  const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   // ── preview ──────────────────────────────────────────────────────────────
   const [previewDoc, setPreviewDoc] = useState<Doc | null>(null);
@@ -605,12 +608,21 @@ export function ReportsSection({ planId }: { planId: string }) {
     : docs.filter((d) => getCategory(d) === activeFolder);
 
   // ── delete ────────────────────────────────────────────────────────────────
-  async function handleDelete(id: string) {
+  function requestDelete(id: string) {
+    setDeleteDocId(id);
+    setConfirmDeleteOpen(true);
+  }
+
+  async function confirmDelete() {
+    if (!deleteDocId) return;
+    const id = deleteDocId;
     try {
       await authClient.request(`/api/plan/${planId}/documents/${id}`, { method: "DELETE" });
       setDocs((prev) => prev.filter((d) => d.id !== id));
     } catch (err) {
       console.error("Delete failed:", err);
+    } finally {
+      setDeleteDocId(null);
     }
   }
 
@@ -864,7 +876,7 @@ export function ReportsSection({ planId }: { planId: string }) {
                     canDelete={permissions.canDeleteReport}
                     onPreview={(d) => { setPreviewDoc(d); setPreviewOpen(true); }}
                     onEditNote={(d) => { setEditingNote(d); setNoteForm({ title: d.title, content: d.content ?? "" }); setNoteOpen(true); }}
-                    onDelete={handleDelete}
+                    onDelete={requestDelete}
                   />
                 ))}
               </div>
@@ -974,6 +986,13 @@ export function ReportsSection({ planId }: { planId: string }) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={confirmDeleteOpen}
+        type={docs.find((d) => d.id === deleteDocId)?.type === "note" ? "note" : "document"}
+        setOpen={setConfirmDeleteOpen}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

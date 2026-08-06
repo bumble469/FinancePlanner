@@ -55,9 +55,17 @@ export interface PlanPermissions {
   canViewExtensionRequests: (deptId: string) => boolean;
   canApproveExtensionRequests: (deptId: string) => boolean;
 
+  // stall permissions
   canManageStalls: boolean;
   canManageTicketing: boolean;
   canCheckInAttendee: boolean;
+  canManageTicketingQr: boolean;
+
+  // hardware logistics
+  canRequestHardware: boolean;
+  canManageHardware: (deptId?: string | null) => boolean;
+  canApproveHardwareRequest: (deptId?: string | null) => boolean;
+  canDeleteHardware: boolean;
 }
 
 export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
@@ -231,6 +239,24 @@ export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
     canManageStalls: isOwnerOrAdmin || isCoAdmin,
     canManageTicketing: isOwnerOrAdmin || isCoAdmin,
     canCheckInAttendee: isOwnerOrAdmin || isCoAdmin || isManager || isCoManager,
+    canManageTicketingQr: isOwnerOrAdmin || isCoAdmin,
+
+    // hardware logistics
+    canRequestHardware: true, // every member of the plan can request
+
+    canManageHardware: (deptId) =>
+      isOwnerOrAdmin ||
+      ca("hardware", "edit") ||
+      (isManager && (!deptId || inScope(deptId)) && managerCan("hardware", "MANAGE")) ||
+      (isCoManager && (!deptId || inScope(deptId)) && coManagerCan("hardware", "MANAGE")),
+
+    canApproveHardwareRequest: (deptId) =>
+      isOwnerOrAdmin ||
+      ca("hardware", "approve") ||
+      (isManager && (!deptId || inScope(deptId)) && managerPerms?.canApproveHardwareRequests === true) ||
+      (isCoManager && (!deptId || inScope(deptId)) && coManagerPerms?.canApproveHardwareRequests === true),
+
+    canDeleteHardware: isOwnerOrAdmin || ca("hardware", "delete"),
   };
 }
 
@@ -250,6 +276,7 @@ export interface CoAdminPermissions {
   revenue: { create: boolean; edit: boolean; delete: boolean };
   expenses: { create: boolean; edit: boolean; delete: boolean; approve: boolean };
   reports: { create: boolean; edit: boolean; delete: boolean };
+  hardware: { edit: boolean; delete: boolean; approve: boolean };
   extensions: { approve: boolean };
   canManagePermissions: boolean;
 }
@@ -260,6 +287,8 @@ export interface ManagerPermissions {
   reports: AccessLevel;
   canApproveExtensionRequests: boolean;
   canManageCoManagerPermissions: boolean;
+  hardware: AccessLevel;
+  canApproveHardwareRequests: boolean;
 }
 
 export interface CoManagerPermissions {
@@ -268,6 +297,8 @@ export interface CoManagerPermissions {
   reports: AccessLevel;
   canRequestExtension: boolean;
   canApproveTaskSubmissions: boolean;
+  hardware: AccessLevel;
+  canApproveHardwareRequests: boolean;
 }
 
 export const DEFAULT_CO_ADMIN_PERMISSIONS: CoAdminPermissions = {
@@ -277,6 +308,7 @@ export const DEFAULT_CO_ADMIN_PERMISSIONS: CoAdminPermissions = {
   revenue: { create: false, edit: false, delete: false },
   expenses: { create: false, edit: false, delete: false, approve: false },
   reports: { create: false, edit: false, delete: false },
+  hardware: { edit: false, delete: false, approve: false },
   extensions: { approve: false },
   canManagePermissions: false,
 };
@@ -287,6 +319,8 @@ export const DEFAULT_MANAGER_PERMISSIONS: ManagerPermissions = {
   reports: "NONE",
   canApproveExtensionRequests: false,
   canManageCoManagerPermissions: false,
+  hardware: "NONE",
+  canApproveHardwareRequests: false,
 };
 
 export const DEFAULT_CO_MANAGER_PERMISSIONS: CoManagerPermissions = {
@@ -295,6 +329,8 @@ export const DEFAULT_CO_MANAGER_PERMISSIONS: CoManagerPermissions = {
   reports: "NONE",
   canRequestExtension: false,
   canApproveTaskSubmissions: false,
+  hardware: "NONE",
+  canApproveHardwareRequests: false,
 };
 
 type ActingMember = { role: MemberRole; permissions: CoAdminPermissions | ManagerPermissions | null };
