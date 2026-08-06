@@ -21,7 +21,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   planId: string;
   ticketTypes: TicketType[];
-  onBooked: () => void;
+  upiQrUrl?: string | null;
+  onBooked: (booking: any) => void;
 }
 
 const EMPTY = {
@@ -30,25 +31,37 @@ const EMPTY = {
   bookedByEmail: "",
   bookedByPhone: "",
   quantity: "1",
+  paymentMethod: "" as "" | "CASH" | "UPI",
 };
 
-export function NewBookingDialog({ open, onOpenChange, planId, ticketTypes, onBooked }: Props) {
+export function NewBookingDialog({ open, onOpenChange, planId, ticketTypes, upiQrUrl, onBooked }: Props) {
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [showQr, setShowQr] = useState(false);
 
-  useEffect(() => { if (open) { setForm(EMPTY); setError(""); setDuplicateWarning(null); } }, [open]);
+  useEffect(() => {
+    if (open) {
+      setForm(EMPTY);
+      setError("");
+      setDuplicateWarning(null);
+      setShowQr(false);
+    }
+  }, [open]);
+
+  const validateBaseForm = () => {
+    if (!form.ticketTypeId) return "Select a ticket type";
+    if (!form.bookedByName.trim()) return "Booker name is required";
+    if (!form.bookedByEmail.trim() && !form.bookedByPhone.trim()) return "Enter an email or phone number";
+    return "";
+  };
 
   const submit = async (forceCreate = false) => {
-    if (!form.ticketTypeId) return setError("Select a ticket type");
-    if (!form.bookedByName.trim()) return setError("Booker name is required");
-    if (!form.bookedByEmail.trim() && !form.bookedByPhone.trim()) return setError("Enter an email or phone number");
-
     setLoading(true);
     setError("");
     try {
-      await authClient.request(`/api/plan/${planId}/ticket-bookings`, {
+      const res = await authClient.request(`/api/plan/${planId}/ticket-bookings`, {
         method: "POST",
         data: {
           ticketTypeId: form.ticketTypeId,
@@ -57,9 +70,10 @@ export function NewBookingDialog({ open, onOpenChange, planId, ticketTypes, onBo
           bookedByPhone: form.bookedByPhone.trim() || undefined,
           quantity: Number(form.quantity) || 1,
           forceCreate,
+          paymentMethod: form.paymentMethod,
         },
       });
-      onBooked();
+      onBooked(res.data.data);
       onOpenChange(false);
     } catch (err: any) {
       const data = err?.response?.data;
@@ -73,6 +87,25 @@ export function NewBookingDialog({ open, onOpenChange, planId, ticketTypes, onBo
     }
   };
 
+  const handlePrimaryAction = () => {
+    const baseError = validateBaseForm();
+    if (baseError) return setError(baseError);
+
+    if (!form.paymentMethod) return setError("Select a payment method");
+
+    if (form.paymentMethod === "CASH") {
+      submit(false);
+      return;
+    }
+
+    // UPI: first click reveals the QR for the buyer to scan; second click ("Confirm booking") finalizes.
+    if (!showQr) {
+      setShowQr(true);
+      return;
+    }
+    submit(false);
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -80,7 +113,7 @@ export function NewBookingDialog({ open, onOpenChange, planId, ticketTypes, onBo
           <DialogHeader>
             <DialogTitle>New booking</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-2">
+          <div className="space-y-4 pt-2 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
             <div className="space-y-1.5">
               <Label>Ticket type</Label>
               <Select value={form.ticketTypeId} onValueChange={(v) => setForm((f) => ({ ...f, ticketTypeId: v }))}>
@@ -110,11 +143,42 @@ export function NewBookingDialog({ open, onOpenChange, planId, ticketTypes, onBo
               <Label>Quantity</Label>
               <Input type="number" min={1} value={form.quantity} onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))} />
             </div>
+
+            <div className="space-y-1.5">
+              <Label>Payment method</Label>
+              <Select
+                value={form.paymentMethod}
+                onValueChange={(v) => { setForm((f) => ({ ...f, paymentMethod: v as any })); setShowQr(false); }}
+              >
+                <SelectTrigger><SelectValue placeholder="Select payment method" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CASH">Cash</SelectItem>
+                  <SelectItem value="UPI" disabled={!upiQrUrl}>
+                    UPI {!upiQrUrl && "(no QR uploaded yet)"}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {form.paymentMethod === "UPI" && showQr && upiQrUrl && (
+              <div className="flex flex-col items-center gap-2 rounded-lg border border-border p-4 bg-muted/20">
+                <p className="text-xs text-muted-foreground">Show this to the buyer to scan and pay</p>
+                <img src={upiQrUrl} alt="UPI QR code" className="w-48 h-48 object-contain rounded-md border border-border" />
+                <p className="text-xs text-muted-foreground text-center">
+                  Once payment is received, click "Confirm booking" below.
+                </p>
+              </div>
+            )}
+
             {error && <p className="text-xs text-destructive">{error}</p>}
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancel</Button>
-              <Button onClick={() => submit(false)} disabled={loading}>
-                {loading ? "Booking..." : "Create booking"}
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="cursor-pointer hover:text-gray-600">Cancel</Button>
+              <Button onClick={handlePrimaryAction} disabled={loading} className="cursor-pointer">
+                {loading
+                  ? "Processing..."
+                  : form.paymentMethod === "UPI"
+                    ? (showQr ? "Confirm booking" : "Show QR")
+                    : "Finish"}
               </Button>
             </div>
           </div>

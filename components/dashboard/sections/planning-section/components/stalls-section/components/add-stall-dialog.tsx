@@ -73,8 +73,8 @@ export function AddStallDialog({ open, onOpenChange, editing, onSave }: Props) {
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={loading}>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="cursor-pointer hover:text-gray-600">Cancel</Button>
+            <Button onClick={handleSubmit} disabled={loading} className="cursor-pointer">
               {loading ? "Saving..." : editing ? "Save changes" : "Add stall"}
             </Button>
           </div>

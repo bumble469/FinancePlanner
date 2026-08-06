@@ -640,7 +640,7 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
           />
 
           {/* block body — internally scrollable unless in full view */}
-          <div className={cn("p-6", fullViewBlock !== "departments" && "max-h-[480px] overflow-y-auto")}>
+          <div className={cn("p-6", fullViewBlock !== "departments" && "max-h-[480px] overflow-y-auto custom-scrollbar")}>
             {activeDept ? (
               isProject ? (
                 <DepartmentDetailView
@@ -717,7 +717,7 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
             }
           />
 
-          <div className={cn("p-6 space-y-5", fullViewBlock !== "milestones" && "max-h-[480px] overflow-y-auto")}>
+          <div className={cn("p-6 space-y-5", fullViewBlock !== "milestones" && "max-h-[480px] overflow-y-auto custom-scrollbar")}>
             {/* status filter chips */}
             <div className="flex flex-wrap gap-1.5">
               {(["ALL", "UPCOMING", "IN_PROGRESS", "ACHIEVED", "MISSED"] as const).map((f) => {

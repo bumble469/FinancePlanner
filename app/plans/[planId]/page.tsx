@@ -42,7 +42,11 @@ export default function PlanDashboardPage() {
           departmentIds: data.departmentIds,
           permissions: data.permissions ?? null,
           hasStalls: data.event?.hasStalls ?? false,
+          hasHardware: data.hasHardware ?? false,
           hasTicketing: data.event?.hasTicketing ?? false,
+          upiQrUrl: data.event?.upiQrUrl ?? null,
+          eventDate: data.event?.eventDate ?? null,
+          venue: data.event?.venue ?? null,
         });
 
         setPlanMeta({

@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     const {
       name, type, budget, description, status, currency,
       startDate, endDate, methodology,
-      eventDate, venue, hasTicketing, hasStalls
+      eventDate, venue, hasTicketing, hasStalls, hasHardware
     } = body;
 
     if (!name?.trim()) {
@@ -129,13 +129,14 @@ export async function POST(request: NextRequest) {
     const plan = await prisma.$transaction(async (tx) => {
       const workItem = await tx.workItem.create({
         data: {
-          accountId: account.id,
           name: name.trim(),
           type,
           budget,
-          description: description?.trim() || null,
-          status: status || 'ACTIVE',
-          currency: currency || 'USD',
+          description,
+          status: status || "ACTIVE",
+          currency,
+          accountId: account.id,
+          hasHardware: !!hasHardware,
         },
       });
 

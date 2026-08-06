@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Expense, ExpenseCategory } from "@/lib/types";
+import type { Expense, ExpenseCategory, Stall } from "@/lib/types";
 import { authClient } from "@/lib/auth-client";
 
 interface Props {
@@ -47,15 +47,25 @@ const EMPTY = {
   description: "",
   phaseId: "",
   departmentId: "",
+  stallId: "",
   occurredAt: new Date().toISOString().split("T")[0],
 };
 
 export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workItemId }: Props) {
-  const { addExpense, updateExpense, modules, departments } = useFinancialStore();
+  const { addExpense, updateExpense, modules, departments, currentPlanMeta } = useFinancialStore();
+  const isEvent = currentPlanMeta?.type === "event";
 
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof typeof EMPTY, string>>>({});
   const [loading, setLoading] = useState(false);
+  const [stalls, setStalls] = useState<Stall[]>([]);
+
+  useEffect(() => {
+    if (!open || !isEvent) return;
+    authClient.request(`/api/plan/${workItemId}/stalls`)
+      .then((res) => setStalls(res.data.data ?? []))
+      .catch((err) => console.error("Failed to fetch stalls:", err));
+  }, [open, isEvent, workItemId]);
 
   // populate form when editing
   useEffect(() => {
@@ -66,6 +76,7 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
         description: editing.description ?? "",
         phaseId: editing.phaseId ?? "",
         departmentId: editing.departmentId ?? "",
+        stallId: (editing as any).stallId ?? "",
         occurredAt: new Date(editing.occurredAt ?? Date.now())
         .toISOString()
         .split("T")[0],
@@ -96,8 +107,9 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
       category: form.category as ExpenseCategory,
       amount: Number(form.amount),
       description: form.description.trim() || undefined,
-      phaseId: form.phaseId || undefined,
+      phaseId: isEvent ? undefined : (form.phaseId || undefined),
       departmentId: form.departmentId || undefined,
+      stallId: isEvent ? (form.stallId || undefined) : undefined,
       occurredAt: new Date(form.occurredAt).toISOString(),
     };
 
@@ -132,7 +144,7 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit expense" : "Add expense"}</DialogTitle>
         </DialogHeader>
@@ -201,29 +213,57 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
             </Select>
           </div>
 
-          {/* Module (optional) */}
-          <div className="space-y-1.5">
-            <Label>
-              Module{" "}
-              <span className="text-xs text-muted-foreground font-normal">(optional)</span>
-            </Label>
-            <Select
-              value={form.phaseId || "none"}
-              onValueChange={(v) => set("phaseId", v === "none" ? "" : v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="No module" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No module</SelectItem>
-                {modules?.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Module (optional, Project-only — events have no phases/modules) */}
+          {!isEvent && (
+            <div className="space-y-1.5">
+              <Label>
+                Module{" "}
+                <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Select
+                value={form.phaseId || "none"}
+                onValueChange={(v) => set("phaseId", v === "none" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No module" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No module</SelectItem>
+                  {modules?.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Stall (event-only, optional) */}
+          {isEvent && (
+            <div className="space-y-1.5">
+              <Label>
+                Stall{" "}
+                <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Select
+                value={form.stallId || "none"}
+                onValueChange={(v) => set("stallId", v === "none" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Not tied to a stall" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not tied to a stall</SelectItem>
+                  {stalls.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Date */}
           <div className="space-y-1.5">
@@ -256,10 +296,10 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onClose} disabled={loading}>
+            <Button variant="outline" onClick={onClose} disabled={loading} className="cursor-pointer hover:text-gray-600">
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={loading}>
+            <Button onClick={handleSubmit} disabled={loading} className="cursor-pointer">
               {loading ? "Saving..." : editing ? "Update" : "Add"} expense
             </Button>
           </div>

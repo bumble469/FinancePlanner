@@ -31,6 +31,10 @@ export interface CurrentPlanMeta {
   permissions: CoAdminPermissions | ManagerPermissions | CoManagerPermissions | null;
   hasStalls?: boolean;
   hasTicketing?: boolean;
+  upiQrUrl?: string | null;
+  eventDate?: string | null;
+  venue?: string | null;
+  hasHardware?: boolean;
 }
 
 interface AccountStore {

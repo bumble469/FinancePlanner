@@ -11,6 +11,7 @@ import { AddStallDialog } from "./components/add-stall-dialog";
 import { StallMembersDialog } from "./components/stall-members-dialog";
 import type { PlanPermissions } from "@/lib/permissions";
 import type { Stall } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 interface Props {
   planId: string;
@@ -121,7 +122,7 @@ export function StallsSection({ planId, permissions, embedded = false, maxHeight
         </div>
       ) : (
         <div
-          className="grid grid-cols-1 gap-3 md:grid-cols-2"
+          className={cn("grid grid-cols-1 gap-3 md:grid-cols-2", maxHeight && "custom-scrollbar")}
           style={maxHeight ? { maxHeight, overflowY: "auto", paddingRight: 4 } : undefined}
         >
           {stalls.map((s) => (
