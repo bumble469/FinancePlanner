@@ -118,6 +118,7 @@ export type ExpenseCategory =
   | "MARKETING"
   | "OPERATIONS"
   | "EVENT"
+  | "EQUIPMENT"
   | "OTHER";
 
 export type FinancialStatus = "healthy" | "warning" | "risk";
@@ -146,6 +147,8 @@ export interface Expense {
   departmentName?: string;
 
   stallId?: string;
+  hardwareItemId?: string;
+  hardwareItemName?: string;
 
   category: ExpenseCategory;
 
@@ -185,6 +188,7 @@ export interface Income {
   departmentName?: string;
 
   stallId?: string;
+  hardwareItemId?: string;
 
   type: IncomeType;
 

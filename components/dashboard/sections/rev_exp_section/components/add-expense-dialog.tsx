@@ -36,6 +36,7 @@ const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   TOOLS:      "Tools",
   OPERATIONS: "Operations",
   EVENT:      "Event",
+  EQUIPMENT:  "Equipment",
   OTHER:      "Other",
 };
 
@@ -48,6 +49,7 @@ const EMPTY = {
   phaseId: "",
   departmentId: "",
   stallId: "",
+  hardwareItemId: "",
   occurredAt: new Date().toISOString().split("T")[0],
 };
 
@@ -59,6 +61,7 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
   const [errors, setErrors] = useState<Partial<Record<keyof typeof EMPTY, string>>>({});
   const [loading, setLoading] = useState(false);
   const [stalls, setStalls] = useState<Stall[]>([]);
+  const [hardwareItems, setHardwareItems] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     if (!open || !isEvent) return;
@@ -67,7 +70,13 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
       .catch((err) => console.error("Failed to fetch stalls:", err));
   }, [open, isEvent, workItemId]);
 
-  // populate form when editing
+  useEffect(() => {
+    if (!open) return;
+    authClient.request(`/api/plan/${workItemId}/hardware`)
+      .then((res) => setHardwareItems((res.data.data ?? []).filter((h: any) => h.requestStatus === "APPROVED")))
+      .catch((err) => console.error("Failed to fetch hardware items:", err));
+  }, [open, workItemId]);
+
   useEffect(() => {
     if (editing) {
       setForm({
@@ -76,10 +85,11 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
         description: editing.description ?? "",
         phaseId: editing.phaseId ?? "",
         departmentId: editing.departmentId ?? "",
-        stallId: (editing as any).stallId ?? "",
+        stallId: editing.stallId ?? "",
+        hardwareItemId: editing.hardwareItemId ?? "",
         occurredAt: new Date(editing.occurredAt ?? Date.now())
-        .toISOString()
-        .split("T")[0],
+          .toISOString()
+          .split("T")[0],
       });
     } else {
       setForm(EMPTY);
@@ -110,6 +120,7 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
       phaseId: isEvent ? undefined : (form.phaseId || undefined),
       departmentId: form.departmentId || undefined,
       stallId: isEvent ? (form.stallId || undefined) : undefined,
+      hardwareItemId: form.hardwareItemId || undefined,
       occurredAt: new Date(form.occurredAt).toISOString(),
     };
 
@@ -117,21 +128,21 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
       if (editing) {
         const res = await authClient.request(
           `/api/plan/${workItemId}/expenses/${editing.id}`,
-          {method: "PATCH", data: payload}
+          { method: "PATCH", data: payload }
         );
         updateExpense(editing.id, res.data.data);
       } else {
         const res = await authClient.request(
           `/api/plan/${workItemId}/expenses`,
-          {method: "POST", data: payload}
-        )
+          { method: "POST", data: payload }
+        );
         addExpense(res.data.data);
       }
       onClose();
-    } catch (err: any){
-       const msg = err?.response?.data?.error || "Something went wrong";
-        setErrors((prev) => ({ ...prev, source: msg }));
-        console.error("Expense submit error:", err);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || "Something went wrong";
+      setErrors((prev) => ({ ...prev, category: msg }));
+      console.error("Expense submit error:", err);
     } finally {
       setLoading(false);
     }
@@ -262,6 +273,35 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {/* Hardware item — only relevant when category is Equipment */}
+          {form.category === "EQUIPMENT" && (
+            <div className="space-y-1.5">
+              <Label>
+                Hardware item{" "}
+                <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Select
+                value={form.hardwareItemId || "none"}
+                onValueChange={(v) => set("hardwareItemId", v === "none" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Not tied to a specific item" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not tied to a specific item</SelectItem>
+                  {hardwareItems.map((h) => (
+                    <SelectItem key={h.id} value={h.id}>
+                      {h.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {hardwareItems.length === 0 && (
+                <p className="text-xs text-muted-foreground">No approved hardware items yet</p>
+              )}
             </div>
           )}
 

@@ -56,6 +56,8 @@ function canMutateExpense(
 const EXPENSE_INCLUDE = {
   phase: { select: { id: true, name: true } },
   department: { select: { id: true, name: true } },
+  stall: { select: { id: true, name: true } },
+  hardwareItem: { select: { id: true, name: true } },
   requestedBy: { include: { user: { select: { name: true } } } },
   approvedBy: { include: { user: { select: { name: true } } } },
   rejectedBy: { include: { user: { select: { name: true } } } },
@@ -68,6 +70,8 @@ function formatExpense(e: any) {
     paidAmount: Number(e.paidAmount),
     phaseName: e.phase?.name ?? null,
     departmentName: e.department?.name ?? null,
+    stallName: e.stall?.name ?? null,
+    hardwareItemName: e.hardwareItem?.name ?? null,
     requestedByName: e.requestedBy?.user?.name ?? null,
     approvedByName: e.approvedBy?.user?.name ?? null,
     rejectedByName: e.rejectedBy?.user?.name ?? null,
@@ -99,7 +103,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
 
     const body = await req.json();
-    const { category, amount, description, phaseId, departmentId, occurredAt } = body;
+    const { category, amount, description, phaseId, departmentId, stallId, hardwareItemId, occurredAt } = body;
 
     if (phaseId) {
       const phase = await prisma.phase.findFirst({ where: { id: phaseId, workItemId: planId } });
@@ -108,6 +112,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (departmentId) {
       const dept = await prisma.department.findFirst({ where: { id: departmentId, workItemId: planId } });
       if (!dept) return NextResponse.json({ error: "Invalid department" }, { status: 400 });
+    }
+    if (stallId) {
+      const stall = await prisma.stall.findFirst({ where: { id: stallId, workItemId: planId } });
+      if (!stall) return NextResponse.json({ error: "Invalid stall" }, { status: 400 });
+    }
+    if (hardwareItemId) {
+      const hw = await prisma.hardwareItem.findFirst({ where: { id: hardwareItemId, workItemId: planId } });
+      if (!hw) return NextResponse.json({ error: "Invalid hardware item" }, { status: 400 });
+      if (hw.requestStatus !== "APPROVED") {
+        return NextResponse.json({ error: "Can only log costs against approved hardware items" }, { status: 400 });
+      }
     }
 
     const updated = await prisma.expense.update({
@@ -118,6 +133,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(description !== undefined ? { description: description?.trim() || null } : {}),
         ...(phaseId !== undefined ? { phaseId: phaseId || null } : {}),
         ...(departmentId !== undefined ? { departmentId: departmentId || null } : {}),
+        ...(stallId !== undefined ? { stallId: stallId || null } : {}),
+        ...(hardwareItemId !== undefined ? { hardwareItemId: hardwareItemId || null } : {}),
         ...(occurredAt !== undefined ? { occurredAt: new Date(occurredAt) } : {}),
       },
       include: EXPENSE_INCLUDE,

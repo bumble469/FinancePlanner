@@ -45,27 +45,56 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (!stall) return NextResponse.json({ error: "Invalid stall" }, { status: 400 });
     }
 
-    const updated = await prisma.hardwareItem.update({
-      where: { id: hardwareId },
-      data: {
-        ...(name !== undefined ? { name: name.trim() } : {}),
-        ...(vendor !== undefined ? { vendor: vendor?.trim() || null } : {}),
-        ...(quantity !== undefined ? { quantity: Number(quantity) } : {}),
-        ...(notes !== undefined ? { notes: notes?.trim() || null } : {}),
-        ...(departmentId !== undefined ? { departmentId: departmentId || null } : {}),
-        ...(stallId !== undefined ? { stallId: stallId || null } : {}),
-        ...(rentalStart !== undefined ? { rentalStart: rentalStart ? new Date(rentalStart) : null } : {}),
-        ...(rentalEnd !== undefined ? { rentalEnd: rentalEnd ? new Date(rentalEnd) : null } : {}),
-        ...(monthlyRentAmount !== undefined ? { monthlyRentAmount: monthlyRentAmount !== null ? Number(monthlyRentAmount) : null } : {}),
-        ...(depositAmount !== undefined ? { depositAmount: depositAmount !== null ? Number(depositAmount) : null } : {}),
-        ...(depositReturned !== undefined ? { depositReturned: !!depositReturned } : {}),
-      },
-      include: {
-        department: { select: { id: true, name: true } },
-        stall: { select: { id: true, name: true } },
-        requestedBy: { select: { id: true, user: { select: { id: true, name: true } } } },
-        reviewedBy: { select: { id: true, user: { select: { id: true, name: true } } } },
-      },
+    const flippingDepositReturned = depositReturned === true && !item.depositReturned;
+
+    if (flippingDepositReturned && (!item.depositAmount || Number(item.depositAmount) <= 0)) {
+      return NextResponse.json({ error: "This item has no deposit amount recorded" }, { status: 400 });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.hardwareItem.update({
+        where: { id: hardwareId },
+        data: {
+          ...(name !== undefined ? { name: name.trim() } : {}),
+          ...(vendor !== undefined ? { vendor: vendor?.trim() || null } : {}),
+          ...(quantity !== undefined ? { quantity: Number(quantity) } : {}),
+          ...(notes !== undefined ? { notes: notes?.trim() || null } : {}),
+          ...(departmentId !== undefined ? { departmentId: departmentId || null } : {}),
+          ...(stallId !== undefined ? { stallId: stallId || null } : {}),
+          ...(rentalStart !== undefined ? { rentalStart: rentalStart ? new Date(rentalStart) : null } : {}),
+          ...(rentalEnd !== undefined ? { rentalEnd: rentalEnd ? new Date(rentalEnd) : null } : {}),
+          ...(monthlyRentAmount !== undefined ? { monthlyRentAmount: monthlyRentAmount !== null ? Number(monthlyRentAmount) : null } : {}),
+          ...(depositAmount !== undefined ? { depositAmount: depositAmount !== null ? Number(depositAmount) : null } : {}),
+          ...(depositReturned !== undefined ? { depositReturned: !!depositReturned } : {}),
+        },
+        include: {
+          department: { select: { id: true, name: true } },
+          stall: { select: { id: true, name: true } },
+          requestedBy: { select: { id: true, user: { select: { id: true, name: true } } } },
+          reviewedBy: { select: { id: true, user: { select: { id: true, name: true } } } },
+        },
+      });
+
+      if (flippingDepositReturned) {
+        await tx.income.create({
+          data: {
+            workItemId: planId,
+            type: "REFUND",
+            amount: item.depositAmount!,
+            receivedAmount: item.depositAmount!,
+            status: "RECEIVED",
+            paymentStatus: "COMPLETED",
+            source: `Deposit refund — ${item.name}${item.vendor ? ` (${item.vendor})` : ""}`,
+            departmentId: item.departmentId,
+            stallId: item.stallId,
+            hardwareItemId: item.id,
+            createdById: access.memberId,
+            receivedAt: new Date(),
+          },
+        });
+      }
+
+      return result;
     });
 
     return NextResponse.json({ success: true, data: formatHardware(updated) });
