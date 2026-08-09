@@ -42,7 +42,7 @@ const STATUS_FILTERS: { key: HardwareRequestStatus | "ALL"; label: string }[] = 
 
 function HardwareCard({
   item, currency, canManage, canApprove, canDelete,
-  onReview, onDelete, onConditionChange,
+  onReview, onDelete, onConditionChange, onDepositToggle,
 }: {
   item: HardwareItem;
   currency: string;
@@ -52,6 +52,7 @@ function HardwareCard({
   onReview: (item: HardwareItem) => void;
   onDelete: (id: string) => void;
   onConditionChange: (id: string, condition: HardwareCondition) => void;
+  onDepositToggle: (id: string, returned: boolean) => void;
 }) {
   const condCfg = item.condition ? CONDITION_CONFIG[item.condition] : null;
   const CondIcon = condCfg?.icon;
@@ -124,6 +125,29 @@ function HardwareCard({
             </SelectContent>
           </Select>
         )}
+
+        {item.requestStatus === "APPROVED" &&
+          item.source === "RENTED" &&
+          item.depositAmount != null &&
+          item.depositAmount > 0 && (
+            <button
+              onClick={() => onDepositToggle(item.id, !item.depositReturned)}
+              disabled={item.depositReturned || !canManage}
+              className={cn(
+                "text-xs flex items-center gap-1.5",
+                item.depositReturned
+                  ? "text-green-600 dark:text-green-400 cursor-default"
+                  : "text-muted-foreground hover:text-foreground cursor-pointer"
+              )}
+            >
+              {item.depositReturned ? (
+                <>✓ Deposit refunded ({fmt(item.depositAmount, currency)})</>
+              ) : (
+                <>Mark deposit ({fmt(item.depositAmount, currency)}) as refunded</>
+              )}
+            </button>
+          )}
+
       </div>
     </div>
   );
@@ -143,6 +167,7 @@ export function HardwareSection({ planId, permissions }: { planId: string; permi
   const [reviewingItem, setReviewingItem] = useState<HardwareItem | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+
 
   const fetchAll = async () => {
     setLoading(true);
@@ -197,6 +222,16 @@ export function HardwareSection({ planId, permissions }: { planId: string; permi
       show("Hardware item deleted", "success");
     } catch (err: any) {
       show(err?.response?.data?.error || "Failed to delete", "error");
+    }
+  };
+
+  const handleDepositToggle = async (id: string, depositReturned: boolean) => {
+    try {
+      await authClient.request(`/api/plan/${planId}/hardware/${id}`, { method: "PATCH", data: { depositReturned } });
+      show("Deposit marked as refunded", "success");
+      fetchAll();
+    } catch (err: any) {
+      show(err?.response?.data?.error || "Failed to update deposit status", "error");
     }
   };
 
@@ -257,6 +292,7 @@ export function HardwareSection({ planId, permissions }: { planId: string; permi
               onReview={setReviewingItem}
               onDelete={(id) => { setDeleteId(id); setConfirmOpen(true); }}
               onConditionChange={handleConditionChange}
+              onDepositToggle={handleDepositToggle}
             />
           ))}
         </div>

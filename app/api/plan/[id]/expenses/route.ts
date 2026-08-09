@@ -5,7 +5,7 @@ import { notify, getPlanAdminUserIds } from "@/lib/notify";
 
 type Params = { params: Promise<{ id: string }> };
 
-const VALID_CATEGORIES = ["SALARY", "MARKETING", "TOOLS", "OPERATIONS", "EVENT", "OTHER"];
+const VALID_CATEGORIES = ["SALARY", "MARKETING", "TOOLS", "OPERATIONS", "EVENT", "EQUIPMENT", "OTHER"];
 
 async function resolveAccess(planId: string, userId: string) {
   const account = await prisma.account.findUnique({ where: { userId } });
@@ -39,6 +39,7 @@ function formatExpense(e: any) {
     phaseName: e.phase?.name ?? null,
     departmentName: e.department?.name ?? null,
     stallName: e.stall?.name ?? null,
+    hardwareItemName: e.hardwareItem?.name ?? null,
     requestedByName: e.requestedBy?.user?.name ?? null,
     approvedByName: e.approvedBy?.user?.name ?? null,
     rejectedByName: e.rejectedBy?.user?.name ?? null,
@@ -53,6 +54,7 @@ const EXPENSE_INCLUDE = {
   phase: { select: { id: true, name: true } },
   department: { select: { id: true, name: true } },
   stall: { select: { id: true, name: true } },
+  hardwareItem: { select: { id: true, name: true } },
   requestedBy: { include: { user: { select: { name: true } } } },
   approvedBy: { include: { user: { select: { name: true } } } },
   rejectedBy: { include: { user: { select: { name: true } } } },
@@ -110,7 +112,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const body = await req.json();
-    const { category, amount, description, phaseId, departmentId, stallId, occurredAt } = body;
+    const { category, amount, description, phaseId, departmentId, stallId, hardwareItemId, occurredAt } = body;
 
     const validCategories = VALID_CATEGORIES;
     if (!category || !validCategories.includes(category)) {
@@ -132,6 +134,13 @@ export async function POST(req: NextRequest, { params }: Params) {
       const stall = await prisma.stall.findFirst({ where: { id: stallId, workItemId: planId } });
       if (!stall) return NextResponse.json({ error: "Invalid stall" }, { status: 400 });
     }
+    if (hardwareItemId) {
+      const hw = await prisma.hardwareItem.findFirst({ where: { id: hardwareItemId, workItemId: planId } });
+      if (!hw) return NextResponse.json({ error: "Invalid hardware item" }, { status: 400 });
+      if (hw.requestStatus !== "APPROVED") {
+        return NextResponse.json({ error: "Can only log costs against approved hardware items" }, { status: 400 });
+      }
+    }
 
     const expense = await prisma.expense.create({
       data: {
@@ -142,6 +151,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         phaseId: phaseId || null,
         departmentId: departmentId || null,
         stallId: stallId || null,
+        hardwareItemId: hardwareItemId || null,
         requestedById: access.memberId,
         status: "PENDING_APPROVAL",
         paymentStatus: "PENDING",
