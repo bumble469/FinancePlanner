@@ -74,13 +74,6 @@ enum IncomeStatus {
     CANCELLED
 }
 
-enum PaymentStatus {
-  PENDING
-  PARTIAL
-  COMPLETED
-  OVERDUE
-}
-
 enum ExpenseStatus {
   DRAFT
   PENDING_APPROVAL
@@ -149,6 +142,9 @@ enum NotificationType {
   EXTENSION_REQUESTED
   EXTENSION_APPROVED
   EXTENSION_REJECTED
+  HARDWARE_REQUESTED
+  HARDWARE_APPROVED
+  HARDWARE_DECLINED
 }
 
 enum ExtensionTargetType {
@@ -202,6 +198,48 @@ enum HardwareCondition {
   PURCHASED   
   RETURNED
   LOST
+}
+
+// SUBSCRIPTION ENUMS
+enum SubscriptionPlanCode {
+  FREE
+  STARTER
+  PRO
+  SCALE
+}
+
+enum BillingInterval {
+  MONTHLY
+  QUARTERLY
+  HALF_YEARLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+  PENDING
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PARTIAL
+  PAID
+  COMPLETED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  OVERDUE
+}
+
+enum PaymentProvider {
+  RAZORPAY
+  STRIPE
+  MANUAL
 }
 
 //////////////////////
@@ -283,6 +321,7 @@ model Account {
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   workItems WorkItem[]
+  subscription Subscription?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1101,4 +1140,132 @@ model HardwareItem {
   updatedAt DateTime @updatedAt
 
   @@map("hardware_items")
+}
+
+
+// SUBSCRIPTION MODELS
+
+model SubscriptionPlans{
+  id String @id @default(uuid())
+  code SubscriptionPlanCode @unique
+
+  name        String
+  description String?
+
+  isActive Boolean @default(true)
+  isPublic Boolean @default(true)
+
+  // Work item limits
+  maxProjects       Int
+  maxEvents         Int
+  maxTotalWorkItems Int?
+
+  // Optional future limits
+  maxMembersPerWorkItem Int?
+  maxStorageBytes        BigInt?
+  maxDepartments         Int?
+  maxTasksPerWorkItem    Int?
+
+  features Json?
+
+  prices        PlanPrice[]
+  subscriptions Subscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("subscription_plans")
+}
+
+model PlanPrice {
+  id String @id @default(uuid())
+
+  planId String
+  plan   SubscriptionPlans @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  currency String
+  billingInterval BillingInterval
+
+  amount Decimal @db.Decimal(12, 2)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@unique([planId, currency, billingInterval])
+  @@index([currency, billingInterval])
+
+  @@map("plan_prices")
+}
+
+model Subscription {
+  id String @id @default(uuid())
+
+  accountId String @unique
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  planId String
+  plan   SubscriptionPlans @relation(fields: [planId], references: [id])
+
+  priceId String
+  price   PlanPrice @relation(fields: [priceId], references: [id])
+
+  status SubscriptionStatus @default(PENDING)
+
+  billingInterval BillingInterval
+  currency        String
+
+  amount Decimal @db.Decimal(12, 2)
+
+  startedAt       DateTime
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+
+  cancelAtPeriodEnd Boolean @default(false)
+  cancelledAt       DateTime?
+  endedAt           DateTime?
+
+  providerCustomerId     String?
+  providerSubscriptionId String?
+
+  payments SubscriptionPayment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([currentPeriodEnd])
+
+  @@map("subscriptions")
+}
+
+model SubscriptionPayment {
+  id String @id @default(uuid())
+
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  provider PaymentProvider
+
+  currency String
+  amount   Decimal @db.Decimal(12, 2)
+
+  status PaymentStatus @default(PENDING)
+
+  providerOrderId   String? @unique
+  providerPaymentId String? @unique
+
+  failureReason String?
+  paidAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([subscriptionId])
+  @@index([status])
+
+  @@map("subscription_payments")
 }

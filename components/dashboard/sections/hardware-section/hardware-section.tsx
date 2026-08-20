@@ -52,7 +52,7 @@ function HardwareCard({
   onReview: (item: HardwareItem) => void;
   onDelete: (id: string) => void;
   onConditionChange: (id: string, condition: HardwareCondition) => void;
-  onDepositToggle: (id: string, returned: boolean) => void;
+  onDepositToggle: (id: string, depositReturned: boolean) => void;
 }) {
   const condCfg = item.condition ? CONDITION_CONFIG[item.condition] : null;
   const CondIcon = condCfg?.icon;
@@ -125,30 +125,27 @@ function HardwareCard({
             </SelectContent>
           </Select>
         )}
-
-        {item.requestStatus === "APPROVED" &&
-          item.source === "RENTED" &&
-          item.depositAmount != null &&
-          item.depositAmount > 0 && (
-            <button
-              onClick={() => onDepositToggle(item.id, !item.depositReturned)}
-              disabled={item.depositReturned || !canManage}
-              className={cn(
-                "text-xs flex items-center gap-1.5",
-                item.depositReturned
-                  ? "text-green-600 dark:text-green-400 cursor-default"
-                  : "text-muted-foreground hover:text-foreground cursor-pointer"
-              )}
-            >
-              {item.depositReturned ? (
-                <>✓ Deposit refunded ({fmt(item.depositAmount, currency)})</>
-              ) : (
-                <>Mark deposit ({fmt(item.depositAmount, currency)}) as refunded</>
-              )}
-            </button>
-          )}
-
       </div>
+
+      {item.requestStatus === "APPROVED" && item.source === "RENTED" && item.depositAmount !== null && item.depositAmount !== undefined && item.depositAmount > 0 && (
+        <button
+          onClick={() => onDepositToggle(item.id, true)}
+          disabled={item.depositReturned || !canManage}
+          className={cn(
+            "text-xs flex items-center gap-1.5",
+            item.depositReturned ? "text-green-600 dark:text-green-400 cursor-default" : "text-muted-foreground hover:text-foreground cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+          )}
+        >
+          {item.depositReturned ? (
+            <>
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Deposit refunded ({fmt(item.depositAmount, currency)})
+            </>
+          ) : (
+            <>Mark deposit ({fmt(item.depositAmount, currency)}) as refunded</>
+          )}
+        </button>
+      )}
     </div>
   );
 }
@@ -167,7 +164,6 @@ export function HardwareSection({ planId, permissions }: { planId: string; permi
   const [reviewingItem, setReviewingItem] = useState<HardwareItem | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-
 
   const fetchAll = async () => {
     setLoading(true);
@@ -215,16 +211,6 @@ export function HardwareSection({ planId, permissions }: { planId: string; permi
     }
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await authClient.request(`/api/plan/${planId}/hardware/${id}`, { method: "DELETE" });
-      setItems((prev) => prev.filter((i) => i.id !== id));
-      show("Hardware item deleted", "success");
-    } catch (err: any) {
-      show(err?.response?.data?.error || "Failed to delete", "error");
-    }
-  };
-
   const handleDepositToggle = async (id: string, depositReturned: boolean) => {
     try {
       await authClient.request(`/api/plan/${planId}/hardware/${id}`, { method: "PATCH", data: { depositReturned } });
@@ -232,6 +218,16 @@ export function HardwareSection({ planId, permissions }: { planId: string; permi
       fetchAll();
     } catch (err: any) {
       show(err?.response?.data?.error || "Failed to update deposit status", "error");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await authClient.request(`/api/plan/${planId}/hardware/${id}`, { method: "DELETE" });
+      setItems((prev) => prev.filter((i) => i.id !== id));
+      show("Hardware item deleted", "success");
+    } catch (err: any) {
+      show(err?.response?.data?.error || "Failed to delete", "error");
     }
   };
 
