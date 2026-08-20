@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    const plans = await prisma.subscriptionPlan.findMany({
+    const plans = await prisma.subscriptionPlans.findMany({
       where: {
         isActive: true,
         isPublic: true,
