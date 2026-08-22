@@ -2,6 +2,7 @@ import { TopNav } from "@/components/layout/top-nav";
 import { Card } from "@/components/ui/card";
 import { LogoutSection } from "@/components/settings/logout-section";
 import { EmailUpdatesToggle } from "@/components/settings/email-updates-toggle";
+import Link from "next/link";
 
 export const metadata = {
   title: "Settings - FinanceFlow",
@@ -62,6 +63,19 @@ export default function SettingsPage() {
                   <li>Currency preference</li>
                 </ul>
               </div>
+            </Card>
+
+            {/* Subscription */}
+            <Card className="border border-border bg-card p-6">
+              <h2 className="text-xl font-semibold text-foreground mb-4">
+                Subscription
+              </h2>
+              <p className="text-muted-foreground mb-4">
+                View or change your current plan.
+              </p>
+              <Link href="/settings/subscription-plan" className="text-sm text-primary hover:underline font-medium">
+                Manage subscription →
+              </Link>
             </Card>
 
             {/* Architecture Info */}

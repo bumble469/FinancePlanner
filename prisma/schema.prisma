@@ -145,6 +145,8 @@ enum NotificationType {
   HARDWARE_REQUESTED
   HARDWARE_APPROVED
   HARDWARE_DECLINED
+  HARDWARE_DEPOSIT_REFUNDED
+  HARDWARE_CONDITION_UPDATED
 }
 
 enum ExtensionTargetType {
@@ -202,10 +204,10 @@ enum HardwareCondition {
 
 // SUBSCRIPTION ENUMS
 enum SubscriptionPlanCode {
-  FREE
   STARTER
-  PRO
-  SCALE
+  BASIC
+  EMPLOYER
+  MANAGER
 }
 
 enum BillingInterval {
@@ -228,7 +230,6 @@ enum PaymentStatus {
   PENDING
   PROCESSING
   PARTIAL
-  PAID
   COMPLETED
   FAILED
   REFUNDED

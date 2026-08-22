@@ -13,8 +13,6 @@ import { HowItWorksSection } from "@/components/landing/how-it-works";
 import { CTASection } from "@/components/landing/cta-section";
 import { LandingFooter } from "@/components/landing/footer";
 import { useFinancialStore } from '@/lib/store';
-
-
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const setCurrentUser = useFinancialStore((s) => s.setCurrentUser);

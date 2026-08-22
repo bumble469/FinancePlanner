@@ -30,7 +30,7 @@ import {
   type AccessLevel,
 } from "@/lib/permissions";
 import type { TeamMember } from "@/lib/types";
-import { ShieldAlert, Users, LayoutTemplate, Wallet, FileText, KeyRound, CalendarClock } from "lucide-react";
+import { ShieldAlert, Users, LayoutTemplate, Wallet, FileText, KeyRound, CalendarClock, HardHat } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -199,6 +199,10 @@ export function PermissionsDialog({ open, onOpenChange, member, planId, onSaved 
 
                 <TabsTrigger value="extensions" className="justify-start px-3 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <CalendarClock className="h-4 w-4 mr-2" /> Extensions
+                </TabsTrigger>
+
+                <TabsTrigger value="hardware" className="justify-start px-3 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <HardHat className="h-4 w-4 mr-2" /> Hardware
                 </TabsTrigger>
 
                 {(role === "CO_ADMIN" || role === "MANAGER") && (
@@ -379,6 +383,78 @@ export function PermissionsDialog({ open, onOpenChange, member, planId, onSaved 
                       setCoManagerPerms((p) => ({ ...p, canRequestExtension: v }))
                     }
                   />
+                )}
+
+                {role === "CO_MANAGER" && (
+                  <SwitchRow
+                    label="Approve task submissions"
+                    description="Can review and approve/reject task submissions in their assigned departments"
+                    checked={coManagerPerms.canApproveTaskSubmissions || false}
+                    onCheckedChange={(v) =>
+                      setCoManagerPerms((p) => ({ ...p, canApproveTaskSubmissions: v }))
+                    }
+                  />
+                )}
+              </TabsContent>
+
+              {/* HARDWARE TAB */}
+              <TabsContent value="hardware" className="mt-0 divide-y divide-border">
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-foreground">Hardware Logistics</h3>
+                  <p className="text-xs text-muted-foreground">Manage hardware items, rentals, and requests.</p>
+                </div>
+
+                {role === "CO_ADMIN" ? (
+                  <>
+                    <SwitchRow
+                      label="Edit hardware"
+                      description="Can add and update hardware items"
+                      checked={coAdminPerms.hardware.edit}
+                      onCheckedChange={(v) =>
+                        setCoAdminPerms((p) => ({ ...p, hardware: { ...p.hardware, edit: v } }))
+                      }
+                    />
+                    <SwitchRow
+                      label="Delete hardware"
+                      checked={coAdminPerms.hardware.delete}
+                      onCheckedChange={(v) =>
+                        setCoAdminPerms((p) => ({ ...p, hardware: { ...p.hardware, delete: v } }))
+                      }
+                    />
+                    <SwitchRow
+                      label="Approve hardware requests"
+                      description="Can approve or decline hardware requests"
+                      checked={coAdminPerms.hardware.approve}
+                      onCheckedChange={(v) =>
+                        setCoAdminPerms((p) => ({ ...p, hardware: { ...p.hardware, approve: v } }))
+                      }
+                    />
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground mb-4 bg-muted/40 p-3 rounded-md border border-border">
+                      Access applies to this member's assigned departments only.
+                    </p>
+                    <AccessSelect
+                      label="Hardware access"
+                      value={role === "MANAGER" ? managerPerms.hardware : coManagerPerms.hardware}
+                      onChange={(v) =>
+                        role === "MANAGER"
+                          ? setManagerPerms((p) => ({ ...p, hardware: v }))
+                          : setCoManagerPerms((p) => ({ ...p, hardware: v }))
+                      }
+                    />
+                    <SwitchRow
+                      label="Approve hardware requests"
+                      description="Can approve or decline hardware requests for their assigned departments"
+                      checked={role === "MANAGER" ? managerPerms.canApproveHardwareRequests : coManagerPerms.canApproveHardwareRequests}
+                      onCheckedChange={(v) =>
+                        role === "MANAGER"
+                          ? setManagerPerms((p) => ({ ...p, canApproveHardwareRequests: v }))
+                          : setCoManagerPerms((p) => ({ ...p, canApproveHardwareRequests: v }))
+                      }
+                    />
+                  </>
                 )}
               </TabsContent>
 

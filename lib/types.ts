@@ -475,3 +475,53 @@ export interface HardwareItem {
   createdAt: string;
   updatedAt: string;
 }
+
+// SUBSCRIPTION
+
+export type SubscriptionPlanCode = "STARTER" | "BASIC" | "EMPLOYER" | "MANAGER";
+export type BillingInterval = "MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY";
+export type SubscriptionStatus = "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELLED" | "EXPIRED" | "PENDING";
+
+export interface PlanPrice {
+  id: string;
+  planId: string;
+  currency: string;
+  billingInterval: BillingInterval;
+  amount: number;
+  isActive: boolean;
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  code: SubscriptionPlanCode;
+  name: string;
+  description?: string | null;
+  isActive: boolean;
+  isPublic: boolean;
+  maxProjects: number | null;
+  maxEvents: number | null;
+  maxTotalWorkItems: number | null;
+  maxMembersPerWorkItem: number | null;
+  maxStorageBytes: string | null;
+  maxDepartments: number | null;
+  maxTasksPerWorkItem: number | null;
+  features: Record<string, boolean> | null;
+  prices: PlanPrice[];
+}
+
+export interface AccountSubscription {
+  id: string;
+  accountId: string;
+  planId: string;
+  plan: SubscriptionPlan;
+  priceId: string;
+  price: PlanPrice;
+  status: SubscriptionStatus;
+  billingInterval: BillingInterval;
+  currency: string;
+  amount: number;
+  startedAt: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+}
