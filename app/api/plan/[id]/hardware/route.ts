@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 import { getPlanAccess } from "@/lib/get-plan-access";
+import { notify, getPlanAdminUserIds, getDepartmentMemberUserIds } from "@/lib/notify";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -164,6 +165,27 @@ export async function POST(req: NextRequest, { params }: Params) {
       },
       include: HARDWARE_INCLUDE,
     });
+
+        const recipientIds = new Set<string>(await getPlanAdminUserIds(planId));
+    if (item.departmentId) {
+      (await getDepartmentMemberUserIds([item.departmentId], user.sub)).forEach((id) => recipientIds.add(id));
+    }
+    recipientIds.delete(user.sub); // don't notify yourself for your own request
+
+    if (recipientIds.size > 0) {
+      await notify({
+        workItemId: planId,
+        userIds: Array.from(recipientIds),
+        scope: "GENERAL",
+        type: "HARDWARE_REQUESTED",
+        title: "New hardware request",
+        message: `${item.quantity}x "${item.name}" was requested${item.department ? ` for ${item.department.name}` : ""}.`,
+        entityType: "hardware",
+        entityId: item.id,
+      });
+    }
+
+    return NextResponse.json({ success: true, data: formatHardware(item) }, { status: 201 });
 
     return NextResponse.json({ success: true, data: formatHardware(item) }, { status: 201 });
   } catch (err) {

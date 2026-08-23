@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 import { getPlanAccess } from "@/lib/get-plan-access";
+import { notify, getPlanAdminUserIds, getDepartmentMemberUserIds } from "@/lib/notify";
 
 type Params = { params: Promise<{ id: string; hardwareId: string }> };
 
@@ -49,6 +50,25 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         reviewedBy: { select: { id: true, user: { select: { id: true, name: true } } } },
       },
     });
+
+    const recipientIds = new Set<string>(await getPlanAdminUserIds(planId));
+    if (item.departmentId) {
+      (await getDepartmentMemberUserIds([item.departmentId], user.sub)).forEach((id) => recipientIds.add(id));
+    }
+    recipientIds.delete(user.sub);
+
+    if (recipientIds.size > 0) {
+      await notify({
+        workItemId: planId,
+        userIds: Array.from(recipientIds),
+        scope: "GENERAL",
+        type: "HARDWARE_CONDITION_UPDATED",
+        title: "Hardware condition updated",
+        message: `"${item.name}" was marked as ${condition.replace(/_/g, " ").toLowerCase()}.`,
+        entityType: "hardware",
+        entityId: item.id,
+      });
+    }
 
     return NextResponse.json({
       success: true,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 import { getPlanAccess } from "@/lib/get-plan-access";
+import { notify, getPlanAdminUserIds, getDepartmentMemberUserIds } from "@/lib/notify";
 
 type Params = { params: Promise<{ id: string; hardwareId: string }> };
 
@@ -96,6 +97,27 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
       return result;
     });
+
+        if (flippingDepositReturned) {
+      const recipientIds = new Set<string>(await getPlanAdminUserIds(planId));
+      if (item.departmentId) {
+        (await getDepartmentMemberUserIds([item.departmentId], user.sub)).forEach((id) => recipientIds.add(id));
+      }
+      recipientIds.delete(user.sub);
+
+      if (recipientIds.size > 0) {
+        await notify({
+          workItemId: planId,
+          userIds: Array.from(recipientIds),
+          scope: "GENERAL",
+          type: "HARDWARE_DEPOSIT_REFUNDED",
+          title: "Hardware deposit refunded",
+          message: `Deposit of ${item.depositAmount} for "${item.name}" was marked as refunded.`,
+          entityType: "hardware",
+          entityId: item.id,
+        });
+      }
+    }
 
     return NextResponse.json({ success: true, data: formatHardware(updated) });
   } catch (err) {
