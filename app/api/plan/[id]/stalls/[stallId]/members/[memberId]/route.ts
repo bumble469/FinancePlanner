@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { getPlanAccess } from "@/lib/get-plan-access";
 
 type Params = { params: Promise<{ id: string; stallId: string; memberId: string }> };
 
@@ -27,9 +28,9 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id: planId, stallId, memberId } = await params;
-    const access = await resolveAccess(planId, user.sub);
+    const access = await getPlanAccess(planId, user.sub);
     if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    if (!canManageStalls(access)) {
+    if (!access.permissions.canManageStalls) {
       return NextResponse.json({ error: "You don't have permission to manage stall members" }, { status: 403 });
     }
 

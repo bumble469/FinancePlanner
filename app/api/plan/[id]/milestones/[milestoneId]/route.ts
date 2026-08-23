@@ -2,21 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 import { notify } from "@/lib/notify";
-
-async function resolveAccess(workItemId: string, userId: string) {
-  const account = await prisma.account.findUnique({ where: { userId } });
-  const isOwner = account
-    ? !!(await prisma.workItem.findFirst({ where: { id: workItemId, accountId: account.id } }))
-    : false;
-
-  const membership = await prisma.workItemMember.findUnique({
-    where: { workItemId_userId: { workItemId, userId } },
-  });
-
-  if (!isOwner && !membership) return null;
-
-  return { isOwner, membership };
-}
+import { getPlanAccess } from "@/lib/get-plan-access";
 
 export async function DELETE(
   req: NextRequest,
@@ -30,14 +16,14 @@ export async function DELETE(
 
     const { id: workItemId, milestoneId } = await params;
 
-    const access = await resolveAccess(workItemId, user.sub);
+    const access = await getPlanAccess(workItemId, user.sub);
     if (!access) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (!access.isOwner && access.membership!.role === "MEMBER") {
+    if (!access.permissions.canDeleteMilestone) {
       return NextResponse.json(
-        { error: "Only admins and managers can delete milestones" },
+        { error: "Only admins can delete milestones" },
         { status: 403 }
       );
     }
@@ -77,12 +63,12 @@ export async function PATCH(
 
     const { id: workItemId, milestoneId } = await params;
 
-    const access = await resolveAccess(workItemId, user.sub);
+    const access = await getPlanAccess(workItemId, user.sub);
     if (!access) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (!access.isOwner && access.membership!.role === "MEMBER") {
+    if (!access.permissions.canEditMilestone) {
       return NextResponse.json(
         { error: "Only admins and managers can update milestones" },
         { status: 403 }
@@ -197,7 +183,7 @@ export async function PATCH(
     // null = extended by the plan owner (owner has no WorkItemMember row)
     let extendedById: string | null = null;
     if (extension) {
-      extendedById = access.membership?.id ?? null;
+      extendedById = access.memberId ?? null;
     }
 
     let taskOps = undefined;

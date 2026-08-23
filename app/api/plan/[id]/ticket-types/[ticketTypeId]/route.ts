@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { getPlanAccess } from "@/lib/get-plan-access";
 
 type Params = { params: Promise<{ id: string; ticketTypeId: string }> };
 
@@ -27,9 +28,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id: planId, ticketTypeId } = await params;
-    const access = await resolveAccess(planId, user.sub);
+    const access = await getPlanAccess(planId, user.sub);
     if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    if (!canManageTicketing(access)) {
+    if (!access.permissions.canManageTicketing) {
       return NextResponse.json({ error: "You don't have permission to manage ticket types" }, { status: 403 });
     }
 
@@ -66,9 +67,9 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id: planId, ticketTypeId } = await params;
-    const access = await resolveAccess(planId, user.sub);
+    const access = await getPlanAccess(planId, user.sub);
     if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    if (!canManageTicketing(access)) {
+    if (!access.permissions.canManageTicketing) {
       return NextResponse.json({ error: "You don't have permission to manage ticket types" }, { status: 403 });
     }
 
