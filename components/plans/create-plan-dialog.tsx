@@ -32,6 +32,11 @@ interface CreatePlanDialogProps {
   onPlanCreate: () => void;
   initialData?: Plan;
   isEditMode?: boolean;
+  atProjectLimit?: boolean;
+  atEventLimit?: boolean;
+  planName?: string;
+  maxProjects?: number;
+  maxEvents?: number;
 }
 
 export function CreatePlanDialog({
@@ -40,6 +45,11 @@ export function CreatePlanDialog({
   onPlanCreate,
   initialData,
   isEditMode = false,
+  atProjectLimit = false,
+  atEventLimit = false,
+  planName,
+  maxProjects,
+  maxEvents,
 }: CreatePlanDialogProps) {
   const { addPlan } = useFinancialStore();
 
@@ -193,31 +203,47 @@ export function CreatePlanDialog({
           <div className="space-y-3">
             <Label>Plan Type</Label>
 
-            <RadioGroup
+                        <RadioGroup
               value={type}
               onValueChange={(v) => setType(v as PlanType)}
               className="space-y-2"
             >
               <Label
                 htmlFor="project"
-                className={`flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors ${type === "project"
-                  ? "border-foreground bg-muted/40"
-                  : "border-border"
-                  }`}
+                className={`flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors ${
+                  isEditMode ? "" : atProjectLimit ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                } ${
+                  type === "project" ? "border-foreground bg-muted/40" : "border-border"
+                }`}
               >
-                <RadioGroupItem value="project" id="project" />
-                <span className="flex-1">Project</span>
+                <RadioGroupItem value="project" id="project" disabled={!isEditMode && atProjectLimit} />
+                <span className="flex-1">
+                  Project
+                  {!isEditMode && atProjectLimit && (
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      Limit reached ({maxProjects} on {planName}) — upgrade to add more
+                    </span>
+                  )}
+                </span>
               </Label>
 
               <Label
                 htmlFor="event"
-                className={`flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors ${type === "event"
-                  ? "border-foreground bg-muted/40"
-                  : "border-border"
-                  }`}
+                className={`flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors ${
+                  isEditMode ? "" : atEventLimit ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                } ${
+                  type === "event" ? "border-foreground bg-muted/40" : "border-border"
+                }`}
               >
-                <RadioGroupItem value="event" id="event" />
-                <span className="flex-1">Event</span>
+                <RadioGroupItem value="event" id="event" disabled={!isEditMode && atEventLimit} />
+                <span className="flex-1">
+                  Event
+                  {!isEditMode && atEventLimit && (
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      Limit reached ({maxEvents} on {planName}) — upgrade to add more
+                    </span>
+                  )}
+                </span>
               </Label>
             </RadioGroup>
           </div>
@@ -418,7 +444,13 @@ export function CreatePlanDialog({
             </Button>
             <Button
               type="submit"
-              disabled={isLoading || !name.trim() || !budget.trim()}
+              disabled={
+                isLoading ||
+                !name.trim() ||
+                !budget.trim() ||
+                (!isEditMode && type === "project" && atProjectLimit) ||
+                (!isEditMode && type === "event" && atEventLimit)
+              }
               className="flex-1 cursor-pointer"
             >
               {isLoading

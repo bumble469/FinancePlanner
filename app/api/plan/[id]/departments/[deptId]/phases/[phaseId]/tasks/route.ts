@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 import { notify, getDepartmentMemberUserIds } from "@/lib/notify";
+import { getPlanAccess } from "@/lib/get-plan-access";
 
 async function resolvePhase(workItemId: string, deptId: string, phaseId: string) {
   return prisma.phase.findFirst({
@@ -98,10 +99,11 @@ export async function POST(
 
     const { id: workItemId, deptId, phaseId } = await params;
 
-    const membership = await prisma.workItemMember.findUnique({
-      where: { workItemId_userId: { workItemId, userId: user.sub } },
-    });
-    if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const access = await getPlanAccess(workItemId, user.sub);
+    if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!access.permissions.canAddTask(deptId)) {
+      return NextResponse.json({ error: "You don't have permission to add tasks in this department" }, { status: 403 });
+    }
 
     const phase = await resolvePhase(workItemId, deptId, phaseId);
     if (!phase) return NextResponse.json({ error: "Phase not found" }, { status: 404 });

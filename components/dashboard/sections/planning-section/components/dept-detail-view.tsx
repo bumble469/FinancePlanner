@@ -24,6 +24,9 @@ export function DepartmentDetailView({
   canAddModule,
   canEditModule,
   canDeleteModule,
+  canAddTask,
+  canDeleteTask,
+  canApproveTaskSubmissions,
 }: {
   dept: Department;
   modules: Module[];
@@ -35,6 +38,9 @@ export function DepartmentDetailView({
   canAddModule?: boolean;
   canEditModule?: boolean;
   canDeleteModule?: boolean;
+  canAddTask?: boolean;
+  canDeleteTask?: boolean;
+  canApproveTaskSubmissions?: boolean;
 }) {
   const deptModules = modules.filter((m) => m.departmentId === dept.id);
   const [activeModule, setActiveModule] = useState<Module | null>(null);
@@ -90,6 +96,9 @@ export function DepartmentDetailView({
         <ModuleDetailView
           module={activeModule}
           onBack={() => setActiveModule(null)}
+          canAddTask={canAddTask}
+          canDeleteTask={canDeleteTask}
+          canApproveTaskSubmissions={canApproveTaskSubmissions}
         />
       </div>
     );

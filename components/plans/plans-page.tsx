@@ -17,6 +17,7 @@ import { CreatePlanDialog } from "./create-plan-dialog";
 import type { Plan } from "@/lib/types";
 import axios from "axios";
 import { authClient } from "@/lib/auth-client";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 function mapWorkItemToPlan(workItem: any): Plan {
   return {
@@ -62,8 +63,13 @@ export function PlansPage() {
   const [collaborations, setCollaborations] = useState<Plan[]>([]);
   const [invitations, setInvitations] = useState<any[]>([]);
 
+  const [subscription, setSubscription] = useState<any>(null);
+
   useEffect(() => {
     fetchPlans();
+    authClient.request("/api/subscription")
+      .then((res) => setSubscription(res.data.data ?? null))
+      .catch((err) => console.error("Failed to fetch subscription:", err));
   }, []);
 
   const fetchPlans = async () => {
@@ -154,6 +160,16 @@ export function PlansPage() {
     );
   }
 
+  const projectCount = plans.filter((p) => p.type === "project").length;
+  const eventCount = plans.filter((p) => p.type === "event").length;
+  const totalCount = plans.length;
+
+  const planLimits = subscription?.plan;
+  const atTotalLimit = planLimits?.maxTotalWorkItems != null && totalCount >= planLimits.maxTotalWorkItems;
+  const atProjectLimit = planLimits ? projectCount >= planLimits.maxProjects : false;
+  const atEventLimit = planLimits ? eventCount >= planLimits.maxEvents : false;
+  const createDisabled = atTotalLimit || (atProjectLimit && atEventLimit);
+
   return (
     <div className="space-y-8">
       <div className="flex items-start justify-between">
@@ -166,13 +182,27 @@ export function PlansPage() {
           </p>
         </div>
 
-        <Button
-          onClick={() => setIsCreateDialogOpen(true)}
-          className="gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Create Plan
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <Button
+                onClick={() => setIsCreateDialogOpen(true)}
+                className="gap-2 cursor-pointer"
+                disabled={createDisabled}
+              >
+                <Plus className="h-4 w-4" />
+                Create Plan
+              </Button>
+            </span>
+          </TooltipTrigger>
+          {createDisabled && (
+            <TooltipContent>
+              {atTotalLimit
+                ? `You've reached your ${planLimits.name} plan's total work item limit (${planLimits.maxTotalWorkItems}). Upgrade to create more.`
+                : `You've reached your ${planLimits.name} plan's project and event limits. Upgrade to create more.`}
+            </TooltipContent>
+          )}
+        </Tooltip>
       </div>
 
       <Tabs defaultValue="my-plans" className="space-y-6">
@@ -233,6 +263,11 @@ export function PlansPage() {
         onPlanCreate={fetchPlans}
         initialData={editingPlan ?? undefined}
         isEditMode={!!editingPlan}
+        atProjectLimit={atProjectLimit}
+        atEventLimit={atEventLimit}
+        planName={planLimits?.name}
+        maxProjects={planLimits?.maxProjects}
+        maxEvents={planLimits?.maxEvents}
       />
     </div>
   );
