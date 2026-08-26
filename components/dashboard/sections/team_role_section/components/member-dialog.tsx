@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 import { useFinancialStore } from "@/lib/store";
 import {
   Dialog,
@@ -37,6 +38,7 @@ interface TeamMember {
   role: AllowedRole;
   departmentIds: string[];
   monthlyCost?: number;
+  departmentCostShares?: Record<string, number>;
 }
 
 interface Props {
@@ -51,8 +53,17 @@ interface Props {
     role: AllowedRole;
     departmentIds: string[];
     monthlyCost?: number;
+    departmentCostShares?: Record<string, number>;
   } | null;
 }
+
+type BudgetSnapshot = {
+  durationMonths: number;
+  durationKnown: boolean;
+  totalBudget: number;
+  totalCommitted: number;
+  departments: { id: string; name: string; budget: number; committed: number }[];
+};
 
 export function AddEditMemberDialog({
   open,
@@ -77,6 +88,8 @@ export function AddEditMemberDialog({
   const [users, setUsers] = useState<any[]>([]);
   const [loadingUser, setLoadingUser] = useState(false);
   const [userSelected, setUserSelected] = useState(false);
+  const [budgetSnapshot, setBudgetSnapshot] = useState<BudgetSnapshot | null>(null);
+  const [departmentCostShares, setDepartmentCostShares] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -97,6 +110,21 @@ export function AddEditMemberDialog({
       resetForm();
     }
   }, [open, initialData]);
+
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try {
+        const res = await authClient.request(`/api/plan/${planId}/members/budget-snapshot`, {
+          method: "GET",
+          params: isEditMode && initialData ? { excludeMemberId: initialData.id } : undefined,
+        });
+        setBudgetSnapshot(res.data.data);
+      } catch {
+        setBudgetSnapshot(null);
+      }
+    })();
+  }, [open, planId, isEditMode, initialData]);
 
   useEffect(() => {
     if (isEditMode) return;
@@ -142,18 +170,19 @@ export function AddEditMemberDialog({
     setUserSelected(true);
   };
 
-  const toggleDepartment = (id: string) => {
+  function toggleDepartment(deptId: string) {
     setFormData((prev) => {
-      const exists = prev.departmentIds.includes(id);
-
-      return {
-        ...prev,
-        departmentIds: exists
-          ? prev.departmentIds.filter((d) => d !== id)
-          : [...prev.departmentIds, id],
-      };
+      const already = prev.departmentIds.includes(deptId);
+      const next = already
+        ? prev.departmentIds.filter((id) => id !== deptId)
+        : [...prev.departmentIds, deptId];
+      return { ...prev, departmentIds: next };
     });
-  };
+    setDepartmentCostShares((prev) => {
+      const { [deptId]: _, ...rest } = prev;
+      return prev[deptId] !== undefined ? rest : { ...prev, [deptId]: "" };
+    });
+  }
 
   const resetForm = () => {
     setFormData({
@@ -169,6 +198,48 @@ export function AddEditMemberDialog({
     setUserSelected(false);
   };
 
+  function getBudgetError(): string | null {
+    if (!budgetSnapshot) return null;
+    const cost = Number(formData.monthlyCost);
+    if (!cost || cost <= 0) return null;
+
+    const committedByThis = cost * budgetSnapshot.durationMonths;
+    const durationNote = budgetSnapshot.durationKnown
+      ? `over ${budgetSnapshot.durationMonths} month(s)`
+      : "(monthly only — plan has no defined duration)";
+
+    if (formData.role === "CO_ADMIN") {
+      if (budgetSnapshot.totalBudget <= 0) return null;
+      const projected = budgetSnapshot.totalCommitted + committedByThis;
+      if (projected > budgetSnapshot.totalBudget) {
+        return `Exceeds total plan budget: ₹${projected.toLocaleString("en-IN")} committed vs ₹${budgetSnapshot.totalBudget.toLocaleString("en-IN")} ${durationNote}.`;
+      }
+      return null;
+    }
+
+    if (formData.departmentIds.length === 0) {
+      if (budgetSnapshot.totalBudget <= 0) return null;
+      const projected = budgetSnapshot.totalCommitted + committedByThis;
+      if (projected > budgetSnapshot.totalBudget) {
+        return `No department selected — exceeds total plan budget: ₹${projected.toLocaleString("en-IN")} vs ₹${budgetSnapshot.totalBudget.toLocaleString("en-IN")} ${durationNote}.`;
+      }
+      return null;
+    }
+
+    for (const deptId of formData.departmentIds) {
+      const dept = budgetSnapshot.departments.find((d) => d.id === deptId);
+      if (!dept || dept.budget <= 0) continue;
+      const projected = dept.committed + committedByThis;
+      if (projected > dept.budget) {
+        return `"${dept.name}" budget exceeded: ₹${projected.toLocaleString("en-IN")} vs ₹${dept.budget.toLocaleString("en-IN")} ${durationNote}.`;
+      }
+    }
+
+    return null;
+  }
+
+  const budgetError = getBudgetError();
+
   const handleSubmit = () => {
     if (!formData.id || !formData.role) return;
 
@@ -177,10 +248,9 @@ export function AddEditMemberDialog({
       name: formData.name,
       role: formData.role as AllowedRole,
       departmentIds: isEditMode ? formData.departmentIds : [],
-      monthlyCost: isEditMode
-        ? formData.role === "CO_ADMIN" || !formData.monthlyCost
-          ? undefined
-          : Number(formData.monthlyCost)
+      monthlyCost: isEditMode && formData.monthlyCost ? Number(formData.monthlyCost) : undefined,
+      departmentCostShares: isEditMode && formData.departmentIds.length > 1
+        ? Object.fromEntries(formData.departmentIds.map((id) => [id, Number(departmentCostShares[id] || 0)]))
         : undefined,
     });
 
@@ -203,8 +273,7 @@ export function AddEditMemberDialog({
   const showDepartments =
     isEditMode && formData.role && formData.role !== "CO_ADMIN";
 
-  const showCost =
-    isEditMode && formData.role && formData.role !== "CO_ADMIN";
+  const showCost = isEditMode && !!formData.role;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -330,11 +399,10 @@ export function AddEditMemberDialog({
                           key={d.id}
                           type="button"
                           onClick={() => toggleDepartment(d.id)}
-                          className={`rounded border p-2 text-sm transition ${
-                            selected
-                              ? "bg-primary text-white"
-                              : "bg-background hover:bg-muted"
-                          }`}
+                          className={`rounded border p-2 text-sm transition ${selected
+                            ? "bg-primary text-white"
+                            : "bg-background hover:bg-muted"
+                            }`}
                         >
                           {d.name}
                         </button>
@@ -344,20 +412,86 @@ export function AddEditMemberDialog({
                 </div>
               )}
 
+              {showDepartments && formData.departmentIds.length > 1 && (
+                <div className="space-y-2 rounded-lg border border-border p-3">
+                  <Label className="text-xs text-muted-foreground">
+                    Split ₹{formData.monthlyCost || 0} across departments
+                  </Label>
+                  {formData.departmentIds.map((deptId) => {
+                    const dept = departments.find((d) => d.id === deptId);
+                    return (
+                      <div key={deptId} className="flex items-center gap-2">
+                        <span className="text-xs w-32 truncate">{dept?.name}</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          placeholder="0"
+                          value={departmentCostShares[deptId] ?? ""}
+                          onChange={(e) => {
+                            const value = e.target.value;
+
+                            if (value === "" || Number(value) >= 0) {
+                              setDepartmentCostShares((prev) => ({
+                                ...prev,
+                                [deptId]: value,
+                              }));
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "-" || e.key === "e" || e.key === "E") {
+                              e.preventDefault();
+                            }
+                          }}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                    );
+                  })}
+                  {(() => {
+                    const sum = formData.departmentIds.reduce(
+                      (s, id) => s + Number(departmentCostShares[id] || 0), 0
+                    );
+                    const total = Number(formData.monthlyCost || 0);
+                    const mismatch = Math.abs(sum - total) > 0.01;
+                    return (
+                      <p className={cn("text-xs", mismatch ? "text-destructive" : "text-muted-foreground")}>
+                        Allocated ₹{sum.toLocaleString("en-IN")} of ₹{total.toLocaleString("en-IN")}
+                      </p>
+                    );
+                  })()}
+                </div>
+              )}
+
               {showCost && (
                 <div className="space-y-2">
                   <Label>Monthly Cost (optional)</Label>
                   <Input
                     type="number"
+                    min={0}
+                    step="0.01"
                     placeholder="Enter monthly cost"
                     value={formData.monthlyCost}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        monthlyCost: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => {
+                      const value = e.target.value;
+
+                      if (value === "" || Number(value) >= 0) {
+                        setFormData((prev) => ({
+                          ...prev,
+                          monthlyCost: value,
+                        }));
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "-" || e.key === "e" || e.key === "E") {
+                        e.preventDefault();
+                      }
+                    }}
+                    className={budgetError ? "border-destructive" : ""}
                   />
+                  {budgetError && (
+                    <p className="text-xs text-destructive">{budgetError}</p>
+                  )}
                 </div>
               )}
             </>
@@ -374,7 +508,7 @@ export function AddEditMemberDialog({
 
             <Button
               onClick={handleSubmit}
-              disabled={!userSelected || !formData.role}
+              disabled={!userSelected || !formData.role || !!budgetError}
               className="cursor-pointer"
             >
               {isEditMode ? "Save Changes" : "Send Invitation"}

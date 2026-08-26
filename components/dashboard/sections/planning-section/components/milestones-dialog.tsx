@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { Department, Module, Task, Milestone, MilestoneFormData, MilestoneStatus } from "@/lib/types";
+import type { Department, Task, Milestone, MilestoneFormData, MilestoneStatus } from "@/lib/types";
 
 interface Props {
   open: boolean;
@@ -27,6 +28,7 @@ interface Props {
   editing: Milestone | null;
   departments: Department[];
   availableTasks: Task[];
+  allMilestones: Milestone[];
   onClose: () => void;
   onCreate: (data: MilestoneFormData) => Promise<void>;
   onUpdate: (id: string, data: MilestoneFormData) => Promise<void>;
@@ -35,10 +37,10 @@ interface Props {
 // ─── constants ───────────────────────────────────────────────────────────────
 
 const STATUS_OPTIONS: { value: MilestoneStatus; label: string }[] = [
-  { value: "UPCOMING",    label: "Upcoming" },
+  { value: "UPCOMING", label: "Upcoming" },
   { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "ACHIEVED",    label: "Achieved" },
-  { value: "MISSED",      label: "Missed" },
+  { value: "ACHIEVED", label: "Achieved" },
+  { value: "MISSED", label: "Missed" },
 ];
 
 const EMPTY: MilestoneFormData = {
@@ -59,6 +61,7 @@ export function MilestoneDialog({
   editing,
   departments,
   availableTasks,
+  allMilestones,
   onClose,
   onCreate,
   onUpdate,
@@ -66,6 +69,14 @@ export function MilestoneDialog({
   const [form, setForm] = useState<MilestoneFormData>(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof MilestoneFormData, string>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const claimedElsewhere = new Map<string, string>();
+  for (const m of allMilestones) {
+    if (editing && m.id === editing.id) continue; // this milestone's own tasks are fine to keep
+    for (const t of m.tasks) {
+      claimedElsewhere.set(t.id, m.title);
+    }
+  }
 
   const filteredTasks = availableTasks.filter((t) => {
     if (form.phaseId && t.phaseId !== form.phaseId) return false;
@@ -88,11 +99,32 @@ export function MilestoneDialog({
     setErrors({});
   }, [editing, open]);
 
+  function checkDueDateConflict(dueDate: string, taskIds: string[]): string | undefined {
+    if (!dueDate || taskIds.length === 0) return undefined;
+    const milestoneDate = new Date(dueDate);
+    const offender = availableTasks.find(
+      (t) => taskIds.includes(t.id) && t.dueDate && new Date(t.dueDate) > milestoneDate
+    );
+    if (!offender) return undefined;
+    return `"${offender.title}" is due ${new Date(offender.dueDate!).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}, after this milestone's date`;
+  }
+
+  // Live check — fires the moment the due date or task selection changes, not on submit
+  useEffect(() => {
+    const conflict = checkDueDateConflict(form.dueDate ?? "", form.taskIds);
+    setErrors((e) => ({ ...e, dueDate: conflict }));
+  }, [form.dueDate, form.taskIds]);
+
   function validate() {
-    const e: Partial<Record<keyof MilestoneFormData, string>> = {};
+    const e: Partial<Record<keyof MilestoneFormData, string>> = { ...errors };
     if (!form.title.trim()) e.title = "Title is required";
+    else e.title = undefined;
+
+    const conflict = checkDueDateConflict(form.dueDate ?? "", form.taskIds);
+    e.dueDate = conflict;
+
     setErrors(e);
-    return Object.keys(e).length === 0;
+    return !e.title && !e.dueDate;
   }
 
   async function handleSubmit() {
@@ -202,7 +234,9 @@ export function MilestoneDialog({
                 type="date"
                 value={form.dueDate}
                 onChange={(e) => set("dueDate", e.target.value)}
+                className={errors.dueDate ? "border-destructive" : ""}
               />
+              {errors.dueDate && <p className="text-xs text-destructive">{errors.dueDate}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>Status</Label>
@@ -255,24 +289,34 @@ export function MilestoneDialog({
               </p>
             ) : (
               <div className="rounded-lg border border-border divide-y divide-border max-h-48 overflow-y-auto">
-                {filteredTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/30 cursor-pointer"
-                    onClick={() => toggleTask(task.id)}
-                  >
-                    <Checkbox
-                      checked={form.taskIds.includes(task.id)}
-                      onCheckedChange={() => toggleTask(task.id)}
-                    />
-                    <div className="min-w-0">
-                      <p className="text-sm text-foreground truncate">{task.title}</p>
-                      <p className="text-xs text-muted-foreground capitalize">
-                        {task.status.toLowerCase().replace("_", " ")}
-                      </p>
+                {filteredTasks.map((task) => {
+                  const claimedBy = claimedElsewhere.get(task.id);
+                  const disabled = !!claimedBy;
+                  return (
+                    <div
+                      key={task.id}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5",
+                        disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-muted/30 cursor-pointer"
+                      )}
+                      onClick={() => !disabled && toggleTask(task.id)}
+                    >
+                      <Checkbox
+                        checked={form.taskIds.includes(task.id)}
+                        disabled={disabled}
+                        onCheckedChange={() => !disabled && toggleTask(task.id)}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm text-foreground truncate">{task.title}</p>
+                        <p className="text-xs text-muted-foreground capitalize">
+                          {disabled
+                            ? `Already in "${claimedBy}"`
+                            : task.status.toLowerCase().replace("_", " ")}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             {form.taskIds.length > 0 && (
@@ -287,7 +331,7 @@ export function MilestoneDialog({
             <Button variant="outline" onClick={onClose} disabled={isSubmitting} className="cursor-pointer hover:text-gray-400">
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting} className="cursor-pointer">
+            <Button onClick={handleSubmit} disabled={isSubmitting} className="cursor-pointer hover:text-gray-100">
               {isSubmitting
                 ? editing ? "Updating..." : "Adding..."
                 : editing ? "Update milestone" : "Add milestone"}

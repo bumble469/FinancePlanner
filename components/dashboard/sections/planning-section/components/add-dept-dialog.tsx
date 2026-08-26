@@ -154,7 +154,7 @@ export function AddDeptDialog({
         </div>
 
         <Button
-          className="w-full mt-2"
+          className="w-full mt-2 cursor-pointer"
           onClick={handleSubmit}
           disabled={isInvalid || loading}
         >

@@ -104,11 +104,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Account not found' }, { status: 404 });
     }
 
+    // subscription check
+    const subscription = await prisma.subscription.findUnique({
+      where: { accountId: account.id },
+      include: { plan: true },
+    });
+
+    if (!subscription || subscription.status !== "ACTIVE") {
+      return NextResponse.json(
+        { success: false, error: "No active subscription found. Please select a plan first." },
+        { status: 403 }
+      );
+    }
+
+    const { plan: subPlan } = subscription;
+
+    const [projectCount, eventCount, totalCount] = await Promise.all([
+      prisma.workItem.count({ where: { accountId: account.id, type: "PROJECT" } }),
+      prisma.workItem.count({ where: { accountId: account.id, type: "EVENT" } }),
+      prisma.workItem.count({ where: { accountId: account.id } }),
+    ]);
+
     const body = await request.json();
     const {
       name, type, budget, description, status, currency,
       startDate, endDate, methodology,
-      eventDate, venue,
+      eventDate, venue, hasTicketing, hasStalls, hasHardware
     } = body;
 
     if (!name?.trim()) {
@@ -122,6 +143,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (subPlan.maxTotalWorkItems !== null && totalCount >= subPlan.maxTotalWorkItems) {
+      return NextResponse.json(
+        { success: false, error: `Your ${subPlan.name} plan allows a maximum of ${subPlan.maxTotalWorkItems} total work items. Upgrade to add more.` },
+        { status: 403 }
+      );
+    }
+
+    if (type === WorkItemType.PROJECT && projectCount >= subPlan.maxProjects) {
+      return NextResponse.json(
+        { success: false, error: `Your ${subPlan.name} plan allows a maximum of ${subPlan.maxProjects} project(s). Upgrade to add more.` },
+        { status: 403 }
+      );
+    }
+
+    if (type === WorkItemType.EVENT && eventCount >= subPlan.maxEvents) {
+      return NextResponse.json(
+        { success: false, error: `Your ${subPlan.name} plan allows a maximum of ${subPlan.maxEvents} event(s). Upgrade to add more.` },
+        { status: 403 }
+      );
+    }
+
     if (!budget || isNaN(budget) || budget <= 0) {
       return NextResponse.json({ success: false, error: 'Budget must be a positive number' }, { status: 400 });
     }
@@ -129,13 +171,14 @@ export async function POST(request: NextRequest) {
     const plan = await prisma.$transaction(async (tx) => {
       const workItem = await tx.workItem.create({
         data: {
-          accountId: account.id,
           name: name.trim(),
           type,
           budget,
-          description: description?.trim() || null,
-          status: status || 'ACTIVE',
-          currency: currency || 'USD',
+          description,
+          status: status || "ACTIVE",
+          currency,
+          accountId: account.id,
+          hasHardware: !!hasHardware,
         },
       });
 
@@ -164,12 +207,12 @@ export async function POST(request: NextRequest) {
             workItemId: workItem.id,
             eventDate: eventDate ? new Date(eventDate) : null,
             venue: venue?.trim() || null,
+            hasTicketing: !!hasTicketing,
+            hasStalls: !!hasStalls
           },
         });
-      } else if (type === WorkItemType.PLAN) {
-        await tx.planInfo.create({
-          data: { workItemId: workItem.id },
-        });
+      } else {
+        return NextResponse.json({ success: false, error: 'Invalid plan type' }, { status: 400 });
       }
 
       return tx.workItem.findUnique({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { notify } from "@/lib/notify";
 
 async function resolveTask(
   workItemId: string,
@@ -84,9 +85,8 @@ export async function GET(
       where: {
         workItemId: id,
         id: { notIn: assignedWorkItemMemberIds },
-        role: {
-          not: "ADMIN",
-        }
+        role: { in: ["MANAGER", "CO_MANAGER", "MEMBER"] },
+        departmentMembers: { some: { departmentId: deptId } },
       },
       select: {
         id: true,
@@ -181,6 +181,18 @@ export async function POST(
           },
         },
       },
+    });
+
+    const task1 = await prisma.task.findUnique({ where: { id: taskId }, select: { title: true } });
+    await notify({
+      workItemId: id,
+      userIds: [taskMember.workItemMember.user.id],
+      scope: "PERSONAL",
+      type: "TASK_ASSIGNED",
+      title: "New task assigned",
+      message: `You've been assigned to "${task1?.title ?? "a task"}"`,
+      entityType: "task",
+      entityId: taskId,
     });
 
     return NextResponse.json(taskMember, { status: 201 });

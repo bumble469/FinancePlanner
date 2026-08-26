@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { notify } from "@/lib/notify";
+import { getPlanAccess } from "@/lib/get-plan-access";
 
 export async function DELETE(
   req: NextRequest,
@@ -14,22 +16,14 @@ export async function DELETE(
 
     const { id: workItemId, milestoneId } = await params;
 
-    const membership = await prisma.workItemMember.findUnique({
-      where: {
-        workItemId_userId: {
-          workItemId,
-          userId: user.sub,
-        },
-      },
-    });
-
-    if (!membership) {
+    const access = await getPlanAccess(workItemId, user.sub);
+    if (!access) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (membership.role === "MEMBER") {
+    if (!access.permissions.canDeleteMilestone) {
       return NextResponse.json(
-        { error: "Only admins and managers can delete milestones" },
+        { error: "Only admins can delete milestones" },
         { status: 403 }
       );
     }
@@ -69,20 +63,12 @@ export async function PATCH(
 
     const { id: workItemId, milestoneId } = await params;
 
-    const membership = await prisma.workItemMember.findUnique({
-      where: {
-        workItemId_userId: {
-          workItemId,
-          userId: user.sub,
-        },
-      },
-    });
-
-    if (!membership) {
+    const access = await getPlanAccess(workItemId, user.sub);
+    if (!access) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (membership.role === "MEMBER") {
+    if (!access.permissions.canEditMilestone) {
       return NextResponse.json(
         { error: "Only admins and managers can update milestones" },
         { status: 403 }
@@ -106,9 +92,26 @@ export async function PATCH(
       dueDate,
       status,
       taskIds,
+      extension,
     } = body;
 
-    // ✅ validate title if provided
+    if (dueDate && taskIds && taskIds.length > 0) {
+      const tasksWithDueDates = await prisma.task.findMany({
+        where: { id: { in: taskIds }, dueDate: { not: null } },
+        select: { title: true, dueDate: true },
+      });
+      const milestoneDate = new Date(dueDate);
+      const offender = tasksWithDueDates.find((t) => t.dueDate! > milestoneDate);
+      if (offender) {
+        return NextResponse.json(
+          {
+            error: `Task "${offender.title}" is due ${offender.dueDate!.toISOString().split("T")[0]}, which is after this milestone's due date. Choose a later milestone date or remove that task.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     if (title !== undefined && (!title || title.trim() === "")) {
       return NextResponse.json(
         { error: "Title cannot be empty" },
@@ -116,7 +119,6 @@ export async function PATCH(
       );
     }
 
-    // ✅ validate tasks
     if (taskIds) {
       const validTasks = await prisma.task.count({
         where: {
@@ -131,6 +133,57 @@ export async function PATCH(
           { status: 400 }
         );
       }
+
+      if (taskIds.length > 0) {
+        const alreadyLinked = await prisma.milestoneTask.findMany({
+          where: {
+            taskId: { in: taskIds },
+            NOT: { milestoneId },
+          },
+          include: {
+            task: { select: { title: true } },
+            milestone: { select: { title: true } },
+          },
+        });
+
+        if (alreadyLinked.length > 0) {
+          const names = alreadyLinked
+            .map((l) => `"${l.task.title}" (in "${l.milestone.title}")`)
+            .join(", ");
+          return NextResponse.json(
+            { error: `These tasks already belong to another milestone: ${names}` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    if (extension) {
+      if (!extension.newDueDate) {
+        return NextResponse.json(
+          { error: "A new due date is required to extend this milestone" },
+          { status: 400 }
+        );
+      }
+      if (!extension.reason || !extension.reason.trim()) {
+        return NextResponse.json(
+          { error: "A reason is required to extend this milestone" },
+          { status: 400 }
+        );
+      }
+      const newDue = new Date(extension.newDueDate);
+      if (isNaN(newDue.getTime())) {
+        return NextResponse.json(
+          { error: "Invalid new due date" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // null = extended by the plan owner (owner has no WorkItemMember row)
+    let extendedById: string | null = null;
+    if (extension) {
+      extendedById = access.memberId ?? null;
     }
 
     let taskOps = undefined;
@@ -158,10 +211,18 @@ export async function PATCH(
       data: {
         ...(title !== undefined && { title: title.trim() }),
         ...(description !== undefined && { description }),
-        ...(dueDate !== undefined && {
+        // plain due-date edits (no extension payload) behave exactly as before
+        ...(dueDate !== undefined && !extension && {
           dueDate: dueDate ? new Date(dueDate) : null,
         }),
         ...(status !== undefined && { status }),
+
+        // deadline extension — preserves the original due date on first use only
+        ...(extension && {
+          originalDueDate: existing.originalDueDate ?? existing.dueDate,
+          dueDate: new Date(extension.newDueDate),
+          extensionReason: extension.reason.trim(),
+        }),
 
         ...(taskIds && {
           tasks: taskOps,
@@ -174,7 +235,55 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updated);
+    if (extension) {
+      await prisma.milestoneExtensionLog.create({
+        data: {
+          milestoneId,
+          previousDueDate: existing.dueDate,
+          newDueDate: new Date(extension.newDueDate),
+          reason: extension.reason.trim(),
+          extendedById,
+        },
+      });
+    }
+
+    const assigneeUserIds = await prisma.taskMember
+      .findMany({
+        where: { taskId: { in: existing.tasks.map((t) => t.taskId) } },
+        select: { workItemMember: { select: { userId: true } } },
+      })
+      .then((rows) => Array.from(new Set(rows.map((r) => r.workItemMember.userId))));
+
+    if (assigneeUserIds.length > 0) {
+      await notify({
+        workItemId,
+        userIds: assigneeUserIds,
+        scope: "PERSONAL",
+        type: extension ? "MILESTONE_UPDATED" : "MILESTONE_UPDATED",
+        title: extension ? "Milestone deadline extended" : "Milestone updated",
+        message: extension
+          ? `The deadline for "${updated.title}" was extended to ${new Date(extension.newDueDate).toLocaleDateString("en-IN")}.`
+          : `"${updated.title}" was updated.`,
+        entityType: "milestone",
+        entityId: milestoneId,
+      });
+    }
+
+    const formatted = {
+      ...updated,
+      tasks: updated.tasks.map((mt) => ({
+        id: mt.task.id,
+        title: mt.task.title,
+        status: mt.task.status,
+        priority: mt.task.priority,
+        startDate: mt.task.startDate,
+        dueDate: mt.task.dueDate,
+        originalDueDate: mt.task.originalDueDate,
+        extensionReason: mt.task.extensionReason,
+      })),
+    };
+
+    return NextResponse.json(formatted);
   } catch (error) {
     console.error("[PATCH /milestone]", error);
     return NextResponse.json(

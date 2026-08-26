@@ -111,8 +111,8 @@ export default function SignupPage() {
       }
 
       document.cookie = `access_token=${json.data.accessToken}; path=/; max-age=${15 * 60}; samesite=lax`;
-
-      window.location.href = '/';
+      window.location.href = '/onboarding/plan';
+      
     } catch (err) {
       console.error('Signup failed:', err);
       setErrors({ email: 'Something went wrong. Please try again.' });

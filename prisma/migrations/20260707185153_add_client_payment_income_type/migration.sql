@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "IncomeType" ADD VALUE 'CLIENT_PAYMENT';

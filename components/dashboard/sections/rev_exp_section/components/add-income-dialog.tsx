@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useFinancialStore } from "@/lib/store";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Income, IncomeType } from "@/lib/types";
+import type { Income, IncomeType, Stall } from "@/lib/types";
 
 interface Props {
   open: boolean;
@@ -32,28 +33,43 @@ interface Props {
 const EMPTY = {
   type: "" as IncomeType | "",
   amount: "",
+  receivedAmount: "",
   source: "",
   description: "",
   phaseId: "",
+  stallId: "",
   receivedAt: new Date().toISOString().split("T")[0],
 };
 
 export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItemId }: Props) {
-  const { addIncome, updateIncome, modules } = useFinancialStore();
+  const { addIncome, updateIncome, modules, currentPlanMeta } = useFinancialStore();
+  const isEvent = currentPlanMeta?.type === "event";
 
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof typeof EMPTY, string>>>({});
+  const [loading, setLoading] = useState(false);
+  const [stalls, setStalls] = useState<Stall[]>([]);
 
-  // populate form when editing
+  useEffect(() => {
+    if (!open || !isEvent) return;
+    authClient.request(`/api/plan/${workItemId}/stalls`)
+      .then((res) => setStalls(res.data.data ?? []))
+      .catch((err) => console.error("Failed to fetch stalls:", err));
+  }, [open, isEvent, workItemId]);
+
   useEffect(() => {
     if (editing) {
       setForm({
         type: editing.type,
         amount: editing.amount.toString(),
+        receivedAmount: editing.receivedAmount?.toString() ?? "0",
         source: editing.source ?? "",
         description: editing.description ?? "",
         phaseId: editing.phaseId ?? "",
-        receivedAt: new Date(editing.receivedAt).toISOString().split("T")[0],
+        stallId: (editing as any).stallId ?? "",
+        receivedAt: new Date(editing.receivedAt ?? Date.now())
+          .toISOString()
+          .split("T")[0],
       });
     } else {
       setForm(EMPTY);
@@ -63,35 +79,58 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
 
   function validate() {
     const e: typeof errors = {};
-    if (!form.type)              e.type = "Select a type";
+    if (!form.type) e.type = "Select a type";
     if (!form.amount || isNaN(Number(form.amount)) || Number(form.amount) <= 0)
       e.amount = "Enter a valid amount";
-    if (!form.source.trim())     e.source = "Source is required";
-    if (!form.receivedAt)        e.receivedAt = "Date is required";
+    if (form.receivedAmount && (isNaN(Number(form.receivedAmount)) || Number(form.receivedAmount) < 0))
+      e.receivedAmount = "Enter a valid received amount";
+    if (form.receivedAmount && Number(form.receivedAmount) > Number(form.amount))
+      e.receivedAmount = "Cannot exceed the total amount";
+    if (!form.source.trim()) e.source = "Source is required";
+    if (!form.receivedAt) e.receivedAt = "Date is required";
+    if (form.type === "STALL_INCOME" && !form.stallId) e.stallId = "Select which stall this income belongs to";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!validate()) return;
+    setLoading(true);
 
     const payload = {
-      workItemId,
       type: form.type as IncomeType,
       amount: Number(form.amount),
+      receivedAmount: form.receivedAmount ? Number(form.receivedAmount) : 0,
       source: form.source.trim(),
       description: form.description.trim() || undefined,
-      phaseId: form.phaseId || undefined,
+      phaseId: isEvent ? undefined : (form.phaseId || undefined),
+      stallId: isEvent ? (form.stallId || undefined) : undefined,
       receivedAt: new Date(form.receivedAt).toISOString(),
     };
 
-    if (editing) {
-      updateIncome(editing.id, payload);
-    } else {
-      addIncome({ id: crypto.randomUUID(), ...payload });
-    }
+    try {
+      if (editing) {
+        const res = await authClient.request(
+          `/api/plan/${workItemId}/income/${editing.id}`,
+          { method: "PATCH", data: payload }
+        );
+        updateIncome(editing.id, res.data.data);
+      } else {
+        const res = await authClient.request(
+          `/api/plan/${workItemId}/income`,
+          { method: "POST", data: payload }
+        );
+        addIncome(res.data.data);
+      }
 
-    onClose();
+      onClose();
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || "Something went wrong";
+      setErrors((prev) => ({ ...prev, source: msg }));
+      console.error("Income submit error:", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function set<K extends keyof typeof EMPTY>(key: K, val: (typeof EMPTY)[K]) {
@@ -101,7 +140,7 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit income" : "Add income"}</DialogTitle>
         </DialogHeader>
@@ -117,6 +156,14 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
               <SelectContent>
                 <SelectItem value="INVESTMENT">Investment</SelectItem>
                 <SelectItem value="REVENUE">Revenue</SelectItem>
+                <SelectItem value="SPONSORSHIP">Sponsorship</SelectItem>
+                <SelectItem value="DONATION">Donation</SelectItem>
+                <SelectItem value="GRANT">Grant</SelectItem>
+                <SelectItem value="CLIENT_PAYMENT">Client Payment</SelectItem>
+                <SelectItem value="MERCHANDISE">Merchandise</SelectItem>
+                <SelectItem value="REFUND">Refund</SelectItem>
+                {isEvent && <SelectItem value="STALL_INCOME">Stall Income</SelectItem>}
+                <SelectItem value="OTHER">Other</SelectItem>
               </SelectContent>
             </Select>
             {errors.type && <p className="text-xs text-destructive">{errors.type}</p>}
@@ -148,29 +195,72 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
             {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
           </div>
 
-          {/* Module (optional) */}
+          {/* Received amount (optional) — drives Expected/Partial/Received status */}
           <div className="space-y-1.5">
             <Label>
-              Module{" "}
-              <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+              Received amount{" "}
+              <span className="text-xs text-muted-foreground font-normal">(optional — leave 0 if still expected)</span>
             </Label>
-            <Select
-              value={form.phaseId || "none"}
-              onValueChange={(v) => set("phaseId", v === "none" ? "" : v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Overall (no module)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Overall (no module)</SelectItem>
-                {modules?.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Input
+              type="number"
+              placeholder="0"
+              min={0}
+              value={form.receivedAmount}
+              onChange={(e) => set("receivedAmount", e.target.value)}
+              className={errors.receivedAmount ? "border-destructive" : ""}
+            />
+            {errors.receivedAmount && <p className="text-xs text-destructive">{errors.receivedAmount}</p>}
           </div>
+
+          {/* Module (optional, Project-only — events have no phases/modules) */}
+          {!isEvent && (
+            <div className="space-y-1.5">
+              <Label>
+                Module{" "}
+                <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Select
+                value={form.phaseId || "none"}
+                onValueChange={(v) => set("phaseId", v === "none" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Overall (no module)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Overall (no module)</SelectItem>
+                  {modules?.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Stall — only relevant when type is Stall Income */}
+          {isEvent && form.type === "STALL_INCOME" && (
+            <div className="space-y-1.5">
+              <Label>Stall</Label>
+              <Select
+                value={form.stallId || "none"}
+                onValueChange={(v) => set("stallId", v === "none" ? "" : v)}
+              >
+                <SelectTrigger className={errors.stallId ? "border-destructive" : ""}>
+                  <SelectValue placeholder="Select stall" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None selected</SelectItem>
+                  {stalls.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.stallId && <p className="text-xs text-destructive">{errors.stallId}</p>}
+            </div>
+          )}
 
           {/* Date */}
           <div className="space-y-1.5">
@@ -203,11 +293,11 @@ export function AddIncomeDialog({ open, onOpenChange, editing, onClose, workItem
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={loading} className="cursor-pointer hover:text-gray-600">
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>
-              {editing ? "Update" : "Add"} income
+            <Button onClick={handleSubmit} disabled={loading} className="cursor-pointer">
+              {loading ? "Saving..." : editing ? "Update" : "Add"} income
             </Button>
           </div>
         </div>

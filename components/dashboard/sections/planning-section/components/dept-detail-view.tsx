@@ -21,6 +21,12 @@ export function DepartmentDetailView({
   onAddModule,
   onEditModule,
   onDeleteModule,
+  canAddModule,
+  canEditModule,
+  canDeleteModule,
+  canAddTask,
+  canDeleteTask,
+  canApproveTaskSubmissions,
 }: {
   dept: Department;
   modules: Module[];
@@ -29,11 +35,15 @@ export function DepartmentDetailView({
   onAddModule: (name: string) => void;
   onEditModule: (module: Module, name: string) => void;
   onDeleteModule: (id: string) => void;
+  canAddModule?: boolean;
+  canEditModule?: boolean;
+  canDeleteModule?: boolean;
+  canAddTask?: boolean;
+  canDeleteTask?: boolean;
+  canApproveTaskSubmissions?: boolean;
 }) {
   const deptModules = modules.filter((m) => m.departmentId === dept.id);
-
   const [activeModule, setActiveModule] = useState<Module | null>(null);
-
   const [moduleDialog, setModuleDialog] = useState<{
     open: boolean;
     editing?: Module | null;
@@ -55,14 +65,11 @@ export function DepartmentDetailView({
         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <span>Departments</span>
           <ChevronRight className="h-3.5 w-3.5" />
-
           {activeModule ? (
             <>
               <span>{dept.name}</span>
               <ChevronRight className="h-3.5 w-3.5" />
-              <span className="text-foreground font-medium">
-                {activeModule.name}
-              </span>
+              <span className="text-foreground font-medium">{activeModule.name}</span>
             </>
           ) : (
             <span className="text-foreground font-medium">{dept.name}</span>
@@ -89,6 +96,9 @@ export function DepartmentDetailView({
         <ModuleDetailView
           module={activeModule}
           onBack={() => setActiveModule(null)}
+          canAddTask={canAddTask}
+          canDeleteTask={canDeleteTask}
+          canApproveTaskSubmissions={canApproveTaskSubmissions}
         />
       </div>
     );
@@ -99,26 +109,27 @@ export function DepartmentDetailView({
     <div className="space-y-4">
       {Header}
 
-      {/* Add module */}
-      <Button
-        size="sm"
-        variant="outline"
-        className="w-full gap-2 border-dashed hover:bg-muted/40 hover:text-foreground hover:border-muted transition-colors cursor-pointer"
-        onClick={() => setModuleDialog({ open: true })}
-      >
-        <Plus className="h-4 w-4" />
-        Add Module
-      </Button>
+      {canAddModule && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full gap-2 border-dashed hover:bg-muted/40 hover:text-foreground hover:border-muted transition-colors cursor-pointer"
+          onClick={() => setModuleDialog({ open: true })}
+        >
+          <Plus className="h-4 w-4" />
+          Add Module
+        </Button>
+      )}
 
-      {/* Module list */}
       <ModuleListView
         modules={deptModules}
         onEdit={(m) => setModuleDialog({ open: true, editing: m })}
-        onDelete={(id) => onDeleteModule(id)} // ✅ FIXED
+        onDelete={(id) => onDeleteModule(id)}
         onDrillDown={(m) => setActiveModule(m)}
+        canEdit={canEditModule}
+        canDelete={canDeleteModule}
       />
 
-      {/* Module dialog */}
       <ModuleDialog
         open={moduleDialog.open}
         editingModule={moduleDialog.editing}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { notify } from "@/lib/notify";
 
 export async function POST(
   req: NextRequest,
@@ -49,6 +50,21 @@ export async function POST(
       );
     }
 
+    // prevent inviting someone who's already a member
+    const existingMember = await prisma.workItemMember.findFirst({
+      where: {
+        workItemId: planId,
+        userId: invitedUser.id,
+      },
+    });
+
+    if (existingMember) {
+      return NextResponse.json(
+        { error: "User is already a member of this plan" },
+        { status: 409 }
+      );
+    }
+
     // prevent duplicate pending invite
     const existingInvite =
       await prisma.workItemMemberInvitation.findFirst({
@@ -77,9 +93,20 @@ export async function POST(
           token: randomUUID(),
           expiresAt: new Date(
             Date.now() + 7 * 24 * 60 * 60 * 1000
-          ),
-        },
-      });
+        ),
+      },
+    });
+
+    await notify({
+      workItemId: planId,
+      userIds: [invitedUser.id],
+      scope: "PERSONAL",
+      type: "INVITATION",
+      title: "You've been invited to a project",
+      message: `${authUser.name ?? "Someone"} invited you to join as ${role ?? "a member"}.`,
+      entityType: "invitation",
+      entityId: invitation.id,
+    });
 
     return NextResponse.json(
       {

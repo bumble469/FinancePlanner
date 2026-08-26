@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
+import { notify, getAllPlanUserIds } from "@/lib/notify";
 
 export async function PATCH(
   req: NextRequest,
@@ -30,10 +31,31 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { title, description, status, phaseId, assignedToId } = body;
+    const {
+      title,
+      description,
+      status,
+      priority,
+      startDate,
+      dueDate,
+      phaseId,
+      extension,
+    } = body;
+
+    if (extension) {
+      if (!extension.newDueDate) {
+        return NextResponse.json({ error: "A new due date is required to extend this task" }, { status: 400 });
+      }
+      if (!extension.reason?.trim()) {
+        return NextResponse.json({ error: "A reason is required to extend this task" }, { status: 400 });
+      }
+      if (isNaN(new Date(extension.newDueDate).getTime())) {
+        return NextResponse.json({ error: "Invalid new due date" }, { status: 400 });
+      }
+    }
 
     // Validate status if provided
-    const VALID_STATUSES = ["TODO", "IN_PROGRESS", "DONE"];
+    const VALID_STATUSES = ["TODO", "IN_PROGRESS", "DONE", "BLOCKED", "SUBMITTED", "CHANGES_REQUESTED", "COMPLETED"];
     if (status !== undefined && !VALID_STATUSES.includes(status)) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
@@ -53,32 +75,67 @@ export async function PATCH(
       }
     }
 
+    if (status === "COMPLETED" || status === "SUBMITTED" || status === "CHANGES_REQUESTED") {
+      return NextResponse.json(
+        { error: "This status can only change through the submission/review workflow." },
+        { status: 400 }
+      );
+    }
+
     const task = await prisma.task.update({
       where: { id: taskId },
       data: {
-        ...(title !== undefined && { title: title.trim() }),
+        ...(title !== undefined && { title }),
         ...(description !== undefined && { description }),
         ...(status !== undefined && { status }),
-        ...(phaseId !== undefined && { phaseId }),         // null clears it
-        ...(assignedToId !== undefined && { assignedToId }), // null unassigns
+        ...(priority !== undefined && { priority: Number(priority) }),
+        ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
+        ...(phaseId !== undefined && { phaseId }),
+        ...(dueDate !== undefined && !extension && { dueDate: dueDate ? new Date(dueDate) : null }),
+        ...(extension && {
+          originalDueDate: existing.originalDueDate ?? existing.dueDate,
+          dueDate: new Date(extension.newDueDate),
+          extensionReason: extension.reason.trim(),
+        }),
+        ...(status === "DONE" && { completedAt: new Date() }),
       },
       select: {
         id: true,
         title: true,
         description: true,
         status: true,
+        priority: true,
         phaseId: true,
         departmentId: true,
-        assignedToId: true,
-        assignedTo: {
-          select: { id: true, name: true, image: true },
-        },
+        startDate: true,
+        dueDate: true,
+        originalDueDate: true,
+        extensionReason: true,
+        completedAt: true,
         createdAt: true,
         updatedAt: true,
+        members: {
+          select: {
+            workItemMember: {
+              select: { id: true, user: { select: { id: true, name: true, image: true } } },
+            },
+          },
+        },
+        milestones: {
+          select: {
+            milestone: { select: { id: true, title: true, status: true, dueDate: true } },
+          },
+        },
+        dependsOn: {
+          select: { dependsOnId: true },
+        },
       },
     });
 
-    return NextResponse.json(task);
+    return NextResponse.json({
+      ...task,
+      milestones: task.milestones.map((mt) => mt.milestone),
+    });
   } catch (err) {
     console.error("[PATCH /tasks/:taskId]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

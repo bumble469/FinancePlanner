@@ -19,7 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Expense, ExpenseCategory } from "@/lib/types";
+import type { Expense, ExpenseCategory, Stall } from "@/lib/types";
+import { authClient } from "@/lib/auth-client";
 
 interface Props {
   open: boolean;
@@ -35,6 +36,7 @@ const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   TOOLS:      "Tools",
   OPERATIONS: "Operations",
   EVENT:      "Event",
+  EQUIPMENT:  "Equipment",
   OTHER:      "Other",
 };
 
@@ -46,16 +48,35 @@ const EMPTY = {
   description: "",
   phaseId: "",
   departmentId: "",
+  stallId: "",
+  hardwareItemId: "",
   occurredAt: new Date().toISOString().split("T")[0],
 };
 
 export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workItemId }: Props) {
-  const { addExpense, updateExpense, modules, departments } = useFinancialStore();
+  const { addExpense, updateExpense, modules, departments, currentPlanMeta } = useFinancialStore();
+  const isEvent = currentPlanMeta?.type === "event";
 
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof typeof EMPTY, string>>>({});
+  const [loading, setLoading] = useState(false);
+  const [stalls, setStalls] = useState<Stall[]>([]);
+  const [hardwareItems, setHardwareItems] = useState<{ id: string; name: string }[]>([]);
 
-  // populate form when editing
+  useEffect(() => {
+    if (!open || !isEvent) return;
+    authClient.request(`/api/plan/${workItemId}/stalls`)
+      .then((res) => setStalls(res.data.data ?? []))
+      .catch((err) => console.error("Failed to fetch stalls:", err));
+  }, [open, isEvent, workItemId]);
+
+  useEffect(() => {
+    if (!open) return;
+    authClient.request(`/api/plan/${workItemId}/hardware`)
+      .then((res) => setHardwareItems((res.data.data ?? []).filter((h: any) => h.requestStatus === "APPROVED")))
+      .catch((err) => console.error("Failed to fetch hardware items:", err));
+  }, [open, workItemId]);
+
   useEffect(() => {
     if (editing) {
       setForm({
@@ -64,7 +85,11 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
         description: editing.description ?? "",
         phaseId: editing.phaseId ?? "",
         departmentId: editing.departmentId ?? "",
-        occurredAt: new Date(editing.occurredAt).toISOString().split("T")[0],
+        stallId: editing.stallId ?? "",
+        hardwareItemId: editing.hardwareItemId ?? "",
+        occurredAt: new Date(editing.occurredAt ?? Date.now())
+          .toISOString()
+          .split("T")[0],
       });
     } else {
       setForm(EMPTY);
@@ -84,26 +109,43 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
     return Object.keys(e).length === 0;
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!validate()) return;
-
+    setLoading(true);
     const payload = {
       workItemId,
       category: form.category as ExpenseCategory,
       amount: Number(form.amount),
       description: form.description.trim() || undefined,
-      phaseId: form.phaseId || undefined,
+      phaseId: isEvent ? undefined : (form.phaseId || undefined),
       departmentId: form.departmentId || undefined,
+      stallId: isEvent ? (form.stallId || undefined) : undefined,
+      hardwareItemId: form.hardwareItemId || undefined,
       occurredAt: new Date(form.occurredAt).toISOString(),
     };
 
-    if (editing) {
-      updateExpense(editing.id, payload);
-    } else {
-      addExpense({ id: crypto.randomUUID(), ...payload });
+    try {
+      if (editing) {
+        const res = await authClient.request(
+          `/api/plan/${workItemId}/expenses/${editing.id}`,
+          { method: "PATCH", data: payload }
+        );
+        updateExpense(editing.id, res.data.data);
+      } else {
+        const res = await authClient.request(
+          `/api/plan/${workItemId}/expenses`,
+          { method: "POST", data: payload }
+        );
+        addExpense(res.data.data);
+      }
+      onClose();
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || "Something went wrong";
+      setErrors((prev) => ({ ...prev, category: msg }));
+      console.error("Expense submit error:", err);
+    } finally {
+      setLoading(false);
     }
-
-    onClose();
   }
 
   function set<K extends keyof typeof EMPTY>(key: K, val: (typeof EMPTY)[K]) {
@@ -113,7 +155,7 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto custom-scrollbar">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit expense" : "Add expense"}</DialogTitle>
         </DialogHeader>
@@ -182,29 +224,86 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
             </Select>
           </div>
 
-          {/* Module (optional) */}
-          <div className="space-y-1.5">
-            <Label>
-              Module{" "}
-              <span className="text-xs text-muted-foreground font-normal">(optional)</span>
-            </Label>
-            <Select
-              value={form.phaseId || "none"}
-              onValueChange={(v) => set("phaseId", v === "none" ? "" : v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="No module" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No module</SelectItem>
-                {modules?.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Module (optional, Project-only — events have no phases/modules) */}
+          {!isEvent && (
+            <div className="space-y-1.5">
+              <Label>
+                Module{" "}
+                <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Select
+                value={form.phaseId || "none"}
+                onValueChange={(v) => set("phaseId", v === "none" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No module" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No module</SelectItem>
+                  {modules?.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Stall (event-only, optional) */}
+          {isEvent && (
+            <div className="space-y-1.5">
+              <Label>
+                Stall{" "}
+                <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Select
+                value={form.stallId || "none"}
+                onValueChange={(v) => set("stallId", v === "none" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Not tied to a stall" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not tied to a stall</SelectItem>
+                  {stalls.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Hardware item — only relevant when category is Equipment */}
+          {form.category === "EQUIPMENT" && (
+            <div className="space-y-1.5">
+              <Label>
+                Hardware item{" "}
+                <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Select
+                value={form.hardwareItemId || "none"}
+                onValueChange={(v) => set("hardwareItemId", v === "none" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Not tied to a specific item" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not tied to a specific item</SelectItem>
+                  {hardwareItems.map((h) => (
+                    <SelectItem key={h.id} value={h.id}>
+                      {h.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {hardwareItems.length === 0 && (
+                <p className="text-xs text-muted-foreground">No approved hardware items yet</p>
+              )}
+            </div>
+          )}
 
           {/* Date */}
           <div className="space-y-1.5">
@@ -237,11 +336,11 @@ export function AddExpenseDialog({ open, onOpenChange, editing, onClose, workIte
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={loading} className="cursor-pointer hover:text-gray-600">
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>
-              {editing ? "Update" : "Add"} expense
+            <Button onClick={handleSubmit} disabled={loading} className="cursor-pointer">
+              {loading ? "Saving..." : editing ? "Update" : "Add"} expense
             </Button>
           </div>
         </div>

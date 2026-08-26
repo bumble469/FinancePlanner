@@ -72,6 +72,7 @@ export async function GET(request: NextRequest) {
     });
 
     let user;
+    let isNewUser = false;
 
     if (oauthAccount) {
       user = oauthAccount.user;
@@ -98,6 +99,8 @@ export async function GET(request: NextRequest) {
             type: AccountType.INDIVIDUAL,
           },
         });
+
+        isNewUser = true;
       }
 
       await prisma.oAuthAccount.create({
@@ -135,7 +138,7 @@ export async function GET(request: NextRequest) {
     );
 
     const response = NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/`
+      `${process.env.NEXT_PUBLIC_APP_URL}${isNewUser ? '/onboarding/plan' : '/'}`
     );
 
     response.cookies.set({

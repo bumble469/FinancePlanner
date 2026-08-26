@@ -16,6 +16,8 @@ export function DepartmentListView({
   onDelete,
   onDrillDown,
   isProject,
+  canEdit,
+  canDelete,
 }: {
   departments: Department[];
   currency: string;
@@ -23,6 +25,8 @@ export function DepartmentListView({
   onDelete: (id: string) => void;
   onDrillDown: (dept: Department) => void;
   isProject: boolean;
+  canEdit?: (deptId: string) => boolean;
+  canDelete?: boolean;
 }) {
   return (
     <div className="space-y-3">
@@ -47,26 +51,40 @@ export function DepartmentListView({
             </div>
 
             <div className="flex items-center gap-1 shrink-0">
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-                <Button size="icon" variant="ghost" onClick={() => onEdit(d)} className="cursor-pointer">
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button size="icon" variant="ghost" onClick={() => onDelete(d.id)} className="cursor-pointer">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-
-              {isProject && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="ml-2 gap-1.5 text-xs hover:bg-muted/40 hover:text-gray-400 cursor-pointer hover:border-muted"
-                  onClick={() => onDrillDown(d)}
-                >
-                  View
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
+              {(canEdit?.(d.id) || canDelete) && (
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                  {canEdit?.(d.id) && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => onEdit(d)}
+                      className="cursor-pointer"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => onDelete(d.id)}
+                      className="cursor-pointer"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               )}
+
+              <Button
+                size="sm"
+                variant="outline"
+                className="ml-2 gap-1.5 text-xs hover:bg-muted/40 hover:text-gray-400 cursor-pointer hover:border-muted"
+                onClick={() => onDrillDown(d)}
+              >
+                View
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
             </div>
           </div>
         </div>

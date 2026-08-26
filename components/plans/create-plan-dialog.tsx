@@ -32,6 +32,11 @@ interface CreatePlanDialogProps {
   onPlanCreate: () => void;
   initialData?: Plan;
   isEditMode?: boolean;
+  atProjectLimit?: boolean;
+  atEventLimit?: boolean;
+  planName?: string;
+  maxProjects?: number;
+  maxEvents?: number;
 }
 
 export function CreatePlanDialog({
@@ -40,6 +45,11 @@ export function CreatePlanDialog({
   onPlanCreate,
   initialData,
   isEditMode = false,
+  atProjectLimit = false,
+  atEventLimit = false,
+  planName,
+  maxProjects,
+  maxEvents,
 }: CreatePlanDialogProps) {
   const { addPlan } = useFinancialStore();
 
@@ -49,6 +59,9 @@ export function CreatePlanDialog({
   const [description, setDescription] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [isActive, setIsActive] = useState(true);
+  const [hasTicketing, setHasTicketing] = useState(false);
+  const [hasStalls, setHasStalls] = useState(false);
+  const [hasHardware, setHasHardware] = useState(false);
 
   // project-specific
   const [startDate, setStartDate] = useState("");
@@ -70,6 +83,7 @@ export function CreatePlanDialog({
       setDescription(initialData.description || "");
       setCurrency(initialData.currency);
       setIsActive(initialData.status === "active");
+      setHasHardware(!!initialData.hasHardware);
 
       if (initialData.project) {
         setStartDate(initialData.project.startDate?.split("T")[0] ?? "");
@@ -80,6 +94,8 @@ export function CreatePlanDialog({
       if (initialData.event) {
         setEventDate(initialData.event.eventDate?.split("T")[0] ?? "");
         setVenue(initialData.event.venue ?? "");
+        setHasTicketing(!!initialData.event.hasTicketing);
+        setHasStalls(!!initialData.event.hasStalls);
       }
     } else {
       setName("");
@@ -93,6 +109,9 @@ export function CreatePlanDialog({
       setMethodology("");
       setEventDate("");
       setVenue("");
+      setHasTicketing(false);
+      setHasStalls(false);
+      setHasHardware(false);
     }
   }, [initialData, open]);
 
@@ -118,6 +137,7 @@ export function CreatePlanDialog({
           description: description.trim(),
           currency,
           status: isActive ? "ACTIVE" : "INACTIVE",
+          hasHardware,
           // type-specific
           ...(type === "project" && {
             startDate: startDate || undefined,
@@ -127,6 +147,8 @@ export function CreatePlanDialog({
           ...(type === "event" && {
             eventDate: eventDate || undefined,
             venue: venue.trim() || undefined,
+            hasTicketing,
+            hasStalls,
           }),
         },
       });
@@ -180,18 +202,49 @@ export function CreatePlanDialog({
           {/* PLAN TYPE */}
           <div className="space-y-3">
             <Label>Plan Type</Label>
-            <RadioGroup
+
+                        <RadioGroup
               value={type}
               onValueChange={(v) => setType(v as PlanType)}
+              className="space-y-2"
             >
-              <div className="flex items-center gap-3 rounded-lg border border-border px-4 py-3 cursor-pointer has-[:checked]:border-foreground has-[:checked]:bg-muted/40 transition-colors">
-                <RadioGroupItem value="project" id="project" />
-                <Label htmlFor="project" className="cursor-pointer">Project</Label>
-              </div>
-              <div className="flex items-center gap-3 rounded-lg border border-border px-4 py-3 cursor-pointer has-[:checked]:border-foreground has-[:checked]:bg-muted/40 transition-colors">
-                <RadioGroupItem value="event" id="event" />
-                <Label htmlFor="event" className="cursor-pointer">Event</Label>
-              </div>
+              <Label
+                htmlFor="project"
+                className={`flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors ${
+                  isEditMode ? "" : atProjectLimit ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                } ${
+                  type === "project" ? "border-foreground bg-muted/40" : "border-border"
+                }`}
+              >
+                <RadioGroupItem value="project" id="project" disabled={!isEditMode && atProjectLimit} />
+                <span className="flex-1">
+                  Project
+                  {!isEditMode && atProjectLimit && (
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      Limit reached ({maxProjects} on {planName}) — upgrade to add more
+                    </span>
+                  )}
+                </span>
+              </Label>
+
+              <Label
+                htmlFor="event"
+                className={`flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors ${
+                  isEditMode ? "" : atEventLimit ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                } ${
+                  type === "event" ? "border-foreground bg-muted/40" : "border-border"
+                }`}
+              >
+                <RadioGroupItem value="event" id="event" disabled={!isEditMode && atEventLimit} />
+                <span className="flex-1">
+                  Event
+                  {!isEditMode && atEventLimit && (
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      Limit reached ({maxEvents} on {planName}) — upgrade to add more
+                    </span>
+                  )}
+                </span>
+              </Label>
             </RadioGroup>
           </div>
 
@@ -277,6 +330,33 @@ export function CreatePlanDialog({
                   disabled={isLoading}
                 />
               </div>
+
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Ticketing</Label>
+                    <p className="text-xs text-muted-foreground">Track ticket types, bookings, and check-in</p>
+                  </div>
+                  <Switch
+                    className="cursor-pointer"
+                    checked={hasTicketing}
+                    onCheckedChange={setHasTicketing}
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Stalls</Label>
+                    <p className="text-xs text-muted-foreground">Track stall teams and their income/expenses</p>
+                  </div>
+                  <Switch
+                    className="cursor-pointer"
+                    checked={hasStalls}
+                    onCheckedChange={setHasStalls}
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
             </div>
           )}
 
@@ -290,6 +370,33 @@ export function CreatePlanDialog({
               onChange={(e) => setBudget(e.target.value)}
               disabled={isLoading}
               min="1"
+            />
+          </div>
+
+          {/* CURRENCY */}
+          <div className="space-y-2">
+            <Label>Currency</Label>
+            <Select value={currency} onValueChange={setCurrency}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select currency" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="USD">USD ($)</SelectItem>
+                <SelectItem value="INR">INR (₹)</SelectItem>
+                <SelectItem value="EUR">EUR (€)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+            <div>
+              <Label>Hardware Logistics</Label>
+              <p className="text-xs text-muted-foreground">Track equipment requests, rentals, and inventory</p>
+            </div>
+            <Switch
+              checked={hasHardware}
+              onCheckedChange={setHasHardware}
+              disabled={isLoading}
             />
           </div>
 
@@ -307,21 +414,6 @@ export function CreatePlanDialog({
               className="resize-none"
               rows={2}
             />
-          </div>
-
-          {/* CURRENCY */}
-          <div className="space-y-2">
-            <Label>Currency</Label>
-            <Select value={currency} onValueChange={setCurrency}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select currency" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="USD">USD ($)</SelectItem>
-                <SelectItem value="INR">INR (₹)</SelectItem>
-                <SelectItem value="EUR">EUR (€)</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           {/* STATUS */}
@@ -346,14 +438,20 @@ export function CreatePlanDialog({
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isLoading}
-              className="flex-1"
+              className="flex-1 cursor-pointer hover:text-gray-600"
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              disabled={isLoading || !name.trim() || !budget.trim()}
-              className="flex-1"
+              disabled={
+                isLoading ||
+                !name.trim() ||
+                !budget.trim() ||
+                (!isEditMode && type === "project" && atProjectLimit) ||
+                (!isEditMode && type === "event" && atEventLimit)
+              }
+              className="flex-1 cursor-pointer"
             >
               {isLoading
                 ? isEditMode

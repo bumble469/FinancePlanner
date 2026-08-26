@@ -49,6 +49,13 @@ export async function POST(
       );
     }
 
+    if (invitation.email !== user.email) {
+      return NextResponse.json(
+        { error: "This invitation does not belong to you" },
+        { status: 403 }
+      );
+    }
+
     if (action === "REJECT") {
       await prisma.workItemMemberInvitation.update({
         where: {
