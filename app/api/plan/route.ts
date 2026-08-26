@@ -104,6 +104,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Account not found' }, { status: 404 });
     }
 
+    // subscription check
+    const subscription = await prisma.subscription.findUnique({
+      where: { accountId: account.id },
+      include: { plan: true },
+    });
+
+    if (!subscription || subscription.status !== "ACTIVE") {
+      return NextResponse.json(
+        { success: false, error: "No active subscription found. Please select a plan first." },
+        { status: 403 }
+      );
+    }
+
+    const { plan: subPlan } = subscription;
+
+    const [projectCount, eventCount, totalCount] = await Promise.all([
+      prisma.workItem.count({ where: { accountId: account.id, type: "PROJECT" } }),
+      prisma.workItem.count({ where: { accountId: account.id, type: "EVENT" } }),
+      prisma.workItem.count({ where: { accountId: account.id } }),
+    ]);
+
     const body = await request.json();
     const {
       name, type, budget, description, status, currency,
@@ -119,6 +140,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Invalid type. Must be PROJECT, EVENT or PLAN' },
         { status: 400 }
+      );
+    }
+
+    if (subPlan.maxTotalWorkItems !== null && totalCount >= subPlan.maxTotalWorkItems) {
+      return NextResponse.json(
+        { success: false, error: `Your ${subPlan.name} plan allows a maximum of ${subPlan.maxTotalWorkItems} total work items. Upgrade to add more.` },
+        { status: 403 }
+      );
+    }
+
+    if (type === WorkItemType.PROJECT && projectCount >= subPlan.maxProjects) {
+      return NextResponse.json(
+        { success: false, error: `Your ${subPlan.name} plan allows a maximum of ${subPlan.maxProjects} project(s). Upgrade to add more.` },
+        { status: 403 }
+      );
+    }
+
+    if (type === WorkItemType.EVENT && eventCount >= subPlan.maxEvents) {
+      return NextResponse.json(
+        { success: false, error: `Your ${subPlan.name} plan allows a maximum of ${subPlan.maxEvents} event(s). Upgrade to add more.` },
+        { status: 403 }
       );
     }
 

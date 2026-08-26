@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
-import { notify, getAllPlanUserIds } from "@/lib/notify";
+import { getPlanAccess } from "@/lib/get-plan-access";
 
 async function resolveTask(workItemId: string, deptId: string, phaseId: string, taskId: string) {
   return prisma.task.findFirst({
@@ -69,10 +69,11 @@ export async function PATCH(
 
     const { id: workItemId, deptId, phaseId, taskId } = await params;
 
-    const membership = await prisma.workItemMember.findUnique({
-      where: { workItemId_userId: { workItemId, userId: user.sub } },
-    });
-    if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const access = await getPlanAccess(workItemId, user.sub);
+    if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!access.permissions.canAddTask(deptId)) {
+      return NextResponse.json({ error: "You don't have permission to edit tasks in this department" }, { status: 403 });
+    }
 
     const existing = await resolveTask(workItemId, deptId, phaseId, taskId);
     if (!existing) return NextResponse.json({ error: "Task not found" }, { status: 404 });
@@ -179,10 +180,11 @@ export async function DELETE(
 
     const { id: workItemId, deptId, phaseId, taskId } = await params;
 
-    const membership = await prisma.workItemMember.findUnique({
-      where: { workItemId_userId: { workItemId, userId: user.sub } },
-    });
-    if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const access = await getPlanAccess(workItemId, user.sub);
+    if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!access.permissions.canDeleteTask) {
+      return NextResponse.json({ error: "Only admins can delete tasks" }, { status: 403 });
+    }
 
     const existing = await resolveTask(workItemId, deptId, phaseId, taskId);
     if (!existing) return NextResponse.json({ error: "Task not found" }, { status: 404 });

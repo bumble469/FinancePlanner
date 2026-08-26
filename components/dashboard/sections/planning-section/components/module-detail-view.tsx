@@ -12,9 +12,15 @@ import { useFinancialStore } from "@/lib/store";
 export function ModuleDetailView({
   module,
   onBack,
+  canAddTask,
+  canDeleteTask,
+  canApproveTaskSubmissions,
 }: {
   module: Module;
   onBack: () => void;
+  canAddTask?: boolean;
+  canDeleteTask?: boolean;
+  canApproveTaskSubmissions?: boolean;
 }) {
   const { currentPlanId } = useFinancialStore();
 
@@ -133,15 +139,17 @@ export function ModuleDetailView({
       </div>
 
       {/* Add task button */}
-      <Button
-        size="sm"
-        variant="outline"
-        className="w-full gap-2 border-dashed cursor-pointer hover:text-gray-400"
-        onClick={() => setTaskDialog({ open: true })}
-      >
-        <Plus className="h-4 w-4" />
-        Add Task
-      </Button>
+      {canAddTask && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full gap-2 border-dashed cursor-pointer hover:text-gray-400"
+          onClick={() => setTaskDialog({ open: true })}
+        >
+          <Plus className="h-4 w-4" />
+          Add Task
+        </Button>
+      )}
 
       {/* Task list */}
       {loading ? (
@@ -160,6 +168,10 @@ export function ModuleDetailView({
             setDeleteTaskId(id);
             setConfirmOpen(true);
           }}
+          canEdit={canAddTask}
+          canDelete={canDeleteTask}
+          canApproveSubmissions={canApproveTaskSubmissions}
+          onSubmissionReviewed={fetchTasks}
         />
       )}
 

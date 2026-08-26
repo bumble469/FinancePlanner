@@ -6,7 +6,7 @@ import { authClient } from "@/lib/auth-client";
 import { MetricCard } from "@/components/dashboard/components/metric-card";
 import {
   Wallet, ArrowDownCircle, PiggyBank, TrendingUp, Info, AlertTriangle,
-  Clock, Ban, Flag, Users, QrCode, Store, Lightbulb, CalendarClock, FileClock,
+  Clock, Ban, Flag, Users, QrCode, Store, Lightbulb, CalendarClock, FileClock, Wrench
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -292,6 +292,57 @@ function PendingApprovalsWidget({ expenseCount, extensionCount }: { expenseCount
   );
 }
 
+function HardwareImpactWidget({ planId }: { planId: string }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { currency } = useFinancialStore();
+
+  useEffect(() => {
+    if (!planId) return;
+    authClient.request(`/api/plan/${planId}/hardware`)
+      .then((res) => setItems(res.data.data ?? []))
+      .catch((err) => console.error("Failed to fetch hardware:", err))
+      .finally(() => setLoading(false));
+  }, [planId]);
+
+  const pendingCount = items.filter((h) => h.requestStatus === "PENDING").length;
+  const monthlyRentCost = items
+    .filter((h) => h.requestStatus === "APPROVED" && h.source === "RENTED" && h.monthlyRentAmount)
+    .reduce((s, h) => s + h.monthlyRentAmount, 0);
+  const outstandingDeposits = items
+    .filter((h) => h.requestStatus === "APPROVED" && h.depositAmount && !h.depositReturned)
+    .reduce((s, h) => s + h.depositAmount, 0);
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <h3 className="flex items-center gap-2 font-semibold text-foreground mb-3">
+        <Wrench className="h-4 w-4 text-muted-foreground" />
+        Hardware
+      </h3>
+      {loading ? (
+        <p className="text-sm text-muted-foreground text-center py-6">Loading...</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-border px-3 py-2.5">
+            <p className={cn("text-xl font-bold", pendingCount > 0 ? "text-yellow-600 dark:text-yellow-400" : "text-foreground")}>
+              {pendingCount}
+            </p>
+            <p className="text-xs text-muted-foreground">Pending requests</p>
+          </div>
+          <div className="rounded-lg border border-border px-3 py-2.5">
+            <p className="text-xl font-bold font-mono text-foreground">{formatCurrency(monthlyRentCost, currency)}</p>
+            <p className="text-xs text-muted-foreground">Monthly rental cost</p>
+          </div>
+          <div className="rounded-lg border border-border px-3 py-2.5">
+            <p className="text-xl font-bold font-mono text-foreground">{formatCurrency(outstandingDeposits, currency)}</p>
+            <p className="text-xs text-muted-foreground">Outstanding deposits</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DepartmentBreakdown({
   departmentStats,
 }: {
@@ -346,9 +397,9 @@ function usePendingApprovalCounts(currentPlanId: string | null, expenses: Expens
 // ─── Project Overview ───────────────────────────────────────────────────────
 
 function ProjectOverview() {
-  const {
+    const {
     expenses, income, simulation, eventData, departments, currency,
-    tasks, milestones, teamMembers, currentPlanId,
+    tasks, milestones, teamMembers, currentPlanId, currentPlanMeta,
   } = useFinancialStore();
 
   const [resourceCosts, setResourceCosts] = useState<{ departments: any[] }>({ departments: [] });
@@ -621,6 +672,9 @@ function ProjectOverview() {
       {/* Pending approvals */}
       <PendingApprovalsWidget expenseCount={pendingExpenseApprovals} extensionCount={pendingExtensions} />
 
+      {/* Hardware */}
+      {currentPlanMeta?.hasHardware && <HardwareImpactWidget planId={currentPlanId!} />}
+
       {/* Risk panel */}
       <div className="rounded-xl border border-border bg-card p-5">
         <h3 className="flex items-center gap-2 font-semibold text-foreground mb-3">
@@ -667,6 +721,14 @@ function EventOverview() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [stalls, setStalls] = useState<any[]>([]);
   const [loadingExtras, setLoadingExtras] = useState(true);
+  const [resourceCosts, setResourceCosts] = useState<{ departments: any[] }>({ departments: [] });
+
+  useEffect(() => {
+    if (!currentPlanId) return;
+    authClient.request(`/api/plan/${currentPlanId}/resource-costs`)
+      .then((res) => setResourceCosts(res.data.data))
+      .catch((err) => console.error("Failed to fetch resource costs:", err));
+  }, [currentPlanId]);
 
   useEffect(() => {
     if (!currentPlanId) return;
@@ -738,9 +800,10 @@ function EventOverview() {
   // Department stats
   const departmentStats = departments.map((d) => {
     const deptTasks = tasks.filter((t) => t.departmentId === d.id);
+    const deptResource = resourceCosts.departments.find((r) => r.name === d.name);
     return {
       name: d.name,
-      budgetUsedPct: 0, // events don't carry the resource-costs projection today
+      budgetUsedPct: deptResource?.budget ? (deptResource.actualExpenses / deptResource.budget) * 100 : 0,
       completionPct: deptTasks.length > 0
         ? (deptTasks.filter((t) => t.status === "DONE" || t.status === "COMPLETED").length / deptTasks.length) * 100
         : 0,
@@ -987,6 +1050,9 @@ function EventOverview() {
 
       {/* Pending approvals */}
       <PendingApprovalsWidget expenseCount={pendingExpenseApprovals} extensionCount={pendingExtensions} />
+
+      {/* Hardware */}
+      {currentPlanMeta?.hasHardware && <HardwareImpactWidget planId={currentPlanId!} />}
 
       {/* Risk panel */}
       <div className="rounded-xl border border-border bg-card p-5">

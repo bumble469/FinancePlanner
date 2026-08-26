@@ -113,22 +113,22 @@ function MilestoneCard({
                 loading={loadingExtensionRequests}
                 onReviewed={() => fetchExtensionRequests(milestone.id)}
                 trigger={
-                    <Button
-                        size="icon"
-                        variant="ghost"
-                        className="relative cursor-pointer"
-                        onClick={() => fetchExtensionRequests(milestone.id)}
-                        title="View Extension Requests"
-                    >
-                        <FileClock className="h-3.5 w-3.5" />
-                        {!!pendingCount && (
-                          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
-                            {pendingCount}
-                          </span>
-                        )}
-                    </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="relative cursor-pointer"
+                    onClick={() => fetchExtensionRequests(milestone.id)}
+                    title="View Extension Requests"
+                  >
+                    <FileClock className="h-3.5 w-3.5" />
+                    {!!pendingCount && (
+                      <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+                        {pendingCount}
+                      </span>
+                    )}
+                  </Button>
                 }
-            />
+              />
             )}
             {!canExtendDirectly && !allTasksCompleted && (
               <RequestExtensionDialog
@@ -654,6 +654,9 @@ export function PlanningSection({ permissions }: { permissions: PlanPermissions 
                   canAddModule={permissions.canAddPhase(activeDept.id)}
                   canEditModule={permissions.canEditPhase(activeDept.id)}
                   canDeleteModule={permissions.canDeletePhase}
+                  canAddTask={permissions.canAddTask(activeDept.id)}
+                  canDeleteTask={permissions.canDeleteTask}
+                  canApproveTaskSubmissions={permissions.canApproveTaskSubmission(activeDept.id)}
                 />
               ) : (
                 <EventDepartmentDetailView
