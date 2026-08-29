@@ -39,6 +39,7 @@ export interface PlanPermissions {
 
   // tasks
   canAddTask: (deptId?: string) => boolean;
+  canEditTask: (deptId: string | null) => boolean;
   canDeleteTask: boolean;
   canCompleteTask: boolean;
   canSubmitTaskWork: (isAssignedToMe: boolean) => boolean;
@@ -179,12 +180,20 @@ export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
     canEditMember: isOwnerOrAdmin || ca("members", "edit"),
     canDeleteMember: isOwnerOrAdmin || ca("members", "delete"),
 
-    canAddTask: (deptId) =>
+    canAddTask: (deptId?: string): boolean =>
       isOwnerOrAdmin ||
-      isCoAdmin ||
-      (isManager && (!deptId || inScope(deptId))),
-    canDeleteTask: isOwnerOrAdmin || isCoAdmin,
+      (isCoAdmin && coAdminPerms?.tasks?.create === true) ||
+      (isManager && !!deptId && inScope(deptId)),
+
+    canEditTask: (deptId: string | null): boolean =>
+      isOwnerOrAdmin ||
+      (isCoAdmin && coAdminPerms?.tasks?.edit === true) ||
+      (isManager && deptId !== null && inScope(deptId)) ||
+      (isCoManager && deptId !== null && inScope(deptId)),
+
+    canDeleteTask: isOwnerOrAdmin || (isCoAdmin && coAdminPerms?.tasks?.delete === true),
     canCompleteTask: true,
+
     // any assignee can submit their own work for review, regardless of role
     canSubmitTaskWork: (isAssignedToMe) => isAssignedToMe === true,
 
@@ -273,6 +282,8 @@ export interface CoAdminPermissions {
   members: { edit: boolean; delete: boolean };
   departments: { edit: boolean; delete: boolean };
   phases: { edit: boolean; delete: boolean };
+  tasks: { create: boolean; edit: boolean; delete: boolean };
+
   revenue: { create: boolean; edit: boolean; delete: boolean };
   expenses: { create: boolean; edit: boolean; delete: boolean; approve: boolean };
   reports: { create: boolean; edit: boolean; delete: boolean };
@@ -305,6 +316,7 @@ export const DEFAULT_CO_ADMIN_PERMISSIONS: CoAdminPermissions = {
   members: { edit: false, delete: false },
   departments: { edit: false, delete: false },
   phases: { edit: false, delete: false },
+  tasks: { create: true, edit: false, delete: true },
   revenue: { create: false, edit: false, delete: false },
   expenses: { create: false, edit: false, delete: false, approve: false },
   reports: { create: false, edit: false, delete: false },
@@ -350,4 +362,11 @@ export function canEditPermissionsOf(
   }
 
   return false;
+}
+
+export function canAssignRole(actingRole: PlanRole, targetRole: PlanRole): boolean {
+  if (targetRole === "ADMIN" || targetRole === "CO_ADMIN") {
+    return actingRole === "OWNER" || actingRole === "ADMIN";
+  }
+  return true;
 }

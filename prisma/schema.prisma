@@ -350,6 +350,7 @@ model WorkItem {
   event    Event?
   planInfo PlanInfo?
   hasHardware Boolean @default(false)
+  allowMultipleEditing Boolean @default(true)
 
   members WorkItemMember[]
   invitations WorkItemMemberInvitation[]

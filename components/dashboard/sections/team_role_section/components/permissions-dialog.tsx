@@ -279,6 +279,30 @@ export function PermissionsDialog({ open, onOpenChange, member, planId, onSaved 
                       setCoAdminPerms((p) => ({ ...p, phases: { ...p.phases, delete: v } }))
                     }
                   />
+                  <SwitchRow
+                    label="Add tasks"
+                    description="Can create new tasks across all departments"
+                    checked={coAdminPerms.tasks.create}
+                    onCheckedChange={(v) =>
+                      setCoAdminPerms((p) => ({ ...p, tasks: { ...p.tasks, create: v } }))
+                    }
+                  />
+                  <SwitchRow
+                    label="Edit tasks"
+                    description="Can edit task details (title, description, due date) across all departments"
+                    checked={coAdminPerms.tasks.edit}
+                    onCheckedChange={(v) =>
+                      setCoAdminPerms((p) => ({ ...p, tasks: { ...p.tasks, edit: v } }))
+                    }
+                  />
+                  <SwitchRow
+                    label="Delete tasks"
+                    description="Can delete tasks across all departments"
+                    checked={coAdminPerms.tasks.delete}
+                    onCheckedChange={(v) =>
+                      setCoAdminPerms((p) => ({ ...p, tasks: { ...p.tasks, delete: v } }))
+                    }
+                  />
                 </TabsContent>
               )}
 

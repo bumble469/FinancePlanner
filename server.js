@@ -42,9 +42,76 @@ app.prepare().then(() => {
     }
   });
 
+  const editLocks = new Map(); // key: `${planId}:${itemType}:${itemId}` -> { userId, userName, socketId, updatedAt }
+  const LOCK_TTL_MS = 90_000;
+
+  function lockKey(planId, itemType, itemId) {
+    return `${planId}:${itemType}:${itemId}`;
+  }
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, lock] of editLocks.entries()) {
+      if (now - lock.updatedAt > LOCK_TTL_MS) {
+        editLocks.delete(key);
+        const [planId, itemType, itemId] = key.split(":");
+        io.to(`plan:${planId}`).emit("editing:lock-released", { itemType, itemId });
+      }
+    }
+  }, 30_000);
+
   io.on("connection", (socket) => {
     console.log("[socket] user connected:", socket.data.userId);
     socket.join(`user:${socket.data.userId}`);
+
+    socket.on("join-plan", (planId) => {
+      socket.join(`plan:${planId}`);
+    });
+
+    socket.on("leave-plan", (planId) => {
+      socket.leave(`plan:${planId}`);
+    });
+
+    socket.on("editing:request-lock", ({ planId, itemType, itemId, userName }, cb) => {
+      const key = lockKey(planId, itemType, itemId);
+      const existing = editLocks.get(key);
+
+      if (existing && existing.socketId !== socket.id) {
+        return cb({ granted: false, lockedByName: existing.userName });
+      }
+
+      editLocks.set(key, { userId: socket.data.userId, userName, socketId: socket.id, updatedAt: Date.now() });
+      socket.join(`editing:${key}`);
+      socket.to(`plan:${planId}`).emit("editing:lock-granted-broadcast", { itemType, itemId, userName });
+      cb({ granted: true });
+    });
+
+    socket.on("editing:heartbeat", ({ planId, itemType, itemId }) => {
+      const key = lockKey(planId, itemType, itemId);
+      const existing = editLocks.get(key);
+      if (existing && existing.socketId === socket.id) {
+        existing.updatedAt = Date.now();
+      }
+    });
+
+    socket.on("editing:release-lock", ({ planId, itemType, itemId }) => {
+      const key = lockKey(planId, itemType, itemId);
+      const existing = editLocks.get(key);
+      if (existing && existing.socketId === socket.id) {
+        editLocks.delete(key);
+        io.to(`plan:${planId}`).emit("editing:lock-released", { itemType, itemId });
+      }
+    });
+
+    socket.on("disconnect", () => {
+      for (const [key, lock] of editLocks.entries()) {
+        if (lock.socketId === socket.id) {
+          editLocks.delete(key);
+          const [planId, itemType, itemId] = key.split(":");
+          io.to(`plan:${planId}`).emit("editing:lock-released", { itemType, itemId });
+        }
+      }
+    });
   });
 
   global.__io = io;
