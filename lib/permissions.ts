@@ -67,6 +67,8 @@ export interface PlanPermissions {
   canManageHardware: (deptId?: string | null) => boolean;
   canApproveHardwareRequest: (deptId?: string | null) => boolean;
   canDeleteHardware: boolean;
+
+  canManagePlanSettings: boolean;
 }
 
 export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
@@ -266,6 +268,8 @@ export function getPermissions(meta: CurrentPlanMeta | null): PlanPermissions {
       (isCoManager && (!deptId || inScope(deptId)) && coManagerPerms?.canApproveHardwareRequests === true),
 
     canDeleteHardware: isOwnerOrAdmin || ca("hardware", "delete"),
+
+    canManagePlanSettings: isOwnerOrAdmin || (isCoAdmin && coAdminPerms?.planSettings?.edit === true),
   };
 }
 
@@ -290,6 +294,7 @@ export interface CoAdminPermissions {
   hardware: { edit: boolean; delete: boolean; approve: boolean };
   extensions: { approve: boolean };
   canManagePermissions: boolean;
+  planSettings: { edit: boolean };
 }
 
 export interface ManagerPermissions {
@@ -323,6 +328,7 @@ export const DEFAULT_CO_ADMIN_PERMISSIONS: CoAdminPermissions = {
   hardware: { edit: false, delete: false, approve: false },
   extensions: { approve: false },
   canManagePermissions: false,
+  planSettings: { edit: false },
 };
 
 export const DEFAULT_MANAGER_PERMISSIONS: ManagerPermissions = {

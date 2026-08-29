@@ -12,9 +12,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Sun, Moon, Monitor, Settings as SettingsIcon } from "lucide-react";
+import { Sun, Moon, Monitor, Settings as SettingsIcon, Lock } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useFinancialStore } from "@/lib/store";
+import { getPermissions } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 interface PlanSettingsDialogProps {
@@ -25,6 +26,7 @@ interface PlanSettingsDialogProps {
 
 export function PlanSettingsDialog({ open, onOpenChange, planId }: PlanSettingsDialogProps) {
   const { currentPlanMeta, setCurrentPlanMeta } = useFinancialStore();
+  const perms = getPermissions(currentPlanMeta);
   const { theme, setTheme } = useTheme();
 
   const [receivingEmails, setReceivingEmails] = useState(true);
@@ -67,6 +69,7 @@ export function PlanSettingsDialog({ open, onOpenChange, planId }: PlanSettingsD
   };
 
   const handleEditingToggle = async (value: boolean) => {
+    if (!perms.canManagePlanSettings) return;
     setAllowMultipleEditing(value);
     setSavingEditingPref(true);
     try {
@@ -91,21 +94,21 @@ export function PlanSettingsDialog({ open, onOpenChange, planId }: PlanSettingsD
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <SettingsIcon className="h-4 w-4" />
-            Plan Settings
+            Settings
           </DialogTitle>
           <DialogDescription>
-            Settings for {currentPlanMeta?.name ?? "this plan"}
+            {currentPlanMeta?.name ?? "This plan"}
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="general" className="space-y-4">
+        <Tabs defaultValue="personal" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="general" className="cursor-pointer">General</TabsTrigger>
-            <TabsTrigger value="appearance" className="cursor-pointer">Appearance</TabsTrigger>
+            <TabsTrigger value="personal" className="cursor-pointer">Personal</TabsTrigger>
+            <TabsTrigger value="plan" className="cursor-pointer">Plan</TabsTrigger>
           </TabsList>
 
-          {/* GENERAL TAB */}
-          <TabsContent value="general" className="space-y-4">
+          {/* PERSONAL TAB — only affects the logged-in user */}
+          <TabsContent value="personal" className="space-y-4">
             <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
               <div className="pr-4">
                 <Label>Receive email updates</Label>
@@ -119,28 +122,32 @@ export function PlanSettingsDialog({ open, onOpenChange, planId }: PlanSettingsD
                 disabled={loadingEmailPref || savingEmailPref}
               />
             </div>
+          </TabsContent>
 
+          {/* PLAN TAB — affects everybody, admin-gated per setting */}
+          <TabsContent value="plan" className="space-y-4">
             <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
               <div className="pr-4">
-                <Label>Allow multiple editing</Label>
+                <div className="flex items-center gap-1.5">
+                  <Label>Allow multiple editing</Label>
+                  {!perms.canManagePlanSettings && <Lock className="h-3 w-3 text-muted-foreground" />}
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {allowMultipleEditing
                     ? "Multiple people can edit the same item at once."
                     : "Only one person can edit an item at a time."}
+                  {!perms.canManagePlanSettings && " Only an Admin can change this."}
                 </p>
               </div>
               <Switch
                 checked={allowMultipleEditing}
                 onCheckedChange={handleEditingToggle}
-                disabled={savingEditingPref}
+                disabled={!perms.canManagePlanSettings || savingEditingPref}
               />
             </div>
-          </TabsContent>
 
-          {/* APPEARANCE TAB — frontend-only, no backend logic */}
-          <TabsContent value="appearance" className="space-y-4">
             <div className="rounded-lg border border-border px-4 py-3 space-y-3">
-              <Label>Theme</Label>
+              <Label>Appearance</Label>
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { value: "light", label: "Light", icon: Sun },

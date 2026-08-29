@@ -501,6 +501,17 @@ export function PermissionsDialog({ open, onOpenChange, member, planId, onSaved 
                     />
                   )}
 
+                  {role === "CO_ADMIN" && (
+                    <SwitchRow
+                      label="Manage plan settings"
+                      description="Can change plan-wide settings like multi-user editing"
+                      checked={coAdminPerms.planSettings.edit}
+                      onCheckedChange={(v) =>
+                        setCoAdminPerms((p) => ({ ...p, planSettings: { edit: v } }))
+                      }
+                    />
+                  )}
+
                   {role === "MANAGER" && (
                     <SwitchRow
                       label="Manage Co-Manager Permissions"

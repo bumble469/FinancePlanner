@@ -42,20 +42,38 @@ app.prepare().then(() => {
     }
   });
 
-  const editLocks = new Map(); // key: `${planId}:${itemType}:${itemId}` -> { userId, userName, socketId, updatedAt }
-  const LOCK_TTL_MS = 90_000;
+  const editPresence = new Map(); // key: `${planId}:${itemType}:${itemId}` -> Map<socketId, { userId, userName, updatedAt }>
+  const PRESENCE_TTL_MS = 90_000;
 
-  function lockKey(planId, itemType, itemId) {
+  function presenceKey(planId, itemType, itemId) {
     return `${planId}:${itemType}:${itemId}`;
+  }
+
+  function broadcastPresence(planId, itemType, itemId) {
+    const key = presenceKey(planId, itemType, itemId);
+    const presenceMap = editPresence.get(key);
+    const editors = presenceMap
+      ? Array.from(presenceMap.values()).map((p) => ({ userId: p.userId, userName: p.userName }))
+      : [];
+    io.to(`plan:${planId}`).emit("editing:presence-update", { itemType, itemId, editors });
   }
 
   setInterval(() => {
     const now = Date.now();
-    for (const [key, lock] of editLocks.entries()) {
-      if (now - lock.updatedAt > LOCK_TTL_MS) {
-        editLocks.delete(key);
-        const [planId, itemType, itemId] = key.split(":");
-        io.to(`plan:${planId}`).emit("editing:lock-released", { itemType, itemId });
+    for (const [key, presenceMap] of editPresence.entries()) {
+      let changed = false;
+      for (const [socketId, p] of presenceMap.entries()) {
+        if (now - p.updatedAt > PRESENCE_TTL_MS) {
+          presenceMap.delete(socketId);
+          changed = true;
+        }
+      }
+      const [planId, itemType, itemId] = key.split(":");
+      if (presenceMap.size === 0) {
+        editPresence.delete(key);
+        if (changed) io.to(`plan:${planId}`).emit("editing:presence-update", { itemType, itemId, editors: [] });
+      } else if (changed) {
+        broadcastPresence(planId, itemType, itemId);
       }
     }
   }, 30_000);
@@ -72,43 +90,57 @@ app.prepare().then(() => {
       socket.leave(`plan:${planId}`);
     });
 
-    socket.on("editing:request-lock", ({ planId, itemType, itemId, userName }, cb) => {
-      const key = lockKey(planId, itemType, itemId);
-      const existing = editLocks.get(key);
-
-      if (existing && existing.socketId !== socket.id) {
-        return cb({ granted: false, lockedByName: existing.userName });
+    // Joining an item's edit presence. If allowMultipleEditing is false and
+    // someone else is already present, the join is denied (exclusive lock).
+    // If true, everyone is granted and simply added to the presence set —
+    // used purely to drive the "N people editing" indicator.
+    socket.on("editing:join", ({ planId, itemType, itemId, userName, allowMultipleEditing }, cb) => {
+      const key = presenceKey(planId, itemType, itemId);
+      let presenceMap = editPresence.get(key);
+      if (!presenceMap) {
+        presenceMap = new Map();
+        editPresence.set(key, presenceMap);
       }
 
-      editLocks.set(key, { userId: socket.data.userId, userName, socketId: socket.id, updatedAt: Date.now() });
-      socket.join(`editing:${key}`);
-      socket.to(`plan:${planId}`).emit("editing:lock-granted-broadcast", { itemType, itemId, userName });
+      const others = Array.from(presenceMap.entries()).filter(([sid]) => sid !== socket.id);
+
+      if (!allowMultipleEditing && others.length > 0) {
+        return cb({ granted: false, lockedByName: others[0][1].userName });
+      }
+
+      presenceMap.set(socket.id, { userId: socket.data.userId, userName, updatedAt: Date.now() });
+      socket.data.editingKeys = socket.data.editingKeys || new Set();
+      socket.data.editingKeys.add(key);
+
+      broadcastPresence(planId, itemType, itemId);
       cb({ granted: true });
     });
 
     socket.on("editing:heartbeat", ({ planId, itemType, itemId }) => {
-      const key = lockKey(planId, itemType, itemId);
-      const existing = editLocks.get(key);
-      if (existing && existing.socketId === socket.id) {
-        existing.updatedAt = Date.now();
-      }
+      const key = presenceKey(planId, itemType, itemId);
+      const entry = editPresence.get(key)?.get(socket.id);
+      if (entry) entry.updatedAt = Date.now();
     });
 
-    socket.on("editing:release-lock", ({ planId, itemType, itemId }) => {
-      const key = lockKey(planId, itemType, itemId);
-      const existing = editLocks.get(key);
-      if (existing && existing.socketId === socket.id) {
-        editLocks.delete(key);
-        io.to(`plan:${planId}`).emit("editing:lock-released", { itemType, itemId });
+    socket.on("editing:leave", ({ planId, itemType, itemId }) => {
+      const key = presenceKey(planId, itemType, itemId);
+      const presenceMap = editPresence.get(key);
+      if (presenceMap?.delete(socket.id)) {
+        socket.data.editingKeys?.delete(key);
+        if (presenceMap.size === 0) editPresence.delete(key);
+        broadcastPresence(planId, itemType, itemId);
       }
     });
 
     socket.on("disconnect", () => {
-      for (const [key, lock] of editLocks.entries()) {
-        if (lock.socketId === socket.id) {
-          editLocks.delete(key);
-          const [planId, itemType, itemId] = key.split(":");
-          io.to(`plan:${planId}`).emit("editing:lock-released", { itemType, itemId });
+      if (socket.data.editingKeys) {
+        for (const key of socket.data.editingKeys) {
+          const presenceMap = editPresence.get(key);
+          if (presenceMap?.delete(socket.id)) {
+            const [planId, itemType, itemId] = key.split(":");
+            if (presenceMap.size === 0) editPresence.delete(key);
+            broadcastPresence(planId, itemType, itemId);
+          }
         }
       }
     });
