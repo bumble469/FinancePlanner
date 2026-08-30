@@ -3,8 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { getSocket } from "@/lib/socket-client";
 import { useFinancialStore } from "@/lib/store";
 
-type ItemType = "task" | "phase" | "milestone" | "hardware";
-
+type ItemType = "task" | "phase" | "milestone" | "hardware" | "department" | "expense" | "income" | "ticketType" | "member" | "stall" | "note";
 export interface Editor {
   userId: string;
   userName: string;
